@@ -12,7 +12,7 @@ class AndroidLauncher : AndroidApplication() {
             useGyroscope = false
             useAccelerometer = false
             numSamples = 2 // Multisampling for smoother edges
-            useGL30 = true // Enable GLES 3.0 for better hardware acceleration
+            useGL30 = false // Request GLES 2.0 for wider device compatibility
         })
     }
 }

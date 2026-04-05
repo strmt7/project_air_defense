@@ -89,7 +89,6 @@ dependencies {
 
     implementation("com.badlogicgames.gdx:gdx-backend-android:1.13.5")
     implementation("com.badlogicgames.gdx:gdx:1.13.5")
-    implementation("com.badlogicgames.gdx:gdx-bullet:1.13.5")
 
     val gdxVersion = "1.13.5"
     natives("com.badlogicgames.gdx:gdx-platform:$gdxVersion:natives-armeabi-v7a")
@@ -97,10 +96,6 @@ dependencies {
     natives("com.badlogicgames.gdx:gdx-platform:$gdxVersion:natives-x86")
     natives("com.badlogicgames.gdx:gdx-platform:$gdxVersion:natives-x86_64")
 
-    natives("com.badlogicgames.gdx:gdx-bullet-platform:$gdxVersion:natives-armeabi-v7a")
-    natives("com.badlogicgames.gdx:gdx-bullet-platform:$gdxVersion:natives-arm64-v8a")
-    natives("com.badlogicgames.gdx:gdx-bullet-platform:$gdxVersion:natives-x86")
-    natives("com.badlogicgames.gdx:gdx-bullet-platform:$gdxVersion:natives-x86_64")
 }
 
 tasks.register("printReleaseSigningSource") {
