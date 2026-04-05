@@ -27,6 +27,15 @@ A high-fidelity libGDX + Kotlin Android prototype where you command a Patriot-in
 2. Sync Gradle.
 3. Run the `android` module on an emulator or device.
 
+4. Build an installable APK:
+   - Preferred helper script (prints which signing path is used): `./scripts/build-installable-apk.sh`
+   - Direct Gradle command: `./gradlew :android:printReleaseSigningSource :android:assembleRelease`
+   - Production signing (set these in `~/.gradle/gradle.properties`, CI secrets, or environment variables):
+     - `RELEASE_STORE_FILE=/absolute/path/to/keystore.jks`
+     - `RELEASE_STORE_PASSWORD=...`
+     - `RELEASE_KEY_ALIAS=...`
+     - `RELEASE_KEY_PASSWORD=...`
+
 ## Notes
 - This is still a gameplay prototype, not a military simulator.
 - Shapes are procedural and inspired by public imagery; swap in art assets for production-grade visual fidelity.

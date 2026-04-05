@@ -3,9 +3,32 @@ plugins {
     id("org.jetbrains.kotlin.android")
 }
 
+val releaseStoreFile = providers.gradleProperty("RELEASE_STORE_FILE")
+val releaseStorePassword = providers.gradleProperty("RELEASE_STORE_PASSWORD")
+val releaseKeyAlias = providers.gradleProperty("RELEASE_KEY_ALIAS")
+val releaseKeyPassword = providers.gradleProperty("RELEASE_KEY_PASSWORD")
+
 android {
     namespace = "com.airdefense.game"
     compileSdk = 36
+
+    signingConfigs {
+        create("release") {
+            if (
+                releaseStoreFile.isPresent &&
+                releaseStorePassword.isPresent &&
+                releaseKeyAlias.isPresent &&
+                releaseKeyPassword.isPresent
+            ) {
+                storeFile = rootProject.file(releaseStoreFile.get())
+                storePassword = releaseStorePassword.get()
+                keyAlias = releaseKeyAlias.get()
+                keyPassword = releaseKeyPassword.get()
+            } else {
+                initWith(getByName("debug"))
+            }
+        }
+    }
 
     defaultConfig {
         applicationId = "com.airdefense.game"
@@ -25,6 +48,7 @@ android {
         release {
             isMinifyEnabled = true
             isShrinkResources = true
+            signingConfig = signingConfigs.getByName("release")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
@@ -70,6 +94,24 @@ dependencies {
     natives("com.badlogicgames.gdx:gdx-bullet-platform:$gdxVersion:natives-arm64-v8a")
     natives("com.badlogicgames.gdx:gdx-bullet-platform:$gdxVersion:natives-x86")
     natives("com.badlogicgames.gdx:gdx-bullet-platform:$gdxVersion:natives-x86_64")
+}
+
+tasks.register("printReleaseSigningSource") {
+    group = "verification"
+    description = "Prints whether release signing uses RELEASE_* properties or debug fallback."
+    doLast {
+        val usingReleaseKeystore =
+            releaseStoreFile.isPresent &&
+            releaseStorePassword.isPresent &&
+            releaseKeyAlias.isPresent &&
+            releaseKeyPassword.isPresent
+
+        if (usingReleaseKeystore) {
+            println("[signing] release build will use RELEASE_* properties (store file: ${releaseStoreFile.get()}).")
+        } else {
+            println("[signing] release build will use DEBUG signing fallback (for local sideload testing).")
+        }
+    }
 }
 
 tasks.register("copyNatives") {
