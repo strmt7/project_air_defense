@@ -1,23 +1,28 @@
 # Air Defense Warrior (Android 3D Prototype)
 
-A working libGDX + Kotlin Android prototype where the player commands a Patriot-like air-defense launcher to intercept incoming ballistic missiles in a fully 3D scene.
+A doctrine-heavy libGDX + Kotlin Android prototype where you command a Patriot-inspired battery in a living 3D battlespace with city assets, vegetation, infrastructure, and defensive-system damage.
 
-## Focus Areas
-- **3D graphics**: Ground plane, launcher, incoming ballistic missiles, and interceptors are rendered as real 3D models.
-- **Physics**: Ballistic trajectories are computed with gravity (`9.81 m/s^2`) and predictive lead targeting for interceptors.
-- **Touch controls**: Launch interceptor, rotate radar/camera left-right, and track wave pressure via HUD.
-- **Modern structure**: Multi-module Gradle project (`:core` + `:android`) in Kotlin.
+## Major Gameplay Upgrades
+- **Fire-control loop, not point-and-shoot**: scan -> track table -> prioritize -> salvo engage -> terminal intercept.
+- **Live doctrine tuning**: engagement range, interceptor speed, launch cooldown, radar refresh interval, blast radius, and salvo size are adjustable while fighting.
+- **Mixed raids**: ballistic, cruise-like, decoy, and anti-radiation missile profiles.
+- **Counter-battery pressure**: ~1 in 20 threat missiles is anti-radiation and can directly damage radar / ECS / launcher capacity.
+
+## Full 3D Battlespace
+- Semi-desert terrain palette with roads, mountain belt, defended urban blocks, and scattered vegetation.
+- Patriot-inspired battery footprint including launcher trailer + canisters, radar, ECS shelter, mast, and power unit silhouettes.
+- Dynamic trails, blast effects, and persistent damage: buildings darken/collapse, battery components degrade, radar can go offline temporarily.
+
+## Public references used for design direction
+- RTX Patriot overview: https://www.rtx.com/raytheon/what-we-do/integrated-air-and-missile-defense/patriot
+- Lockheed PAC-3 product page: https://www.lockheedmartin.com/en-us/products/pac-3-advanced-capability-3.html
+- U.S. Army Patriot article: https://www.army.mil/article/171144/patriot_missile_system
 
 ## Run (Android)
 1. Open project in Android Studio (latest stable).
 2. Sync Gradle.
-3. Run the `android` module on a physical device or emulator.
-
-## Gameplay
-- Tap **Launch Interceptor** to fire toward the closest threat using predictive aiming.
-- Use **< Radar** and **Radar >** to rotate camera/radar perspective.
-- Survive escalating waves as incoming missile rates and speeds increase.
+3. Run the `android` module on an emulator or device.
 
 ## Notes
-- This is a gameplay prototype; visuals are intentionally procedural to keep iteration fast.
-- You can tune difficulty in `BattleScreen.kt` using the balancing defaults in `skills/android-3d-air-defense/SKILL.md`.
+- This is still a gameplay prototype, not a military simulator.
+- Shapes are procedural and inspired by public imagery; swap in art assets for production-grade visual fidelity.
