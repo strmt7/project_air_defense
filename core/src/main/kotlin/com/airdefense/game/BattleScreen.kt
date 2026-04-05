@@ -63,6 +63,13 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
     private val v2 = Vector3()
     private val v3 = Vector3()
     private val tempVec = Vector3()
+    private val gravity = Vector3(0f, -45f, 0f)
+
+    private companion object {
+        private const val THREAT_SCALE = 3.2f
+        private const val INTERCEPTOR_SCALE = 4.0f
+        private const val THREAT_TRAIL_INTERVAL = 0.04f
+    }
 
     // --- Audio Loading ---
     private fun loadAudio() {
@@ -104,6 +111,7 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
         createInitialEnvironment()
         setupHud(localSkin)
         loadAudio()
+        startNewWave()
         
         stage.addListener(object : InputListener() {
             override fun touchDown(event: InputEvent?, x: Float, y: Float, pointer: Int, button: Int): Boolean {
@@ -357,7 +365,10 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
     }
 
     private fun startNewWave() {
-        waveInProgress = true; threatsRemainingInWave = 8 + wave * 4; spawnTimer = 0f
+        waveInProgress = true
+        threatsRemainingInWave = 8 + wave * 4
+        spawnTimer = 0f
+        timeSinceLastEngagement = settings.launchCooldown
         statusLabel.setText("WARNING: MULTIPLE INBOUND // WAVE $wave")
         statusLabel.style = skin.get("critical", Label.LabelStyle::class.java)
     }
@@ -524,10 +535,13 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
         val velocity = targetPos.cpy().sub(startPos).scl(1f / time)
         // Add vertical arch factor
         velocity.y += 150f 
-        
+
         val id = "T-${MathUtils.random(1000, 9999)}"
-        val inst = ModelInstance(models.get("t_ballistic")).apply { transform.setToTranslation(startPos); setRotationToward(velocity) }
-        threats.add(ThreatEntity(inst, startPos, velocity, id))
+        val inst = ModelInstance(models.get("t_ballistic")).apply {
+            transform.setToScaling(THREAT_SCALE, THREAT_SCALE, THREAT_SCALE).setTranslation(startPos)
+            setRotationToward(velocity)
+        }
+        threats.add(ThreatEntity(inst, startPos, velocity, id, trailCooldown = MathUtils.random(0f, THREAT_TRAIL_INTERVAL)))
     }
 
     private fun updateThreats(dt: Float) {
@@ -535,14 +549,19 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
         while (it.hasNext()) {
             val t = it.next()
             // Apply gravity to threat
-            t.velocity.y -= 45f * dt 
-            
+            t.velocity.mulAdd(gravity, dt)
             v1.set(t.velocity).scl(dt)
             t.position.add(v1)
-            t.instance.transform.setToTranslation(t.position)
+            t.instance.transform.setToScaling(THREAT_SCALE, THREAT_SCALE, THREAT_SCALE).setTranslation(t.position)
             t.instance.setRotationToward(t.velocity)
-            
-            if (t.position.y <= 10f) {
+
+            t.trailCooldown -= dt
+            if (t.trailCooldown <= 0f) {
+                spawnTrail(t.position)
+                t.trailCooldown = THREAT_TRAIL_INTERVAL
+            }
+
+            if (t.position.y <= 10f || t.position.z > 450f) {
                 health -= 20f
                 spawnBlast(t.position, 100f)
                 spawnDebris(t.position, 15)
@@ -570,38 +589,22 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
             val i = it.next()
             val target = i.target
             if (target != null && threats.contains(target, true)) {
-                // Proportional Navigation Guidance
-                // 1. Calculate relative position and velocity
-                v1.set(target.position).sub(i.position) // Relative position
-                v2.set(target.velocity).sub(i.velocity) // Relative velocity
-                
-                // 2. Line of Sight (LOS) vector
-                val dist = v1.len()
-                v1.nor() // LOS unit vector
-                
-                // 3. LOS rate (rotation of the LOS vector)
-                // Omega = (R x Vrel) / |R|^2
-                tempVec.set(v1).crs(v2).scl(1f / (dist * dist))
-                
-                // 4. Commanded acceleration
-                // Accel = n * V_closing * (Omega x LOS_unit)
-                val closingSpeed = -v2.dot(v1)
-                val n = 4.0f // Navigation constant
-                
-                v2.set(tempVec).crs(v1).scl(n * closingSpeed)
-                
-                // 5. Update velocity
-                i.velocity.add(v2.scl(dt))
-                // Maintain constant speed
+                val predicted = predictInterceptPoint(i.position, target.position, target.velocity, settings.interceptorSpeed)
+                v1.set(predicted).sub(i.position)
+                if (!v1.isZero(1e-3f)) {
+                    val maxTurn = (220f * dt).coerceAtMost(1f)
+                    tempVec.set(v1).nor().scl(settings.interceptorSpeed)
+                    i.velocity.lerp(tempVec, maxTurn)
+                }
                 i.velocity.nor().scl(settings.interceptorSpeed)
             }
             
             v1.set(i.velocity).scl(dt)
             i.position.add(v1)
-            i.instance.transform.setToTranslation(i.position)
+            i.instance.transform.setToScaling(INTERCEPTOR_SCALE, INTERCEPTOR_SCALE, INTERCEPTOR_SCALE).setTranslation(i.position)
             i.instance.setRotationToward(i.velocity)
             
-            if (MathUtils.randomBoolean(0.6f)) spawnTrail(i.position)
+            if (MathUtils.randomBoolean(0.85f)) spawnTrail(i.position)
             
             if (target != null && threats.contains(target, true) && i.position.dst(target.position) < settings.blastRadius) {
                 score += 100
@@ -618,29 +621,69 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
         }
         timeSinceLastEngagement += dt
         if (timeSinceLastEngagement >= settings.launchCooldown) {
-            val nextTarget = threats.find { t -> 
-                val d = t.position.len()
-                if (d < settings.engagementRange) t.isIdentified = true
-                d < settings.engagementRange && interceptors.none { it.target == t }
+            val nextTarget = threats
+                .filter { t ->
+                    val d = t.position.len()
+                    if (d < settings.engagementRange) t.isIdentified = true
+                    d < settings.engagementRange && interceptors.none { it.target == t }
+                }
+                .minByOrNull { it.position.z }
+            if (nextTarget != null) {
+                launchInterceptor(nextTarget)
+                timeSinceLastEngagement = 0f
             }
-            if (nextTarget != null) { launchInterceptor(nextTarget); timeSinceLastEngagement = 0f }
         }
     }
 
     private fun launchInterceptor(target: ThreatEntity) {
-        val launcher = if (target.position.x > 0) launchers[0] else launchers[1]
+        val launcher = launchers.minByOrNull {
+            it.transform.getTranslation(v1)
+            v1.dst2(target.position)
+        } ?: return
+
         launcher.transform.getTranslation(v1)
         v1.y += 12f // Launch from top of canister
-        
-        v2.set(target.position).sub(v1).nor().scl(settings.interceptorSpeed)
-        
+
+        val interceptPoint = predictInterceptPoint(v1, target.position, target.velocity, settings.interceptorSpeed)
+        v2.set(interceptPoint).sub(v1).nor().scl(settings.interceptorSpeed)
+
         // Aim launcher toward target
         launcher.setRotationToward(v2)
 
-        val inst = ModelInstance(models.get("interceptor")).apply { transform.setToTranslation(v1); setRotationToward(v2) }
+        val inst = ModelInstance(models.get("interceptor")).apply {
+            transform.setToScaling(INTERCEPTOR_SCALE, INTERCEPTOR_SCALE, INTERCEPTOR_SCALE).setTranslation(v1)
+            setRotationToward(v2)
+        }
         interceptors.add(InterceptorEntity(inst, v1.cpy(), v2.cpy(), target))
         spawnBlast(v1, 15f)
         playSfx("launch", 0.4f)
+    }
+
+    private fun predictInterceptPoint(
+        interceptorPos: Vector3,
+        targetPos: Vector3,
+        targetVelocity: Vector3,
+        interceptorSpeed: Float
+    ): Vector3 {
+        val toTarget = v3.set(targetPos).sub(interceptorPos)
+        val a = targetVelocity.dot(targetVelocity) - interceptorSpeed * interceptorSpeed
+        val b = 2f * toTarget.dot(targetVelocity)
+        val c = toTarget.dot(toTarget)
+
+        val t = if (abs(a) < 1e-3f) {
+            if (abs(b) < 1e-3f) 0f else (-c / b).coerceAtLeast(0f)
+        } else {
+            val disc = b * b - 4f * a * c
+            if (disc < 0f) 0f
+            else {
+                val sqrtDisc = kotlin.math.sqrt(disc)
+                val t1 = (-b - sqrtDisc) / (2f * a)
+                val t2 = (-b + sqrtDisc) / (2f * a)
+                listOf(t1, t2).filter { it > 0f }.minOrNull() ?: 0f
+            }
+        }.coerceIn(0f, 8f)
+
+        return Vector3(targetPos).mulAdd(targetVelocity, t)
     }
 
     private fun triggerShake(intensity: Float, duration: Float) {
@@ -725,6 +768,15 @@ data class DefenseSettings(var engagementRange: Float = 1200f, var interceptorSp
 enum class EffectType { BLAST, TRAIL }
 data class BuildingEntity(val instance: ModelInstance, var health: Float)
 data class DebrisEntity(val instance: ModelInstance, val position: Vector3, val velocity: Vector3, var life: Float)
-data class ThreatEntity(val instance: ModelInstance, val position: Vector3, val velocity: Vector3, var id: String, var type: String = "BALLISTIC", var rcs: Float = 0.15f, var isIdentified: Boolean = false)
+data class ThreatEntity(
+    val instance: ModelInstance,
+    val position: Vector3,
+    val velocity: Vector3,
+    var id: String,
+    var type: String = "BALLISTIC",
+    var rcs: Float = 0.15f,
+    var isIdentified: Boolean = false,
+    var trailCooldown: Float = 0f
+)
 data class InterceptorEntity(val instance: ModelInstance, val position: Vector3, val velocity: Vector3, var target: ThreatEntity?)
 data class VisualEffect(val instance: ModelInstance, val position: Vector3, var life: Float, val initialLife: Float, val type: EffectType, val maxScale: Float = 1f)
