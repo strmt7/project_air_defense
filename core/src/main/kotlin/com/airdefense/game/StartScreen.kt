@@ -27,6 +27,7 @@ class StartScreen(private val game: AirDefenseGame) : ScreenAdapter() {
     private val models = ObjectMap<String, Model>()
     
     private var scanLineY = 0f
+    private var launchRequested = false
     private val root = Table()
 
     init {
@@ -50,7 +51,8 @@ class StartScreen(private val game: AirDefenseGame) : ScreenAdapter() {
         startBtn.addListener(object : ChangeListener() {
             override fun changed(event: ChangeEvent?, actor: Actor?) {
                 Gdx.app.log("StartScreen", "Initializing Defense Network...")
-                game.screen = BattleScreen(game)
+                launchRequested = true
+                startBtn.isDisabled = true
             }
         })
         
@@ -174,7 +176,13 @@ class StartScreen(private val game: AirDefenseGame) : ScreenAdapter() {
 
         val uiScale = Gdx.graphics.height / 1080f
         scanLineY = (scanLineY + delta * 300f * uiScale) % Gdx.graphics.height
-        
+
+        if (launchRequested) {
+            launchRequested = false
+            game.screen = BattleScreen(game)
+            return
+        }
+
         stage.act(delta)
         stage.draw()
         
@@ -214,9 +222,11 @@ class StartScreen(private val game: AirDefenseGame) : ScreenAdapter() {
         menuTable.defaults().width(450f * uiScale).height(80f * uiScale).pad(20f * uiScale)
         
         val startBtn = TextButton("INITIALIZE DEFENSE NETWORK", skin)
+        startBtn.isDisabled = launchRequested
         startBtn.addListener(object : ChangeListener() {
             override fun changed(event: ChangeEvent?, actor: Actor?) {
-                game.screen = BattleScreen(game)
+                launchRequested = true
+                startBtn.isDisabled = true
             }
         })
         
