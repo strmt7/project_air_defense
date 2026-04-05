@@ -67,11 +67,16 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
     // --- Audio Loading ---
     private fun loadAudio() {
         try {
-            sounds.put("launch", Gdx.audio.newSound(Gdx.files.internal("sfx/launch.mp3")))
-            sounds.put("detonate", Gdx.audio.newSound(Gdx.files.internal("sfx/detonate.mp3")))
-            sounds.put("impact", Gdx.audio.newSound(Gdx.files.internal("sfx/impact.mp3")))
-        } catch (_: Exception) {
-            Gdx.app.error("Audio", "Sound files missing, skipping audio initialization")
+            val launchFile = Gdx.files.internal("sfx/launch.mp3")
+            if (launchFile.exists()) sounds.put("launch", Gdx.audio.newSound(launchFile))
+            
+            val detonateFile = Gdx.files.internal("sfx/detonate.mp3")
+            if (detonateFile.exists()) sounds.put("detonate", Gdx.audio.newSound(detonateFile))
+            
+            val impactFile = Gdx.files.internal("sfx/impact.mp3")
+            if (impactFile.exists()) sounds.put("impact", Gdx.audio.newSound(impactFile))
+        } catch (e: Exception) {
+            Gdx.app.error("Audio", "Error loading audio: ${e.message}")
         }
     }
 
@@ -359,17 +364,28 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
 
     override fun render(delta: Float) {
         if (isGameOver) {
-            ScreenUtils.clear(0f, 0f, 0f, 1f)
-            stage.act(delta)
-            stage.draw()
-            if (Gdx.input.justTouched()) game.screen = StartScreen(game)
+            val batch = stage.batch
+            batch.begin()
+            val font = skin.getFont("title")
+            val layout = GlyphLayout(font, "MISSION FAILED")
+            font.draw(batch, layout, (Gdx.graphics.width - layout.width) / 2f, Gdx.graphics.height / 2f + 50f)
+            val fontSmall = skin.getFont("default")
+            val layout2 = GlyphLayout(fontSmall, "FINAL SCORE: $score - TAP TO RESTART")
+            fontSmall.draw(batch, layout2, (Gdx.graphics.width - layout2.width) / 2f, Gdx.graphics.height / 2f - 50f)
+            batch.end()
             return
         }
         updateLogic(delta)
         ScreenUtils.clear(0.01f, 0.02f, 0.05f, 1f, true)
         modelBatch.begin(camera)
         modelBatch.render(instances, environment)
-        cityBlocks.forEach { modelBatch.render(it.instance, environment) }
+        cityBlocks.forEach { 
+            if (it.health > 0) modelBatch.render(it.instance, environment)
+            else {
+                // Could render as rubble or just dark
+                modelBatch.render(it.instance, environment)
+            }
+        }
         threats.forEach { modelBatch.render(it.instance, environment) }
         interceptors.forEach { modelBatch.render(it.instance, environment) }
         effects.forEach { modelBatch.render(it.instance, environment) }
@@ -540,6 +556,7 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
                     }
                 }
                 it.remove()
+                continue
             }
         }
     }
@@ -641,7 +658,7 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
 
     private fun updateEffects(dt: Float) {
         val it = effects.iterator()
-        var maxL = 0f; val lP = v3
+        var maxL = 0f; val lP = Vector3()
         while (it.hasNext()) {
             val e = it.next(); e.life -= dt; val p = e.life / e.initialLife
             if (e.type == EffectType.BLAST) {
