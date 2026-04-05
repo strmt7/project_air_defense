@@ -1,6 +1,6 @@
-# Air Defense Warrior (Android 3D Prototype)
+# Project Air Defense (Android 3D)
 
-A doctrine-heavy libGDX + Kotlin Android prototype where you command a Patriot-inspired battery in a living 3D battlespace with city assets, vegetation, infrastructure, and defensive-system damage.
+A high-fidelity libGDX + Kotlin Android prototype where you command a Patriot-inspired battery in a living 3D battlespace.
 
 ## Major Gameplay Upgrades
 - **Fire-control loop, not point-and-shoot**: scan -> track table -> prioritize -> salvo engage -> terminal intercept.
@@ -18,7 +18,11 @@ A doctrine-heavy libGDX + Kotlin Android prototype where you command a Patriot-i
 - Lockheed PAC-3 product page: https://www.lockheedmartin.com/en-us/products/pac-3-advanced-capability-3.html
 - U.S. Army Patriot article: https://www.army.mil/article/171144/patriot_missile_system
 
-## Run (Android)
+## Security and Performance
+- **ProGuard/R8 Enabled**: Minification and obfuscation for production security.
+- **GLES 3.0 + MSAA**: Modern hardware-accelerated rendering with anti-aliasing.
+- **Optimized Memory**: Minimal allocations in the main loop using math buffers and pooled entities.
+- **Strict Repositories**: Only Google and MavenCentral used for dependency resolution.
 1. Open project in Android Studio (latest stable).
 2. Sync Gradle.
 3. Run the `android` module on an emulator or device.

@@ -17,5 +17,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "air_defense_warrior"
+rootProject.name = "project_air_defense"
 include(":android", ":core")
