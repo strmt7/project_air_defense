@@ -514,21 +514,20 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
 
     private fun spawnThreat() {
         // Start high and far
-        v1.set(MathUtils.random(-1500f, 1500f), 1200f, -4000f)
+        val startPos = Vector3(MathUtils.random(-1500f, 1500f), 1200f, -4000f)
         // Target area around city
-        v2.set(MathUtils.random(-300f, 300f), 0f, MathUtils.random(-400f, 100f))
+        val targetPos = Vector3(MathUtils.random(-300f, 300f), 0f, MathUtils.random(-400f, 100f))
         
         // Calculate initial velocity for ballistic trajectory
-        // Simplified: horizontal velocity + vertical boost
-        val dist = v1.dst(v2)
+        val dist = startPos.dst(targetPos)
         val time = dist / (280f + wave * 25f)
-        v3.set(v2).sub(v1).scl(1f / time)
+        val velocity = targetPos.cpy().sub(startPos).scl(1f / time)
         // Add vertical arch factor
-        v3.y += 150f 
+        velocity.y += 150f 
         
         val id = "T-${MathUtils.random(1000, 9999)}"
-        val inst = ModelInstance(models.get("t_ballistic")).apply { transform.setToTranslation(v1); setRotationToward(v3) }
-        threats.add(ThreatEntity(inst, v1.cpy(), v3.cpy(), id))
+        val inst = ModelInstance(models.get("t_ballistic")).apply { transform.setToTranslation(startPos); setRotationToward(velocity) }
+        threats.add(ThreatEntity(inst, startPos, velocity, id))
     }
 
     private fun updateThreats(dt: Float) {
@@ -549,8 +548,12 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
                 spawnDebris(t.position, 15)
                 triggerShake(25f, 0.6f)
                 playSfx("impact", 0.8f)
+                
+                // Use a separate vector for city collision to avoid modifying t.position or t.velocity
+                val impactPos = v3.set(t.position)
                 cityBlocks.forEach {
-                    if (it.instance.transform.getTranslation(v1).dst(t.position) < 180f) {
+                    it.instance.transform.getTranslation(v2)
+                    if (v2.dst(impactPos) < 180f) {
                         it.health -= 60f
                         if (it.health <= 0) it.instance.materials.first().set(ColorAttribute.createDiffuse(Color.BLACK))
                     }
@@ -646,14 +649,14 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
     }
 
     private fun spawnBlast(pos: Vector3, size: Float) {
-        val inst = ModelInstance(models.get("blast")).apply { transform.setToScaling(0.1f, 0.1f, 0.1f).trn(pos) }
-        effects.add(VisualEffect(inst, pos, 0.8f, 0.8f, EffectType.BLAST, size))
+        val inst = ModelInstance(models.get("blast")).apply { transform.setToScaling(0.1f, 0.1f, 0.1f).setTranslation(pos) }
+        effects.add(VisualEffect(inst, pos.cpy(), 0.8f, 0.8f, EffectType.BLAST, size))
         impactLight.set(Color.GOLD, pos, size * 15f)
     }
 
     private fun spawnTrail(pos: Vector3) {
-        val inst = ModelInstance(models.get("trail")).apply { transform.setToScaling(0.5f, 0.5f, 0.5f).trn(pos) }
-        effects.add(VisualEffect(inst, pos, 1.2f, 1.2f, EffectType.TRAIL, 0.5f))
+        val inst = ModelInstance(models.get("trail")).apply { transform.setToScaling(0.5f, 0.5f, 0.5f).setTranslation(pos) }
+        effects.add(VisualEffect(inst, pos.cpy(), 1.2f, 1.2f, EffectType.TRAIL, 0.5f))
     }
 
     private fun updateEffects(dt: Float) {
@@ -689,10 +692,15 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
     private fun ModelInstance.setRotationToward(dir: Vector3) {
         if (dir.isZero(1e-6f)) return
         transform.getTranslation(tempVec)
-        v2.set(dir).nor()
-        v1.set(Vector3.Z); if (abs(v2.dot(v1)) > 0.99f) v1.set(Vector3.X)
-        v3.set(v1).crs(v2).nor()
-        v1.set(v2).crs(v3).nor()
+        
+        v2.set(dir).nor() // UP vector is the direction of travel
+        // Find an arbitrary right vector (v3)
+        v1.set(Vector3.Y)
+        if (abs(v2.dot(v1)) > 0.99f) v1.set(Vector3.Z)
+        
+        v3.set(v1).crs(v2).nor() // Right
+        v1.set(v2).crs(v3).nor() // Forward
+
         transform.set(v3, v2, v1, tempVec)
     }
 
