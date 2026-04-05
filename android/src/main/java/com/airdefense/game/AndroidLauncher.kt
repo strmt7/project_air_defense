@@ -11,6 +11,8 @@ class AndroidLauncher : AndroidApplication() {
             useImmersiveMode = true
             useGyroscope = false
             useAccelerometer = false
+            numSamples = 2 // Multisampling for smoother edges
+            useGL30 = true // Enable GLES 3.0 for better hardware acceleration
         })
     }
 }
