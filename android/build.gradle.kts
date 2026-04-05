@@ -3,10 +3,10 @@ plugins {
     id("org.jetbrains.kotlin.android")
 }
 
-val releaseStoreFile = providers.gradleProperty("RELEASE_STORE_FILE")
-val releaseStorePassword = providers.gradleProperty("RELEASE_STORE_PASSWORD")
-val releaseKeyAlias = providers.gradleProperty("RELEASE_KEY_ALIAS")
-val releaseKeyPassword = providers.gradleProperty("RELEASE_KEY_PASSWORD")
+val releaseStoreFile = providers.gradleProperty("RELEASE_STORE_FILE").orElse(providers.environmentVariable("RELEASE_STORE_FILE"))
+val releaseStorePassword = providers.gradleProperty("RELEASE_STORE_PASSWORD").orElse(providers.environmentVariable("RELEASE_STORE_PASSWORD"))
+val releaseKeyAlias = providers.gradleProperty("RELEASE_KEY_ALIAS").orElse(providers.environmentVariable("RELEASE_KEY_ALIAS"))
+val releaseKeyPassword = providers.gradleProperty("RELEASE_KEY_PASSWORD").orElse(providers.environmentVariable("RELEASE_KEY_PASSWORD"))
 
 android {
     namespace = "com.airdefense.game"
