@@ -42,7 +42,7 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
     private val sounds = ObjectMap<String, com.badlogic.gdx.audio.Sound>()
     
     // --- Game State ---
-    private var credits = 5000
+    private var credits = 10000
     private var wave = 1
     private var score = 0
     private var health = 100f
@@ -56,7 +56,7 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
     // --- Screen Shake ---
     private var shakeTime = 0f
     private var shakeIntensity = 0f
-    private val baseCameraPos = Vector3(300f, 250f, 600f)
+    private val baseCameraPos = Vector3(350f, 300f, 650f)
     
     // --- Optimized Math Buffers (Zero Allocation) ---
     private val v1 = Vector3()
