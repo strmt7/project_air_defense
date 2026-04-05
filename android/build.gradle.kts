@@ -7,6 +7,7 @@ val releaseStoreFile = providers.gradleProperty("RELEASE_STORE_FILE").orElse(pro
 val releaseStorePassword = providers.gradleProperty("RELEASE_STORE_PASSWORD").orElse(providers.environmentVariable("RELEASE_STORE_PASSWORD"))
 val releaseKeyAlias = providers.gradleProperty("RELEASE_KEY_ALIAS").orElse(providers.environmentVariable("RELEASE_KEY_ALIAS"))
 val releaseKeyPassword = providers.gradleProperty("RELEASE_KEY_PASSWORD").orElse(providers.environmentVariable("RELEASE_KEY_PASSWORD"))
+val androidStudioDebugKeystore = java.io.File(System.getProperty("user.home"), ".android/debug.keystore")
 
 android {
     namespace = "com.airdefense.game"
@@ -25,7 +26,10 @@ android {
                 keyAlias = releaseKeyAlias.get()
                 keyPassword = releaseKeyPassword.get()
             } else {
-                initWith(getByName("debug"))
+                storeFile = androidStudioDebugKeystore
+                storePassword = "android"
+                keyAlias = "androiddebugkey"
+                keyPassword = "android"
             }
         }
     }
@@ -109,7 +113,7 @@ tasks.register("printReleaseSigningSource") {
         if (usingReleaseKeystore) {
             println("[signing] release build will use RELEASE_* properties (store file: ${releaseStoreFile.get()}).")
         } else {
-            println("[signing] release build will use DEBUG signing fallback (for local sideload testing).")
+            println("[signing] release build will use Android Studio debug.keystore fallback (${androidStudioDebugKeystore.path}).")
         }
     }
 }
