@@ -1,258 +1,179 @@
 package com.airdefense.game
 
-import com.badlogic.gdx.*
-import com.badlogic.gdx.graphics.*
-import com.badlogic.gdx.graphics.g2d.*
-import com.badlogic.gdx.graphics.g3d.*
-import com.badlogic.gdx.graphics.g3d.attributes.*
-import com.badlogic.gdx.graphics.g3d.environment.*
-import com.badlogic.gdx.graphics.g3d.utils.*
-import com.badlogic.gdx.graphics.g3d.utils.shapebuilders.*
-import com.badlogic.gdx.math.*
-import com.badlogic.gdx.scenes.scene2d.*
-import com.badlogic.gdx.scenes.scene2d.ui.*
-import com.badlogic.gdx.scenes.scene2d.utils.*
-import com.badlogic.gdx.utils.*
+import com.badlogic.gdx.Gdx
+import com.badlogic.gdx.ScreenAdapter
+import com.badlogic.gdx.graphics.Color
+import com.badlogic.gdx.graphics.Pixmap
+import com.badlogic.gdx.graphics.Texture
+import com.badlogic.gdx.graphics.g2d.BitmapFont
+import com.badlogic.gdx.graphics.g2d.TextureRegion
+import com.badlogic.gdx.scenes.scene2d.Actor
+import com.badlogic.gdx.scenes.scene2d.Stage
+import com.badlogic.gdx.scenes.scene2d.ui.Label
+import com.badlogic.gdx.scenes.scene2d.ui.Skin
+import com.badlogic.gdx.scenes.scene2d.ui.Table
+import com.badlogic.gdx.scenes.scene2d.ui.TextButton
+import com.badlogic.gdx.scenes.scene2d.utils.ChangeListener
+import com.badlogic.gdx.scenes.scene2d.utils.Drawable
+import com.badlogic.gdx.scenes.scene2d.utils.TextureRegionDrawable
 import com.badlogic.gdx.utils.Array
+import com.badlogic.gdx.utils.ScreenUtils
 import com.badlogic.gdx.utils.viewport.ScreenViewport
-import kotlin.math.*
 
 class StartScreen(private val game: AirDefenseGame) : ScreenAdapter() {
     private val stage = Stage(ScreenViewport())
-    private val skin: Skin
-    private val modelBatch = ModelBatch()
-    private val camera = PerspectiveCamera(60f, Gdx.graphics.width.toFloat(), Gdx.graphics.height.toFloat())
-    private val environment = Environment()
-    private val instances = Array<ModelInstance>()
-    private val models = ObjectMap<String, Model>()
-    
+    private val textures = Array<Texture>()
+    private val skin = createSkin()
+    private val skyTexture = loadTexture("textures/sky_panorama_2k.jpg", Color(0.01f, 0.02f, 0.05f, 1f))
+    private val cityTexture = loadTexture("textures/city_backdrop_telaviv.jpg", Color(0.08f, 0.08f, 0.12f, 1f))
+
     private var scanLineY = 0f
     private var launchRequested = false
-    private val root = Table()
 
     init {
-        skin = createSkin()
-        setup3DBackground()
-        
-        root.setFillParent(true)
-        
-        val titleTable = Table()
-        val titleLabel = Label("PROJECT: AIR DEFENSE", skin, "title")
-        val subLabel = Label("STRATEGIC INTERCEPT COMMAND // VER 3.0.4", skin, "status")
-        
-        titleTable.add(titleLabel).row()
-        titleTable.add(subLabel).padTop(10f).row()
-        root.add(titleTable).padBottom(120f).row()
+        val root = Table().apply { setFillParent(true) }
+        val titleBlock = Table()
+        titleBlock.add(Label("PROJECT AIR DEFENSE", skin, "title")).row()
+        titleBlock.add(Label("NIGHT SHIELD COMMAND // TACTICAL BUILD 4", skin, "status")).padTop(8f).row()
+        root.add(titleBlock).expandY().top().padTop(120f).row()
 
-        val menuTable = Table()
-        menuTable.defaults().width(450f).height(80f).pad(20f)
-        
-        val startBtn = TextButton("INITIALIZE DEFENSE NETWORK", skin)
-        startBtn.addListener(object : ChangeListener() {
+        val menu = Table().apply {
+            defaults().width(430f).height(80f).pad(16f)
+        }
+        val startButton = TextButton("ENTER AIRSPACE", skin)
+        startButton.addListener(object : ChangeListener() {
             override fun changed(event: ChangeEvent?, actor: Actor?) {
-                Gdx.app.log("StartScreen", "Initializing Defense Network...")
                 launchRequested = true
-                startBtn.isDisabled = true
+                startButton.isDisabled = true
             }
         })
-        
-        val exitBtn = TextButton("TERMINATE SESSION", skin)
-        exitBtn.addListener(object : ChangeListener() {
+        val exitButton = TextButton("EXIT", skin)
+        exitButton.addListener(object : ChangeListener() {
             override fun changed(event: ChangeEvent?, actor: Actor?) {
                 Gdx.app.exit()
             }
         })
+        menu.add(startButton).row()
+        menu.add(exitButton).row()
+        root.add(menu).expand().center().row()
 
-        menuTable.add(startBtn).row()
-        menuTable.add(exitBtn).row()
-        root.add(menuTable).row()
-
-        val footer = Table(skin).apply {
-            background = skin.newDrawable("white", Color(0f, 0.1f, 0.2f, 0.5f))
-            val footerText = Label("ESTABLISHING SECURE LINK... OK | RADAR ARRAY... ONLINE | BATTERY STATUS... READY", skin, "default")
-            add(footerText).pad(10f)
+        val footer = Table().apply {
+            background = skin.newDrawable("white", Color(0f, 0.05f, 0.08f, 0.8f))
         }
-        root.add(footer).expandX().fillX().bottom().padTop(100f)
+        footer.add(Label("TEL AVIV NIGHT REFERENCE + CC0 SKY PANORAMA INTEGRATED INTO THE SCENE", skin, "default")).pad(12f)
+        root.add(footer).expandX().fillX().bottom().padBottom(20f)
 
         stage.addActor(root)
         Gdx.input.inputProcessor = stage
     }
 
-    private fun setup3DBackground() {
-        camera.position.set(0f, 200f, 500f)
-        camera.lookAt(0f, 0f, 0f)
-        camera.near = 1f
-        camera.far = 5000f
-        camera.update()
-
-        environment.set(ColorAttribute(ColorAttribute.AmbientLight, 0.3f, 0.4f, 0.6f, 1f))
-        environment.add(DirectionalLight().set(Color.CYAN, -1f, -0.8f, -0.2f))
-        environment.add(PointLight().set(Color.WHITE, Vector3(100f, 100f, 100f), 1000f))
-
-        val mb = ModelBuilder()
-        val attr = (VertexAttributes.Usage.Position or VertexAttributes.Usage.Normal or VertexAttributes.Usage.TextureCoordinates).toLong()
-
-        // High-poly tactical globe
-        val globeMat = Material(ColorAttribute.createDiffuse(Color(0f, 0.2f, 0.4f, 1f)), BlendingAttribute(0.6f))
-        models.put("globe", mb.createSphere(400f, 400f, 400f, 64, 64, globeMat, attr))
-        
-        // Orbital Rings (High Poly)
-        mb.begin()
-        val ringMat = Material(ColorAttribute.createDiffuse(Color.CYAN))
-        val p1 = mb.part("ring", GL20.GL_TRIANGLES, attr, ringMat)
-        CylinderShapeBuilder.build(p1, 450f, 2f, 450f, 80)
-        models.put("ring", mb.end())
-
-        instances.add(ModelInstance(models.get("globe")))
-        instances.add(ModelInstance(models.get("ring")).apply { transform.rotate(Vector3.X, 75f) })
-        instances.add(ModelInstance(models.get("ring")).apply { transform.rotate(Vector3.Z, 45f) })
-    }
-
     private fun createSkin(): Skin {
         val s = Skin()
         val uiScale = Gdx.graphics.height / 1080f
-        val font = BitmapFont().apply { data.setScale(1.3f * uiScale) }
-        val titleFont = BitmapFont().apply { data.setScale(3.5f * uiScale) }
+        val font = BitmapFont().apply { data.setScale(1.15f * uiScale) }
+        val titleFont = BitmapFont().apply { data.setScale(3.1f * uiScale) }
         s.add("default", font, BitmapFont::class.java)
         s.add("title", titleFont, BitmapFont::class.java)
 
-        val pix = Pixmap(1, 1, Pixmap.Format.RGBA8888)
-        pix.setColor(Color.WHITE)
-        pix.fill()
-        val whiteTex = Texture(pix)
-        val whiteRegion = TextureRegion(whiteTex)
+        val white = Pixmap(2, 2, Pixmap.Format.RGBA8888)
+        white.setColor(Color.WHITE)
+        white.fill()
+        val whiteTexture = Texture(white)
+        textures.add(whiteTexture)
+        val whiteRegion = TextureRegion(whiteTexture)
         s.add("white", whiteRegion, TextureRegion::class.java)
         s.add("white", TextureRegionDrawable(whiteRegion), Drawable::class.java)
+        white.dispose()
 
-        // Fixed Button Registration using TextureRegion
-        fun createBtnRegion(up: Boolean): TextureRegion {
-            val w = (450 * uiScale).toInt()
-            val h = (80 * uiScale).toInt()
-            val p = Pixmap(w, h, Pixmap.Format.RGBA8888)
-            if (up) {
-                p.setColor(0.02f, 0.1f, 0.2f, 0.85f); p.fill()
-                p.setColor(0f, 0.8f, 1f, 1f); p.drawRectangle(0, 0, w, h)
-                p.drawRectangle(1, 1, w - 2, h - 2)
-            } else {
-                p.setColor(0f, 0.4f, 0.7f, 0.95f); p.fill()
-                p.setColor(Color.WHITE); p.drawRectangle(0, 0, w, h)
-            }
-            val tex = Texture(p)
-            p.dispose()
-            return TextureRegion(tex)
+        fun addButton(name: String, fill: Color, border: Color) {
+            val pixmap = Pixmap(220, 80, Pixmap.Format.RGBA8888)
+            pixmap.setColor(fill)
+            pixmap.fill()
+            pixmap.setColor(border)
+            pixmap.drawRectangle(0, 0, 220, 80)
+            pixmap.drawRectangle(1, 1, 218, 78)
+            val texture = Texture(pixmap)
+            textures.add(texture)
+            s.add(name, TextureRegion(texture), TextureRegion::class.java)
+            s.add(name, TextureRegionDrawable(TextureRegion(texture)), Drawable::class.java)
+            pixmap.dispose()
         }
 
-        val btnUp = createBtnRegion(true)
-        val btnDown = createBtnRegion(false)
-        s.add("btn_up", btnUp, TextureRegion::class.java)
-        s.add("btn_up", TextureRegionDrawable(btnUp), Drawable::class.java)
-        s.add("btn_down", btnDown, TextureRegion::class.java)
-        s.add("btn_down", TextureRegionDrawable(btnDown), Drawable::class.java)
+        addButton("btn_up", Color(0.02f, 0.08f, 0.14f, 0.88f), Color(0.18f, 0.84f, 1f, 1f))
+        addButton("btn_down", Color(0f, 0.3f, 0.46f, 0.96f), Color(0.75f, 0.96f, 1f, 1f))
 
         s.add("default", TextButton.TextButtonStyle().apply {
             up = s.getDrawable("btn_up")
             down = s.getDrawable("btn_down")
-            over = s.newDrawable("btn_up", Color(0.8f, 0.9f, 1f, 1f))
+            over = s.newDrawable("btn_up", Color(0.9f, 0.95f, 1f, 1f))
             this.font = font
             fontColor = Color.WHITE
         })
-
-        s.add("default", Label.LabelStyle(font, Color.LIGHT_GRAY))
-        s.add("status", Label.LabelStyle(font, Color.CYAN))
+        s.add("default", Label.LabelStyle(font, Color.WHITE))
+        s.add("status", Label.LabelStyle(font, Color(0.68f, 0.95f, 1f, 1f)))
         s.add("title", Label.LabelStyle(titleFont, Color.WHITE))
-
-        pix.dispose()
         return s
     }
 
-    override fun render(delta: Float) {
-        ScreenUtils.clear(0.01f, 0.02f, 0.05f, 1f, true)
-        
-        instances.forEach { it.transform.rotate(Vector3.Y, delta * 15f) }
-        
-        modelBatch.begin(camera)
-        modelBatch.render(instances, environment)
-        modelBatch.end()
+    private fun loadTexture(path: String, fallbackColor: Color): Texture {
+        val file = Gdx.files.internal(path)
+        if (file.exists()) {
+            return Texture(file).also {
+                it.setFilter(Texture.TextureFilter.Linear, Texture.TextureFilter.Linear)
+                textures.add(it)
+            }
+        }
+        val pixmap = Pixmap(4, 4, Pixmap.Format.RGBA8888)
+        pixmap.setColor(fallbackColor)
+        pixmap.fill()
+        return Texture(pixmap).also {
+            it.setFilter(Texture.TextureFilter.Linear, Texture.TextureFilter.Linear)
+            textures.add(it)
+            pixmap.dispose()
+        }
+    }
 
-        val uiScale = Gdx.graphics.height / 1080f
-        scanLineY = (scanLineY + delta * 300f * uiScale) % Gdx.graphics.height
+    override fun render(delta: Float) {
+        ScreenUtils.clear(0.01f, 0.02f, 0.04f, 1f)
+        stage.act(delta)
+        stage.viewport.apply()
+
+        val batch = stage.batch
+        val width = Gdx.graphics.width.toFloat()
+        val height = Gdx.graphics.height.toFloat()
+        scanLineY = (scanLineY + delta * 260f) % height
+
+        batch.begin()
+        batch.color = Color.WHITE
+        batch.draw(skyTexture, 0f, 0f, width, height)
+        batch.setColor(1f, 1f, 1f, 0.65f)
+        batch.draw(cityTexture, 0f, 0f, width, height * 0.56f)
+        batch.setColor(0f, 0.2f, 0.35f, 0.16f)
+        batch.draw(skin.getRegion("white"), 0f, 0f, width, height * 0.6f)
+        batch.setColor(0.15f, 0.92f, 1f, 0.08f)
+        batch.draw(skin.getRegion("white"), 0f, scanLineY, width, 3f)
+        batch.draw(skin.getRegion("white"), 0f, (scanLineY + 180f) % height, width, 1.5f)
+        batch.setColor(0f, 0f, 0f, 0.36f)
+        batch.draw(skin.getRegion("white"), 0f, height - 180f, width, 180f)
+        batch.draw(skin.getRegion("white"), 0f, 0f, width, 110f)
+        batch.color = Color.WHITE
+        batch.end()
+
+        stage.draw()
 
         if (launchRequested) {
             launchRequested = false
             game.screen = BattleScreen(game)
-            return
         }
-
-        stage.act(delta)
-        stage.draw()
-        
-        val batch = stage.batch
-        batch.begin()
-        batch.setColor(0f, 1f, 1f, 0.05f)
-        batch.draw(skin.getRegion("white"), 0f, scanLineY, Gdx.graphics.width.toFloat(), 3f * uiScale)
-        batch.draw(skin.getRegion("white"), 0f, (scanLineY + 200 * uiScale) % Gdx.graphics.height, Gdx.graphics.width.toFloat(), 1f * uiScale)
-        
-        batch.setColor(0f, 0f, 0f, 0.4f)
-        batch.draw(skin.getRegion("white"), 0f, Gdx.graphics.height - 100f * uiScale, Gdx.graphics.width.toFloat(), 100f * uiScale)
-        batch.draw(skin.getRegion("white"), 0f, 0f, Gdx.graphics.width.toFloat(), 100f * uiScale)
-        
-        batch.setColor(Color.WHITE)
-        batch.end()
     }
 
     override fun resize(width: Int, height: Int) {
         stage.viewport.update(width, height, true)
-        camera.viewportWidth = width.toFloat()
-        camera.viewportHeight = height.toFloat()
-        camera.update()
-        
-        // Re-center UI root after scaling
-        val uiScale = height / 1080f
-        root.clear()
-        
-        val titleTable = Table()
-        val titleLabel = Label("PROJECT: AIR DEFENSE", skin, "title")
-        val subLabel = Label("STRATEGIC INTERCEPT COMMAND // VER 3.0.4", skin, "status")
-        
-        titleTable.add(titleLabel).row()
-        titleTable.add(subLabel).padTop(10f * uiScale).row()
-        root.add(titleTable).padBottom(120f * uiScale).row()
-
-        val menuTable = Table()
-        menuTable.defaults().width(450f * uiScale).height(80f * uiScale).pad(20f * uiScale)
-        
-        val startBtn = TextButton("INITIALIZE DEFENSE NETWORK", skin)
-        startBtn.isDisabled = launchRequested
-        startBtn.addListener(object : ChangeListener() {
-            override fun changed(event: ChangeEvent?, actor: Actor?) {
-                launchRequested = true
-                startBtn.isDisabled = true
-            }
-        })
-        
-        val exitBtn = TextButton("TERMINATE SESSION", skin)
-        exitBtn.addListener(object : ChangeListener() {
-            override fun changed(event: ChangeEvent?, actor: Actor?) {
-                Gdx.app.exit()
-            }
-        })
-
-        menuTable.add(startBtn).row()
-        menuTable.add(exitBtn).row()
-        root.add(menuTable).row()
-
-        val footer = Table(skin).apply {
-            background = skin.newDrawable("white", Color(0f, 0.1f, 0.2f, 0.5f))
-            val footerText = Label("ESTABLISHING SECURE LINK... OK | RADAR ARRAY... ONLINE | BATTERY STATUS... READY", skin, "default")
-            add(footerText).pad(10f * uiScale)
-        }
-        root.add(footer).expandX().fillX().bottom().padTop(100f * uiScale)
     }
 
     override fun dispose() {
         stage.dispose()
         skin.dispose()
-        modelBatch.dispose()
-        models.values().forEach { it.dispose() }
+        textures.forEach { it.dispose() }
     }
 }

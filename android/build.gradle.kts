@@ -1,3 +1,5 @@
+import java.io.ByteArrayOutputStream
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -7,6 +9,22 @@ val releaseStoreFile = providers.gradleProperty("RELEASE_STORE_FILE").orElse(pro
 val releaseStorePassword = providers.gradleProperty("RELEASE_STORE_PASSWORD").orElse(providers.environmentVariable("RELEASE_STORE_PASSWORD"))
 val releaseKeyAlias = providers.gradleProperty("RELEASE_KEY_ALIAS").orElse(providers.environmentVariable("RELEASE_KEY_ALIAS"))
 val releaseKeyPassword = providers.gradleProperty("RELEASE_KEY_PASSWORD").orElse(providers.environmentVariable("RELEASE_KEY_PASSWORD"))
+val explicitVersionCode = providers.gradleProperty("APP_VERSION_CODE").orElse(providers.environmentVariable("APP_VERSION_CODE"))
+val explicitVersionName = providers.gradleProperty("APP_VERSION_NAME").orElse(providers.environmentVariable("APP_VERSION_NAME"))
+val gitVersionCodeProvider = providers.provider {
+    val gitDir = rootProject.file(".git")
+    if (!gitDir.exists()) return@provider "1"
+    val stdout = ByteArrayOutputStream()
+    val result = exec {
+        commandLine("git", "rev-list", "--count", "HEAD")
+        standardOutput = stdout
+        isIgnoreExitValue = true
+    }
+    if (result.exitValue == 0) stdout.toString().trim().ifBlank { "1" } else "1"
+}
+val computedVersionCode = explicitVersionCode.orElse(gitVersionCodeProvider).map { it.toInt() }
+val computedVersionName = explicitVersionName.orElse(computedVersionCode.map { "0.1.$it" })
+val hasReleaseSigning = releaseStoreFile.isPresent && releaseStorePassword.isPresent && releaseKeyAlias.isPresent && releaseKeyPassword.isPresent
 
 android {
     namespace = "com.airdefense.game"
@@ -14,12 +32,7 @@ android {
 
     signingConfigs {
         create("release") {
-            if (
-                releaseStoreFile.isPresent &&
-                releaseStorePassword.isPresent &&
-                releaseKeyAlias.isPresent &&
-                releaseKeyPassword.isPresent
-            ) {
+            if (hasReleaseSigning) {
                 storeFile = rootProject.file(releaseStoreFile.get())
                 storePassword = releaseStorePassword.get()
                 keyAlias = releaseKeyAlias.get()
@@ -32,8 +45,8 @@ android {
         applicationId = "com.airdefense.game"
         minSdk = 28
         targetSdk = 36
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = computedVersionCode.get()
+        versionName = computedVersionName.get()
     }
 
     sourceSets {
@@ -43,19 +56,23 @@ android {
     }
 
     buildTypes {
+        debug {
+            applicationIdSuffix = ".debug"
+            versionNameSuffix = "-debug"
+            signingConfig = signingConfigs.getByName("debug")
+        }
+
+        create("local") {
+            initWith(getByName("debug"))
+            applicationIdSuffix = ".local"
+            versionNameSuffix = "-local"
+            matchingFallbacks += listOf("debug")
+        }
+
         release {
             isMinifyEnabled = true
             isShrinkResources = true
-            val usingReleaseKeystore =
-                releaseStoreFile.isPresent &&
-                releaseStorePassword.isPresent &&
-                releaseKeyAlias.isPresent &&
-                releaseKeyPassword.isPresent
-            signingConfig = if (usingReleaseKeystore) {
-                signingConfigs.getByName("release")
-            } else {
-                signingConfigs.getByName("debug")
-            }
+            signingConfig = signingConfigs.getByName("release")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
@@ -100,19 +117,23 @@ dependencies {
 
 tasks.register("printReleaseSigningSource") {
     group = "verification"
-    description = "Prints whether release signing uses RELEASE_* properties or debug fallback."
+    description = "Prints whether release signing uses RELEASE_* properties."
     doLast {
-        val usingReleaseKeystore =
-            releaseStoreFile.isPresent &&
-            releaseStorePassword.isPresent &&
-            releaseKeyAlias.isPresent &&
-            releaseKeyPassword.isPresent
-
-        if (usingReleaseKeystore) {
+        if (hasReleaseSigning) {
             println("[signing] release build will use RELEASE_* properties (store file: ${releaseStoreFile.get()}).")
         } else {
-            println("[signing] release build will use the Android debug signing config fallback.")
+            println("[signing] release build is disabled until RELEASE_* properties are configured.")
         }
+    }
+}
+
+tasks.register("printAppIdentity") {
+    group = "verification"
+    description = "Prints package ids and version metadata for debug/local/release channels."
+    doLast {
+        println("[identity] release package=com.airdefense.game versionCode=${computedVersionCode.get()} versionName=${computedVersionName.get()}")
+        println("[identity] local package=com.airdefense.game.local versionCode=${computedVersionCode.get()} versionName=${computedVersionName.get()}-local")
+        println("[identity] debug package=com.airdefense.game.debug versionCode=${computedVersionCode.get()} versionName=${computedVersionName.get()}-debug")
     }
 }
 
@@ -142,5 +163,10 @@ tasks.register("copyNatives") {
 tasks.configureEach {
     if (name.contains("package")) {
         dependsOn("copyNatives")
+    }
+    if (name == "assembleRelease" || name == "bundleRelease") {
+        onlyIf("release signing must be configured for update-safe release artifacts") {
+            hasReleaseSigning
+        }
     }
 }
