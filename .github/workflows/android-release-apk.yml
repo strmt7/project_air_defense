@@ -42,12 +42,15 @@ jobs:
       - name: Ensure Gradle wrapper is executable
         run: chmod +x gradlew
 
-      - name: Build release APK
-        run: ./gradlew --no-daemon :android:assembleRelease
+      - name: Print app identity
+        run: ./gradlew --no-daemon :android:printAppIdentity :android:printReleaseSigningSource
 
-      - name: Upload release APK artifact
+      - name: Build local APK artifact
+        run: ./gradlew --no-daemon :android:assembleLocal
+
+      - name: Upload local APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: android-release-apk
-          path: android/build/outputs/apk/release/*.apk
+          name: android-local-apk
+          path: android/build/outputs/apk/local/*.apk
           if-no-files-found: error

@@ -1,689 +1,1218 @@
 package com.airdefense.game
 
-import com.badlogic.gdx.*
-import com.badlogic.gdx.graphics.*
-import com.badlogic.gdx.graphics.g2d.*
-import com.badlogic.gdx.graphics.g3d.*
-import com.badlogic.gdx.graphics.g3d.attributes.*
-import com.badlogic.gdx.graphics.g3d.environment.*
-import com.badlogic.gdx.graphics.g3d.utils.*
-import com.badlogic.gdx.graphics.g3d.utils.shapebuilders.*
-import com.badlogic.gdx.math.*
-import com.badlogic.gdx.scenes.scene2d.*
-import com.badlogic.gdx.scenes.scene2d.ui.*
-import com.badlogic.gdx.scenes.scene2d.utils.*
-import com.badlogic.gdx.utils.*
+import com.badlogic.gdx.Gdx
+import com.badlogic.gdx.InputAdapter
+import com.badlogic.gdx.ScreenAdapter
+import com.badlogic.gdx.audio.Sound
+import com.badlogic.gdx.graphics.Color
+import com.badlogic.gdx.graphics.GL20
+import com.badlogic.gdx.graphics.PerspectiveCamera
+import com.badlogic.gdx.graphics.Pixmap
+import com.badlogic.gdx.graphics.Texture
+import com.badlogic.gdx.graphics.VertexAttributes
+import com.badlogic.gdx.graphics.g2d.BitmapFont
+import com.badlogic.gdx.graphics.g2d.GlyphLayout
+import com.badlogic.gdx.graphics.g3d.Environment
+import com.badlogic.gdx.graphics.g3d.Material
+import com.badlogic.gdx.graphics.g3d.Model
+import com.badlogic.gdx.graphics.g3d.ModelBatch
+import com.badlogic.gdx.graphics.g3d.ModelInstance
+import com.badlogic.gdx.graphics.g3d.attributes.BlendingAttribute
+import com.badlogic.gdx.graphics.g3d.attributes.ColorAttribute
+import com.badlogic.gdx.graphics.g3d.attributes.FloatAttribute
+import com.badlogic.gdx.graphics.g3d.attributes.IntAttribute
+import com.badlogic.gdx.graphics.g3d.attributes.TextureAttribute
+import com.badlogic.gdx.graphics.g3d.environment.DirectionalLight
+import com.badlogic.gdx.graphics.g3d.environment.PointLight
+import com.badlogic.gdx.graphics.g3d.utils.ModelBuilder
+import com.badlogic.gdx.graphics.g3d.utils.shapebuilders.BoxShapeBuilder
+import com.badlogic.gdx.graphics.g3d.utils.shapebuilders.ConeShapeBuilder
+import com.badlogic.gdx.graphics.g3d.utils.shapebuilders.CylinderShapeBuilder
+import com.badlogic.gdx.graphics.g3d.utils.shapebuilders.SphereShapeBuilder
+import com.badlogic.gdx.math.MathUtils
+import com.badlogic.gdx.math.Matrix4
+import com.badlogic.gdx.math.Vector3
+import com.badlogic.gdx.scenes.scene2d.Actor
+import com.badlogic.gdx.scenes.scene2d.InputEvent
+import com.badlogic.gdx.scenes.scene2d.Stage
+import com.badlogic.gdx.scenes.scene2d.ui.Label
+import com.badlogic.gdx.scenes.scene2d.ui.Skin
+import com.badlogic.gdx.scenes.scene2d.ui.Slider
+import com.badlogic.gdx.scenes.scene2d.ui.Table
+import com.badlogic.gdx.scenes.scene2d.ui.TextButton
+import com.badlogic.gdx.scenes.scene2d.utils.ChangeListener
+import com.badlogic.gdx.scenes.scene2d.utils.Drawable
+import com.badlogic.gdx.scenes.scene2d.utils.TextureRegionDrawable
 import com.badlogic.gdx.utils.Array
-import com.badlogic.gdx.utils.viewport.ScreenViewport
+import com.badlogic.gdx.utils.ObjectMap
 import com.badlogic.gdx.utils.ScreenUtils
-import kotlin.math.*
+import com.badlogic.gdx.utils.viewport.ScreenViewport
+import kotlin.math.abs
+import kotlin.math.max
+import kotlin.math.min
 
 class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
-    // --- High-Fidelity Engine Systems ---
-    private val modelBatch = ModelBatch()
     private val environment = Environment()
     private val impactLight = PointLight()
-    private val camera = PerspectiveCamera(60f, Gdx.graphics.width.toFloat(), Gdx.graphics.height.toFloat())
-    private val settings = DefenseSettings()
+    private val modelBatch = ModelBatch(NightShaderProvider(impactLight))
+    private val camera = PerspectiveCamera(55f, Gdx.graphics.width.toFloat(), Gdx.graphics.height.toFloat())
     private val stage = Stage(ScreenViewport())
-    private val skin: Skin
-    
-    // --- Asset Management ---
+    private val settings = DefenseSettings()
+    private val skin = createSkin()
+    private val whiteRegion by lazy { skin.get("white_region", com.badlogic.gdx.graphics.g2d.TextureRegion::class.java) }
+
     private val models = ObjectMap<String, Model>()
+    private val textures = Array<Texture>()
     private val instances = Array<ModelInstance>()
-    private val cityBlocks = Array<BuildingEntity>()
     private val launchers = Array<ModelInstance>()
+    private val cityBlocks = Array<BuildingEntity>()
     private val threats = Array<ThreatEntity>()
     private val interceptors = Array<InterceptorEntity>()
     private val effects = Array<VisualEffect>()
     private val debris = Array<DebrisEntity>()
-    
-    // --- Audio ---
-    private val sounds = ObjectMap<String, com.badlogic.gdx.audio.Sound>()
-    
-    // --- Game State ---
+    private val sounds = ObjectMap<String, Sound>()
+
+    private val statusLabel = Label("AIR DEFENSE NETWORK ONLINE", skin, "status")
+    private val creditsLabel = Label("", skin, "status")
+
+    private val gravity = Vector3(0f, -55f, 0f)
+    private val cameraBase = Vector3(0f, 260f, 720f)
+    private val tempA = Vector3()
+    private val tempB = Vector3()
+    private val tempC = Vector3()
+    private val tempD = Vector3()
+    private val tempProject = Vector3()
+    private val tmpMatrix = Matrix4()
+
     private var credits = 10000
     private var wave = 1
     private var score = 0
-    private var health = 100f
-    private var isGameOver = false
+    private var cityIntegrity = 100f
     private var waveInProgress = false
-    private var spawnTimer = 0f
+    private var isGameOver = false
     private var threatsRemainingInWave = 0
-    private var timeSinceLastEngagement = 0f
+    private var spawnTimer = 0f
+    private var timeSinceLastLaunch = 0f
     private var radarScanAngle = 0f
-    
-    // --- Screen Shake ---
     private var shakeTime = 0f
     private var shakeIntensity = 0f
-    private val baseCameraPos = Vector3(350f, 300f, 650f)
-    
-    // --- Optimized Math Buffers (Zero Allocation) ---
-    private val v1 = Vector3()
-    private val v2 = Vector3()
-    private val v3 = Vector3()
-    private val tempVec = Vector3()
-    private val gravity = Vector3(0f, -45f, 0f)
 
     private companion object {
-        private const val THREAT_SCALE = 3.2f
-        private const val INTERCEPTOR_SCALE = 4.0f
-        private const val THREAT_TRAIL_INTERVAL = 0.04f
+        private const val WORLD_RADIUS = 9000f
+        private const val THREAT_TRAIL_INTERVAL = 0.06f
+        private const val INTERCEPTOR_TRAIL_INTERVAL = 0.025f
+        private const val THREAT_SCALE = 6f
+        private const val INTERCEPTOR_SCALE = 8f
+        private const val BUILDING_SPACING_X = 150f
+        private const val BUILDING_SPACING_Z = 190f
     }
-
-    // --- Audio Loading ---
-    private fun loadAudio() {
-        try {
-            val launchFile = Gdx.files.internal("sfx/launch.mp3")
-            if (launchFile.exists()) sounds.put("launch", Gdx.audio.newSound(launchFile))
-            
-            val detonateFile = Gdx.files.internal("sfx/detonate.mp3")
-            if (detonateFile.exists()) sounds.put("detonate", Gdx.audio.newSound(detonateFile))
-            
-            val impactFile = Gdx.files.internal("sfx/impact.mp3")
-            if (impactFile.exists()) sounds.put("impact", Gdx.audio.newSound(impactFile))
-        } catch (e: Exception) {
-            Gdx.app.error("Audio", "Error loading audio: ${e.message}")
-        }
-    }
-
-    private fun playSfx(name: String, volume: Float = 0.5f) {
-        sounds.get(name)?.play(volume)
-    }
-
-    // --- UI Elements ---
-    private val statusLabel: Label
-    private val creditsLabel: Label
 
     init {
-        val localSkin = createSkin()
-        this.skin = localSkin
-        
-        statusLabel = Label("NETWORK ONLINE // READY FOR ENGAGEMENT", localSkin, "status")
-        creditsLabel = Label("CMD CREDITS: $credits | SCORE: $score", localSkin, "status")
-
         setupEnvironment()
         setupCamera()
-        
         generateWorldModels()
-        generateThreatModels()
-        
-        createInitialEnvironment()
-        setupHud(localSkin)
+        createWorldInstances()
+        setupHud()
         loadAudio()
         startNewWave()
-        
-        stage.addListener(object : InputListener() {
-            override fun touchDown(event: InputEvent?, x: Float, y: Float, pointer: Int, button: Int): Boolean {
-                if (isGameOver) {
+
+        stage.addListener(object : InputAdapter(), com.badlogic.gdx.scenes.scene2d.EventListener {
+            override fun handle(event: com.badlogic.gdx.scenes.scene2d.Event?): Boolean {
+                if (isGameOver && event is InputEvent && event.type == InputEvent.Type.touchDown) {
                     game.screen = StartScreen(game)
                     return true
                 }
                 return false
             }
         })
-        
         Gdx.input.inputProcessor = stage
     }
 
     private fun createSkin(): Skin {
         val s = Skin()
         val uiScale = Gdx.graphics.height / 1080f
-        val font = BitmapFont().apply { data.setScale(1.1f * uiScale) }
-        val titleFont = BitmapFont().apply { data.setScale(1.8f * uiScale) }
+        val font = BitmapFont().apply { data.setScale(1.05f * uiScale) }
+        val titleFont = BitmapFont().apply { data.setScale(1.7f * uiScale) }
         s.add("default", font, BitmapFont::class.java)
         s.add("title", titleFont, BitmapFont::class.java)
 
-        val pixmap = Pixmap(128, 128, Pixmap.Format.RGBA8888)
-        
-        pixmap.setColor(Color(0.02f, 0.05f, 0.1f, 0.9f))
-        pixmap.fill()
-        val bgTex = Texture(pixmap).apply { setFilter(Texture.TextureFilter.Linear, Texture.TextureFilter.Linear) }
-        s.add("bg_tex", bgTex)
-        s.add("bg_panel", TextureRegion(bgTex))
-        s.add("bg_panel", TextureRegionDrawable(s.getRegion("bg_panel")), Drawable::class.java)
-        
-        pixmap.setColor(Color.WHITE)
-        pixmap.fill()
-        val whiteTex = Texture(pixmap)
-        s.add("white_tex", whiteTex)
-        s.add("white", TextureRegion(whiteTex))
-        s.add("white", TextureRegionDrawable(s.getRegion("white")), Drawable::class.java)
+        val whitePix = Pixmap(2, 2, Pixmap.Format.RGBA8888)
+        whitePix.setColor(Color.WHITE)
+        whitePix.fill()
+        val whiteTex = Texture(whitePix)
+        textures.add(whiteTex)
+        s.add("white", TextureRegionDrawable(com.badlogic.gdx.graphics.g2d.TextureRegion(whiteTex)), Drawable::class.java)
+        s.add("white_region", com.badlogic.gdx.graphics.g2d.TextureRegion(whiteTex))
 
-        fun addBtn(name: String, upC: Color, brdC: Color) {
-            val p = Pixmap(128, 128, Pixmap.Format.RGBA8888)
-            p.setColor(upC)
+        fun addButton(name: String, fill: Color, stroke: Color) {
+            val p = Pixmap(160, 72, Pixmap.Format.RGBA8888)
+            p.setColor(fill)
             p.fill()
-            p.setColor(brdC)
-            p.drawRectangle(0, 0, 128, 128)
-            p.drawRectangle(1, 1, 126, 126)
-            val tex = Texture(p).apply { setFilter(Texture.TextureFilter.Linear, Texture.TextureFilter.Linear) }
-            s.add("${name}_tex", tex)
-            s.add(name, TextureRegion(tex))
-            s.add(name, TextureRegionDrawable(s.getRegion(name)), Drawable::class.java)
+            p.setColor(stroke)
+            p.drawRectangle(0, 0, 160, 72)
+            p.drawRectangle(1, 1, 158, 70)
+            val tex = Texture(p)
+            textures.add(tex)
+            s.add(name, TextureRegionDrawable(com.badlogic.gdx.graphics.g2d.TextureRegion(tex)), Drawable::class.java)
             p.dispose()
         }
-        addBtn("btn_up", Color(0.05f, 0.12f, 0.2f, 0.8f), Color(0f, 0.8f, 1f, 1f))
-        addBtn("btn_down", Color(0f, 0.4f, 0.6f, 0.9f), Color(0.5f, 1f, 1f, 1f))
-        
+
+        addButton("btn_up", Color(0.02f, 0.08f, 0.15f, 0.92f), Color(0.2f, 0.84f, 1f, 1f))
+        addButton("btn_down", Color(0.0f, 0.25f, 0.4f, 0.95f), Color(0.6f, 0.94f, 1f, 1f))
+
         s.add("default", TextButton.TextButtonStyle().apply {
             up = s.getDrawable("btn_up")
             down = s.getDrawable("btn_down")
-            over = s.newDrawable("btn_up", Color.DARK_GRAY)
+            over = s.newDrawable("btn_up", Color(0.85f, 0.95f, 1f, 1f))
             this.font = font
             fontColor = Color.WHITE
         })
-
         s.add("default", Label.LabelStyle(font, Color.WHITE))
-        s.add("status", Label.LabelStyle(font, Color.CYAN))
-        s.add("warning", Label.LabelStyle(font, Color.ORANGE))
-        s.add("critical", Label.LabelStyle(font, Color.RED))
-        s.add("title", Label.LabelStyle(titleFont, Color.CYAN))
+        s.add("status", Label.LabelStyle(font, Color(0.7f, 0.96f, 1f, 1f)))
+        s.add("warning", Label.LabelStyle(font, Color(1f, 0.84f, 0.4f, 1f)))
+        s.add("critical", Label.LabelStyle(font, Color(1f, 0.42f, 0.42f, 1f)))
+        s.add("title", Label.LabelStyle(titleFont, Color.WHITE))
 
-        val sBack = Pixmap(100, 8, Pixmap.Format.RGBA8888).apply { setColor(0.1f, 0.2f, 0.3f, 1f); fill() }
-        val sBackTex = Texture(sBack)
-        s.add("s_back_tex", sBackTex); s.add("s_back", TextureRegion(sBackTex))
-        s.add("s_back", TextureRegionDrawable(s.getRegion("s_back")), Drawable::class.java)
-        
-        val sKnob = Pixmap(16, 24, Pixmap.Format.RGBA8888).apply { setColor(0f, 0.9f, 1f, 1f); fill() }
-        val sKnobTex = Texture(sKnob)
-        s.add("s_knob_tex", sKnobTex); s.add("s_knob", TextureRegion(sKnobTex))
-        s.add("s_knob", TextureRegionDrawable(s.getRegion("s_knob")), Drawable::class.java)
-        
-        s.add("default-horizontal", Slider.SliderStyle(s.getDrawable("s_back"), s.getDrawable("s_knob")))
-
-        pixmap.dispose(); sBack.dispose(); sKnob.dispose()
+        val sliderBack = Pixmap(128, 10, Pixmap.Format.RGBA8888).apply {
+            setColor(0.08f, 0.18f, 0.26f, 1f)
+            fill()
+        }
+        val sliderKnob = Pixmap(20, 28, Pixmap.Format.RGBA8888).apply {
+            setColor(0.4f, 0.9f, 1f, 1f)
+            fill()
+        }
+        val sliderBackTex = Texture(sliderBack)
+        val sliderKnobTex = Texture(sliderKnob)
+        textures.add(sliderBackTex)
+        textures.add(sliderKnobTex)
+        s.add("default-horizontal", Slider.SliderStyle(
+            TextureRegionDrawable(com.badlogic.gdx.graphics.g2d.TextureRegion(sliderBackTex)),
+            TextureRegionDrawable(com.badlogic.gdx.graphics.g2d.TextureRegion(sliderKnobTex))
+        ))
+        whitePix.dispose()
+        sliderBack.dispose()
+        sliderKnob.dispose()
         return s
     }
 
     private fun setupEnvironment() {
-        environment.set(ColorAttribute(ColorAttribute.AmbientLight, 0.12f, 0.15f, 0.22f, 1f))
-        environment.add(DirectionalLight().set(Color(0.7f, 0.8f, 1f, 1f), -0.5f, -1f, -0.3f))
+        environment.set(ColorAttribute(ColorAttribute.AmbientLight, 0.22f, 0.24f, 0.3f, 1f))
+        environment.add(DirectionalLight().set(Color(0.38f, 0.44f, 0.55f, 1f), -0.4f, -1f, -0.18f))
+        environment.add(DirectionalLight().set(Color(0.16f, 0.15f, 0.22f, 1f), 0.35f, -0.22f, 0.4f))
         impactLight.set(Color.BLACK, Vector3.Zero, 0f)
         environment.add(impactLight)
     }
 
     private fun setupCamera() {
         camera.near = 1f
-        camera.far = 10000f
-        camera.position.set(300f, 250f, 600f)
-        camera.lookAt(0f, 50f, -200f)
+        camera.far = WORLD_RADIUS * 1.5f
+        camera.position.set(cameraBase)
+        camera.lookAt(0f, 100f, -240f)
         camera.update()
     }
 
+    private fun loadTexture(path: String, fallbackColor: Color): Texture {
+        val file = Gdx.files.internal(path)
+        if (file.exists()) {
+            return registerTexture(Texture(file))
+        }
+        val pixmap = Pixmap(8, 8, Pixmap.Format.RGBA8888)
+        pixmap.setColor(fallbackColor)
+        pixmap.fill()
+        return registerTexture(Texture(pixmap)).also { pixmap.dispose() }
+    }
+
+    private fun registerTexture(texture: Texture, repeat: Boolean = false): Texture {
+        texture.setFilter(Texture.TextureFilter.Linear, Texture.TextureFilter.Linear)
+        if (repeat) texture.setWrap(Texture.TextureWrap.Repeat, Texture.TextureWrap.Repeat)
+        textures.add(texture)
+        return texture
+    }
+
+    private fun createTextureSet(diffuse: Pixmap, roughness: Pixmap, repeat: Boolean = true): SurfaceTextureSet {
+        val diffuseTexture = registerTexture(Texture(diffuse), repeat)
+        val roughnessTexture = registerTexture(Texture(roughness), repeat)
+        diffuse.dispose()
+        roughness.dispose()
+        return SurfaceTextureSet(diffuseTexture, roughnessTexture)
+    }
+
+    private fun createSolidTextureSet(color: Color, roughnessValue: Float): SurfaceTextureSet {
+        val diffuse = Pixmap(4, 4, Pixmap.Format.RGBA8888).apply { setColor(color); fill() }
+        val roughness = Pixmap(4, 4, Pixmap.Format.RGBA8888).apply {
+            setColor(roughnessValue, roughnessValue, roughnessValue, 1f)
+            fill()
+        }
+        return createTextureSet(diffuse, roughness, repeat = false)
+    }
+
+    private fun createFacadeTextureSet(width: Int, height: Int, base: Color, lit: Color): SurfaceTextureSet {
+        val diffuse = Pixmap(width, height, Pixmap.Format.RGBA8888)
+        val roughness = Pixmap(width, height, Pixmap.Format.RGBA8888)
+        diffuse.setColor(base)
+        diffuse.fill()
+        roughness.setColor(0.84f, 0.84f, 0.84f, 1f)
+        roughness.fill()
+
+        for (x in 0 until width) {
+            for (y in 0 until height) {
+                val verticalBand = ((x / 14) % 2) * 0.03f
+                val horizontalBand = ((y / 18) % 2) * 0.02f
+                val noise = MathUtils.random(-0.015f, 0.015f)
+                diffuse.setColor(
+                    (base.r + verticalBand + noise).coerceIn(0f, 1f),
+                    (base.g + horizontalBand + noise).coerceIn(0f, 1f),
+                    (base.b + noise).coerceIn(0f, 1f),
+                    1f
+                )
+                diffuse.drawPixel(x, y)
+            }
+        }
+
+        for (x in 8 until width step 20) {
+            for (y in 10 until height step 22) {
+                val glow = MathUtils.randomBoolean(0.7f)
+                diffuse.setColor(if (glow) lit else Color(0.03f, 0.05f, 0.08f, 1f))
+                diffuse.fillRectangle(x, y, 10, 12)
+                roughness.setColor(if (glow) 0.15f else 0.88f, if (glow) 0.15f else 0.88f, if (glow) 0.15f else 0.88f, 1f)
+                roughness.fillRectangle(x, y, 10, 12)
+            }
+        }
+
+        return createTextureSet(diffuse, roughness)
+    }
+
+    private fun createGroundTextureSet(): SurfaceTextureSet {
+        val diffuse = Pixmap(512, 512, Pixmap.Format.RGBA8888)
+        val roughness = Pixmap(512, 512, Pixmap.Format.RGBA8888)
+        for (x in 0 until 512) {
+            for (y in 0 until 512) {
+                val noise = MathUtils.random(-0.03f, 0.03f)
+                val striping = if ((x / 32 + y / 32) % 2 == 0) 0.02f else -0.01f
+                diffuse.setColor(
+                    (0.07f + noise + striping).coerceIn(0f, 1f),
+                    (0.075f + noise).coerceIn(0f, 1f),
+                    (0.08f + noise * 0.7f).coerceIn(0f, 1f),
+                    1f
+                )
+                diffuse.drawPixel(x, y)
+                val r = (0.82f + MathUtils.random(-0.1f, 0.08f)).coerceIn(0.1f, 1f)
+                roughness.setColor(r, r, r, 1f)
+                roughness.drawPixel(x, y)
+            }
+        }
+        return createTextureSet(diffuse, roughness)
+    }
+
+    private fun createRoadTextureSet(): SurfaceTextureSet {
+        val diffuse = Pixmap(512, 512, Pixmap.Format.RGBA8888)
+        val roughness = Pixmap(512, 512, Pixmap.Format.RGBA8888)
+        for (x in 0 until 512) {
+            for (y in 0 until 512) {
+                val noise = MathUtils.random(-0.025f, 0.025f)
+                diffuse.setColor(
+                    (0.09f + noise).coerceIn(0f, 1f),
+                    (0.09f + noise).coerceIn(0f, 1f),
+                    (0.1f + noise).coerceIn(0f, 1f),
+                    1f
+                )
+                diffuse.drawPixel(x, y)
+                val r = (0.74f + MathUtils.random(-0.08f, 0.06f)).coerceIn(0.1f, 1f)
+                roughness.setColor(r, r, r, 1f)
+                roughness.drawPixel(x, y)
+            }
+        }
+        for (x in 246..266) {
+            diffuse.setColor(0.65f, 0.6f, 0.36f, 1f)
+            diffuse.fillRectangle(x, 0, 2, 512)
+            roughness.setColor(0.42f, 0.42f, 0.42f, 1f)
+            roughness.fillRectangle(x, 0, 2, 512)
+        }
+        return createTextureSet(diffuse, roughness)
+    }
+
+    private fun createMetalTextureSet(base: Color): SurfaceTextureSet {
+        val diffuse = Pixmap(256, 256, Pixmap.Format.RGBA8888)
+        val roughness = Pixmap(256, 256, Pixmap.Format.RGBA8888)
+        for (x in 0 until 256) {
+            for (y in 0 until 256) {
+                val streak = ((x % 24) / 24f) * 0.05f
+                val noise = MathUtils.random(-0.025f, 0.025f)
+                diffuse.setColor(
+                    (base.r + streak + noise).coerceIn(0f, 1f),
+                    (base.g + streak + noise).coerceIn(0f, 1f),
+                    (base.b + streak + noise).coerceIn(0f, 1f),
+                    1f
+                )
+                diffuse.drawPixel(x, y)
+                val r = (0.42f + MathUtils.random(-0.1f, 0.08f)).coerceIn(0.08f, 1f)
+                roughness.setColor(r, r, r, 1f)
+                roughness.drawPixel(x, y)
+            }
+        }
+        return createTextureSet(diffuse, roughness)
+    }
+
+    private fun createConcreteTextureSet(base: Color): SurfaceTextureSet {
+        val diffuse = Pixmap(256, 256, Pixmap.Format.RGBA8888)
+        val roughness = Pixmap(256, 256, Pixmap.Format.RGBA8888)
+        for (x in 0 until 256) {
+            for (y in 0 until 256) {
+                val noise = MathUtils.random(-0.05f, 0.05f)
+                diffuse.setColor(
+                    (base.r + noise).coerceIn(0f, 1f),
+                    (base.g + noise).coerceIn(0f, 1f),
+                    (base.b + noise).coerceIn(0f, 1f),
+                    1f
+                )
+                diffuse.drawPixel(x, y)
+                val r = (0.88f + MathUtils.random(-0.06f, 0.04f)).coerceIn(0.1f, 1f)
+                roughness.setColor(r, r, r, 1f)
+                roughness.drawPixel(x, y)
+            }
+        }
+        return createTextureSet(diffuse, roughness)
+    }
+
     private fun generateWorldModels() {
+        val attr = (
+            VertexAttributes.Usage.Position or
+                VertexAttributes.Usage.Normal or
+                VertexAttributes.Usage.TextureCoordinates
+            ).toLong()
         val mb = ModelBuilder()
-        val attr = (VertexAttributes.Usage.Position or VertexAttributes.Usage.Normal or VertexAttributes.Usage.TextureCoordinates).toLong()
+        val skyTexture = loadTexture("textures/sky_panorama_2k.jpg", Color(0.01f, 0.02f, 0.05f, 1f))
+        val skylineTexture = loadTexture("textures/city_backdrop_telaviv.jpg", Color(0.08f, 0.08f, 0.12f, 1f))
+        val facadeA = createFacadeTextureSet(256, 512, Color(0.08f, 0.1f, 0.14f, 1f), Color(1f, 0.82f, 0.48f, 1f))
+        val facadeB = createFacadeTextureSet(256, 512, Color(0.05f, 0.07f, 0.11f, 1f), Color(0.7f, 0.88f, 1f, 1f))
+        val facadeC = createFacadeTextureSet(256, 512, Color(0.1f, 0.08f, 0.09f, 1f), Color(1f, 0.62f, 0.3f, 1f))
+        val groundSet = createGroundTextureSet()
+        val roadSet = createRoadTextureSet()
+        val launcherSet = createMetalTextureSet(Color(0.18f, 0.24f, 0.19f, 1f))
+        val radarSet = createMetalTextureSet(Color(0.22f, 0.32f, 0.24f, 1f))
+        val threatSet = createMetalTextureSet(Color(0.32f, 0.35f, 0.38f, 1f))
+        val interceptorSet = createMetalTextureSet(Color(0.9f, 0.92f, 0.94f, 1f))
+        val debrisSet = createConcreteTextureSet(Color(0.22f, 0.24f, 0.28f, 1f))
+        val blastSet = createSolidTextureSet(Color(1f, 0.82f, 0.35f, 1f), 0.12f)
+        val trailSet = createSolidTextureSet(Color(0.92f, 0.9f, 0.84f, 1f), 0.8f)
+        val moonSet = createSolidTextureSet(Color(0.88f, 0.9f, 1f, 1f), 0.65f)
 
-        // Skybox with Stars
-        mb.begin()
-        val skyMat = Material(ColorAttribute.createDiffuse(Color(0.01f, 0.01f, 0.03f, 1f)), IntAttribute.createCullFace(GL20.GL_NONE))
-        mb.part("sky", GL20.GL_TRIANGLES, attr, skyMat).apply { SphereShapeBuilder.build(this, 16000f, 16000f, 16000f, 32, 32) }
-        val starMat = Material(ColorAttribute.createDiffuse(Color.WHITE), ColorAttribute.createEmissive(Color.WHITE))
-        repeat(500) { i ->
-            mb.node().translation.set(MathUtils.random(-8000f, 8000f), MathUtils.random(200f, 8000f), MathUtils.random(-8000f, 8000f))
-            if (mb.node().translation.len() < 7500f) mb.node().translation.nor().scl(7800f)
-            mb.part("star_$i", GL20.GL_TRIANGLES, attr, starMat).apply { SphereShapeBuilder.build(this, 15f, 15f, 15f, 4, 4) }
-        }
-        models.put("sky", mb.end())
+        models.put(
+            "sky",
+            mb.createSphere(
+                WORLD_RADIUS,
+                WORLD_RADIUS,
+                WORLD_RADIUS,
+                40,
+                24,
+                Material(
+                    TextureAttribute.createDiffuse(skyTexture),
+                    ColorAttribute.createDiffuse(Color.WHITE),
+                    ColorAttribute.createEmissive(Color(0.02f, 0.03f, 0.05f, 1f)),
+                    IntAttribute.createCullFace(GL20.GL_NONE)
+                ),
+                attr
+            )
+        )
 
-        // Ground with Grid
         mb.begin()
-        val groundMat = Material(ColorAttribute.createDiffuse(Color(0.05f, 0.08f, 0.1f, 1f)), FloatAttribute.createShininess(10f))
-        mb.part("base", GL20.GL_TRIANGLES, attr, groundMat).apply { BoxShapeBuilder.build(this, 12000f, 2f, 12000f) }
-        val gridMat = Material(ColorAttribute.createDiffuse(Color(0f, 0.4f, 0.6f, 1f)), BlendingAttribute(0.3f))
-        for (i in -15..15) {
-            mb.node().translation.set(i * 400f, 1.2f, 0f)
-            mb.part("gx_$i", GL20.GL_TRIANGLES, attr, gridMat).apply { BoxShapeBuilder.build(this, 2f, 0.1f, 12000f) }
-            mb.node().translation.set(0f, 1.2f, i * 400f)
-            mb.part("gz_$i", GL20.GL_TRIANGLES, attr, gridMat).apply { BoxShapeBuilder.build(this, 12000f, 0.1f, 2f) }
-        }
+        val ground = mb.part(
+            "ground",
+            GL20.GL_TRIANGLES,
+            attr,
+            Material(
+                TextureAttribute.createDiffuse(groundSet.diffuse),
+                TextureAttribute.createSpecular(groundSet.roughness),
+                ColorAttribute.createDiffuse(Color(0.95f, 0.98f, 1f, 1f)),
+                ColorAttribute.createSpecular(Color(0.18f, 0.2f, 0.24f, 1f)),
+                FloatAttribute.createShininess(12f)
+            )
+        )
+        BoxShapeBuilder.build(ground, 11000f, 3f, 11000f)
+        val road = mb.part(
+            "road",
+            GL20.GL_TRIANGLES,
+            attr,
+            Material(
+                TextureAttribute.createDiffuse(roadSet.diffuse),
+                TextureAttribute.createSpecular(roadSet.roughness),
+                ColorAttribute.createDiffuse(Color.WHITE),
+                ColorAttribute.createSpecular(Color(0.28f, 0.28f, 0.3f, 1f)),
+                FloatAttribute.createShininess(18f)
+            )
+        )
+        BoxShapeBuilder.build(road, 11000f, 1f, 36f, 0f, 0f, -120f)
+        BoxShapeBuilder.build(road, 60f, 1f, 9000f, -120f, 0f, -900f)
+        val glowBand = mb.part(
+            "glow",
+            GL20.GL_TRIANGLES,
+            attr,
+            Material(
+                ColorAttribute.createDiffuse(Color(0.15f, 0.22f, 0.35f, 1f)),
+                BlendingAttribute(0.18f)
+            )
+        )
+        BoxShapeBuilder.build(glowBand, 5200f, 0.5f, 1400f, 0f, 5f, -600f)
         models.put("ground", mb.end())
 
-        fun buildBuilding(id: String, h: Float, w: Float, baseColor: Color) {
-            mb.begin()
-            val mat = Material(ColorAttribute.createDiffuse(baseColor), FloatAttribute.createShininess(25f))
-            mb.part("core", GL20.GL_TRIANGLES, attr, mat).apply { BoxShapeBuilder.build(this, w, h, w) }
-            val windowMat = Material(ColorAttribute.createDiffuse(Color.BLACK), ColorAttribute.createEmissive(Color(0.1f, 0.3f, 0.6f, 1f)))
-            for (side in 0..3) {
-                mb.node().apply { rotation.set(Vector3.Y, side * 90f) }
-                for (floor in 1..10) {
-                    val fy = (h / 12f) * floor - (h / 2f)
-                    mb.node().translation.set(w/2f + 0.6f, fy, 0f)
-                    mb.part("w_${side}_${floor}", GL20.GL_TRIANGLES, attr, windowMat).apply { BoxShapeBuilder.build(this, 0.2f, h/25f, w * 0.7f) }
-                }
-            }
-            models.put(id, mb.end())
-        }
-        buildBuilding("b_tall", 240f, 50f, Color(0.2f, 0.22f, 0.28f, 1f))
-        buildBuilding("b_med", 140f, 60f, Color(0.18f, 0.2f, 0.25f, 1f))
-        buildBuilding("b_wide", 80f, 110f, Color(0.22f, 0.25f, 0.3f, 1f))
+        models.put(
+            "backdrop",
+            mb.createBox(
+                4200f,
+                900f,
+                18f,
+                Material(
+                    TextureAttribute.createDiffuse(skylineTexture),
+                    ColorAttribute.createDiffuse(Color.WHITE),
+                    ColorAttribute.createEmissive(Color(0.2f, 0.18f, 0.14f, 1f)),
+                    BlendingAttribute(0.96f)
+                ),
+                attr
+            )
+        )
 
-        // Launcher
+        fun createBuildingModel(name: String, width: Float, height: Float, depth: Float, texture: SurfaceTextureSet, tint: Color) {
+            models.put(
+                name,
+                mb.createBox(
+                    width,
+                    height,
+                    depth,
+                    Material(
+                        TextureAttribute.createDiffuse(texture.diffuse),
+                        TextureAttribute.createSpecular(texture.roughness),
+                        ColorAttribute.createDiffuse(tint),
+                        ColorAttribute.createSpecular(Color(0.12f, 0.14f, 0.18f, 1f)),
+                        FloatAttribute.createShininess(8f)
+                    ),
+                    attr
+                )
+            )
+        }
+
+        createBuildingModel("tower_a", 58f, 280f, 58f, facadeA, Color(0.9f, 0.95f, 1f, 1f))
+        createBuildingModel("tower_b", 84f, 210f, 84f, facadeB, Color(0.82f, 0.9f, 1f, 1f))
+        createBuildingModel("tower_c", 120f, 130f, 90f, facadeC, Color(1f, 0.95f, 0.9f, 1f))
+
+        val launcherMaterial = Material(
+            TextureAttribute.createDiffuse(launcherSet.diffuse),
+            TextureAttribute.createSpecular(launcherSet.roughness),
+            ColorAttribute.createDiffuse(Color.WHITE),
+            ColorAttribute.createSpecular(Color(0.5f, 0.56f, 0.52f, 1f)),
+            FloatAttribute.createShininess(40f)
+        )
         mb.begin()
-        val milColor = Color(0.15f, 0.22f, 0.15f, 1f)
-        val metalMat = Material(ColorAttribute.createDiffuse(milColor), FloatAttribute.createShininess(10f))
-        mb.part("chassis", GL20.GL_TRIANGLES, attr, metalMat).apply { BoxShapeBuilder.build(this, 28f, 5f, 45f) }
-        mb.node().apply { translation.set(0f, 15f, -5f); rotation.set(Vector3.X, -30f) }
-        repeat(4) { i ->
-            mb.node().translation.set(-9f + i * 6f, 15f, -5f)
-            mb.part("can_$i", GL20.GL_TRIANGLES, attr, Material(ColorAttribute.createDiffuse(Color(0.1f, 0.15f, 0.1f, 1f))))
-                .apply { BoxShapeBuilder.build(this, 5.5f, 5.5f, 35f) }
+        mb.part("chassis", GL20.GL_TRIANGLES, attr, launcherMaterial).apply {
+            BoxShapeBuilder.build(this, 34f, 5f, 54f)
+        }
+        mb.part("cab", GL20.GL_TRIANGLES, attr, launcherMaterial).apply {
+            BoxShapeBuilder.build(this, 18f, 10f, 16f, 0f, 7f, 18f)
+        }
+        repeat(4) { index ->
+            mb.part("tube_$index", GL20.GL_TRIANGLES, attr, launcherMaterial).apply {
+                BoxShapeBuilder.build(this, 5f, 5f, 34f, -9f + index * 6f, 15f, -6f)
+            }
         }
         models.put("launcher", mb.end())
 
-        // Radar
         mb.begin()
-        mb.part("r_base", GL20.GL_TRIANGLES, attr, metalMat).apply { BoxShapeBuilder.build(this, 30f, 6f, 50f) }
-        mb.node().apply { translation.set(0f, 25f, 0f); rotation.set(Vector3.X, 15f) }
-        mb.part("r_face", GL20.GL_TRIANGLES, attr, Material(ColorAttribute.createDiffuse(Color(0.3f, 0.35f, 0.3f, 1f))))
-            .apply { BoxShapeBuilder.build(this, 45f, 35f, 5f) }
-        models.put("radar", mb.end())
-        
-        models.put("debris", mb.createBox(2f, 2f, 2f, Material(ColorAttribute.createDiffuse(Color.GRAY)), attr))
-    }
-
-    private fun generateThreatModels() {
-        val mb = ModelBuilder()
-        val attr = (VertexAttributes.Usage.Position or VertexAttributes.Usage.Normal or VertexAttributes.Usage.TextureCoordinates).toLong()
-
-        // Ballistic Threat
-        mb.begin()
-        val mBody = Material(ColorAttribute.createDiffuse(Color.LIGHT_GRAY), FloatAttribute.createShininess(40f))
-        mb.part("s1", GL20.GL_TRIANGLES, attr, mBody).apply { CylinderShapeBuilder.build(this, 3.5f, 22f, 3.5f, 32) }
-        mb.node().translation.set(0f, 15f, 0f)
-        mb.part("nose", GL20.GL_TRIANGLES, attr, Material(ColorAttribute.createDiffuse(Color.FIREBRICK))).apply { ConeShapeBuilder.build(this, 3.5f, 8f, 3.5f, 32) }
-        repeat(4) { i ->
-            mb.node().apply { translation.set(2f, -8f, 0f); rotation.set(Vector3.Y, i * 90f) }
-            mb.part("f_$i", GL20.GL_TRIANGLES, attr, Material(ColorAttribute.createDiffuse(Color.GRAY))).apply { BoxShapeBuilder.build(this, 4f, 6f, 0.4f) }
+        val radarMaterial = Material(
+            TextureAttribute.createDiffuse(radarSet.diffuse),
+            TextureAttribute.createSpecular(radarSet.roughness),
+            ColorAttribute.createDiffuse(Color.WHITE),
+            ColorAttribute.createSpecular(Color(0.55f, 0.64f, 0.6f, 1f)),
+            FloatAttribute.createShininess(44f)
+        )
+        mb.part("base", GL20.GL_TRIANGLES, attr, radarMaterial).apply {
+            BoxShapeBuilder.build(this, 42f, 8f, 42f)
         }
-        models.put("t_ballistic", mb.end())
+        mb.part("face", GL20.GL_TRIANGLES, attr, radarMaterial).apply {
+            BoxShapeBuilder.build(this, 54f, 34f, 6f, 0f, 28f, -8f)
+        }
+        models.put("radar", mb.end())
 
-        // Interceptor
         mb.begin()
-        val mPat = Material(ColorAttribute.createDiffuse(Color(0.95f, 0.95f, 0.9f, 1f)), FloatAttribute.createShininess(60f))
-        mb.part("p_body", GL20.GL_TRIANGLES, attr, mPat).apply { CylinderShapeBuilder.build(this, 1.1f, 18f, 1.1f, 32) }
-        mb.node().translation.set(0f, 9f, 0f)
-        mb.part("p_nose", GL20.GL_TRIANGLES, attr, Material(ColorAttribute.createDiffuse(Color(0.85f, 0.8f, 0.7f, 1f)))).apply { ConeShapeBuilder.build(this, 1.1f, 4f, 1.1f, 32) }
-        repeat(4) { i ->
-            mb.node().apply { translation.set(1.2f, -8f, 0f); rotation.set(Vector3.Y, i * 90f + 45f) }
-            mb.part("pf_$i", GL20.GL_TRIANGLES, attr, Material(ColorAttribute.createDiffuse(Color.DARK_GRAY))).apply { BoxShapeBuilder.build(this, 3f, 2.5f, 0.25f) }
+        val threatMaterial = Material(
+            TextureAttribute.createDiffuse(threatSet.diffuse),
+            TextureAttribute.createSpecular(threatSet.roughness),
+            ColorAttribute.createDiffuse(Color.WHITE),
+            ColorAttribute.createSpecular(Color(0.74f, 0.74f, 0.76f, 1f)),
+            FloatAttribute.createShininess(54f)
+        )
+        mb.part("body", GL20.GL_TRIANGLES, attr, threatMaterial).apply {
+            CylinderShapeBuilder.build(this, 4f, 26f, 4f, 18)
+        }
+        mb.part("nose", GL20.GL_TRIANGLES, attr, threatMaterial).apply {
+            tmpMatrix.idt().translate(0f, 18f, 0f)
+            setVertexTransform(tmpMatrix)
+            ConeShapeBuilder.build(this, 4.2f, 10f, 4.2f, 18)
+        }
+        repeat(4) { index ->
+            mb.part("fin_$index", GL20.GL_TRIANGLES, attr, threatMaterial).apply {
+                val yaw = index * 90f
+                tmpMatrix.idt().rotate(Vector3.Y, yaw)
+                tmpMatrix.translate(0f, -8f, 0f)
+                setVertexTransform(tmpMatrix)
+                BoxShapeBuilder.build(this, 5.5f, 6f, 0.4f)
+            }
+        }
+        models.put("threat", mb.end())
+
+        mb.begin()
+        val interceptorMaterial = Material(
+            TextureAttribute.createDiffuse(interceptorSet.diffuse),
+            TextureAttribute.createSpecular(interceptorSet.roughness),
+            ColorAttribute.createDiffuse(Color.WHITE),
+            ColorAttribute.createSpecular(Color(0.9f, 0.92f, 0.96f, 1f)),
+            FloatAttribute.createShininess(64f)
+        )
+        mb.part("body", GL20.GL_TRIANGLES, attr, interceptorMaterial).apply {
+            CylinderShapeBuilder.build(this, 2.2f, 24f, 2.2f, 18)
+        }
+        mb.part("nose", GL20.GL_TRIANGLES, attr, interceptorMaterial).apply {
+            tmpMatrix.idt().translate(0f, 16f, 0f)
+            setVertexTransform(tmpMatrix)
+            ConeShapeBuilder.build(this, 2.6f, 7f, 2.6f, 18)
+        }
+        repeat(4) { index ->
+            mb.part("fin_$index", GL20.GL_TRIANGLES, attr, interceptorMaterial).apply {
+                val yaw = index * 90f + 45f
+                tmpMatrix.idt().rotate(Vector3.Y, yaw)
+                tmpMatrix.translate(0f, -8f, 0f)
+                setVertexTransform(tmpMatrix)
+                BoxShapeBuilder.build(this, 3f, 3f, 0.25f)
+            }
         }
         models.put("interceptor", mb.end())
 
-        models.put("blast", mb.createSphere(1f, 1f, 1f, 32, 32, Material(ColorAttribute.createDiffuse(Color.GOLD), ColorAttribute.createEmissive(Color.ORANGE), BlendingAttribute(0.9f)), attr))
-        models.put("trail", mb.createSphere(1.0f, 1.0f, 1.0f, 12, 12, Material(ColorAttribute.createDiffuse(Color(0.8f, 0.8f, 0.9f, 1f)), BlendingAttribute(0.4f)), attr))
+        models.put(
+            "blast",
+            mb.createSphere(
+                1f,
+                1f,
+                1f,
+                16,
+                12,
+                Material(
+                    TextureAttribute.createDiffuse(blastSet.diffuse),
+                    TextureAttribute.createSpecular(blastSet.roughness),
+                    ColorAttribute.createDiffuse(Color.WHITE),
+                    ColorAttribute.createSpecular(Color.WHITE),
+                    ColorAttribute.createEmissive(Color(1f, 0.65f, 0.2f, 1f)),
+                    BlendingAttribute(0.92f)
+                ),
+                attr
+            )
+        )
+        models.put(
+            "trail",
+            mb.createSphere(
+                1f,
+                1f,
+                1f,
+                10,
+                8,
+                Material(
+                    TextureAttribute.createDiffuse(trailSet.diffuse),
+                    TextureAttribute.createSpecular(trailSet.roughness),
+                    ColorAttribute.createDiffuse(Color.WHITE),
+                    ColorAttribute.createEmissive(Color(0.32f, 0.38f, 0.44f, 1f)),
+                    BlendingAttribute(0.55f)
+                ),
+                attr
+            )
+        )
+        models.put(
+            "debris",
+            mb.createBox(
+                6f,
+                6f,
+                6f,
+                Material(
+                    TextureAttribute.createDiffuse(debrisSet.diffuse),
+                    TextureAttribute.createSpecular(debrisSet.roughness),
+                    ColorAttribute.createDiffuse(Color.WHITE),
+                    ColorAttribute.createSpecular(Color(0.18f, 0.18f, 0.2f, 1f)),
+                    FloatAttribute.createShininess(10f)
+                ),
+                attr
+            )
+        )
+        models.put(
+            "moon",
+            mb.createSphere(
+                80f,
+                80f,
+                80f,
+                18,
+                18,
+                Material(
+                    TextureAttribute.createDiffuse(moonSet.diffuse),
+                    TextureAttribute.createSpecular(moonSet.roughness),
+                    ColorAttribute.createDiffuse(Color.WHITE),
+                    ColorAttribute.createEmissive(Color(0.18f, 0.2f, 0.24f, 1f))
+                ),
+                attr
+            )
+        )
     }
 
-    private fun createInitialEnvironment() {
+    private fun createWorldInstances() {
         instances.add(ModelInstance(models.get("sky")))
-        instances.add(ModelInstance(models.get("ground")).apply { transform.setToTranslation(0f, -2.5f, 0f) })
-        
-        val l1 = ModelInstance(models.get("launcher")).apply { transform.setToTranslation(120f, 3f, 150f) }
-        val l2 = ModelInstance(models.get("launcher")).apply { transform.setToTranslation(-120f, 3f, 150f) }
-        launchers.add(l1); launchers.add(l2)
-        instances.add(l1); instances.add(l2)
-        
-        instances.add(ModelInstance(models.get("radar")).apply { transform.setToTranslation(0f, 3f, 220f) })
+        instances.add(ModelInstance(models.get("ground")).apply { transform.setToTranslation(0f, -2f, 0f) })
+        instances.add(ModelInstance(models.get("backdrop")).apply { transform.setToTranslation(0f, 320f, -2250f) })
+        instances.add(ModelInstance(models.get("moon")).apply { transform.setToTranslation(1400f, 1450f, -4200f) })
 
-        val rng = MathUtils.random
-        for (x in -8..8) {
-            for (z in -6..2) {
-                if (abs(x) < 2 && z > -1) continue 
-                val type = rng.nextInt(3)
-                val mName = when(type) { 0 -> "b_tall"; 1 -> "b_med"; else -> "b_wide" }
-                val pos = Vector3(x * 150f + rng.nextFloat() * 40f, 0f, z * 200f - 400f)
-                val h = when(type) { 0 -> 240f; 1 -> 140f; else -> 80f }
-                val inst = ModelInstance(models.get(mName)).apply { transform.setToTranslation(pos.x, h/2, pos.z); transform.rotate(Vector3.Y, rng.nextFloat() * 360f) }
-                cityBlocks.add(BuildingEntity(inst, 200f))
+        val leftLauncher = ModelInstance(models.get("launcher")).apply { transform.setToTranslation(-120f, 4f, 220f) }
+        val rightLauncher = ModelInstance(models.get("launcher")).apply { transform.setToTranslation(120f, 4f, 220f) }
+        launchers.add(leftLauncher)
+        launchers.add(rightLauncher)
+        instances.add(leftLauncher)
+        instances.add(rightLauncher)
+        instances.add(ModelInstance(models.get("radar")).apply { transform.setToTranslation(0f, 4f, 160f) })
+
+        for (gridX in -9..9) {
+            for (gridZ in -8..1) {
+                if (abs(gridX) < 2 && gridZ > -2) continue
+                val roll = MathUtils.random(0, 5)
+                val modelName = when {
+                    roll <= 1 -> "tower_a"
+                    roll <= 3 -> "tower_b"
+                    else -> "tower_c"
+                }
+                val baseHeight = when (modelName) {
+                    "tower_a" -> 280f
+                    "tower_b" -> 210f
+                    else -> 130f
+                }
+                val width = when (modelName) {
+                    "tower_a" -> 58f
+                    "tower_b" -> 84f
+                    else -> 120f
+                }
+                val depth = when (modelName) {
+                    "tower_a" -> 58f
+                    "tower_b" -> 84f
+                    else -> 90f
+                }
+                val position = Vector3(
+                    gridX * BUILDING_SPACING_X + MathUtils.random(-24f, 24f),
+                    0f,
+                    gridZ * BUILDING_SPACING_Z - 340f + MathUtils.random(-30f, 30f)
+                )
+                val yaw = MathUtils.random(-12f, 12f)
+                val instance = ModelInstance(models.get(modelName))
+                val entity = BuildingEntity(
+                    instance = instance,
+                    modelName = modelName,
+                    position = position,
+                    yaw = yaw,
+                    baseHeight = baseHeight,
+                    width = width,
+                    depth = depth,
+                    integrity = 100f
+                )
+                syncBuildingTransform(entity)
+                cityBlocks.add(entity)
             }
         }
     }
 
-    private fun setupHud(currentSkin: Skin) {
-        val uiScale = Gdx.graphics.height / 1080f
+    private fun setupHud() {
         stage.clear()
+        val uiScale = Gdx.graphics.height / 1080f
         val root = Table().apply { setFillParent(true) }
-        val topTable = Table().apply { background = currentSkin.newDrawable("white", Color(0f, 0.05f, 0.1f, 0.85f)) }
-        topTable.add(statusLabel).expandX().left().pad(15f * uiScale)
-        topTable.add(creditsLabel).right().pad(15f * uiScale)
-        root.add(topTable).expandX().fillX().top().row()
 
-        val side = Table().apply { background = currentSkin.getDrawable("bg_panel"); defaults().pad(12f * uiScale).width(350f * uiScale) }
-        side.add(Label("STRATEGIC DEFENSE COMMAND", currentSkin, "title")).padBottom(40f * uiScale).row()
-        val startBtn = TextButton("INITIATE RESPONSE", currentSkin).apply { addListener(object : ChangeListener() { override fun changed(e: ChangeEvent?, a: Actor?) { if (!waveInProgress) startNewWave() } }) }
-        side.add(startBtn).height(100f * uiScale).fillX().row()
-        side.add(Label("ENGAGEMENT RANGE", currentSkin)).row()
-        val rS = Slider(200f, 2500f, 50f, false, currentSkin).apply { value = settings.engagementRange; addListener(object : ChangeListener() { override fun changed(e: ChangeEvent?, a: Actor?) { settings.engagementRange = value } }) }
-        side.add(rS).fillX().row()
-        root.add(side).expand().right().fillY()
+        val top = Table().apply { background = skin.newDrawable("white", Color(0f, 0.04f, 0.08f, 0.82f)) }
+        top.add(statusLabel).expandX().left().pad(14f * uiScale)
+        top.add(creditsLabel).right().pad(14f * uiScale)
+        root.add(top).expandX().fillX().top().row()
+
+        val side = Table().apply {
+            background = skin.newDrawable("white", Color(0.02f, 0.06f, 0.1f, 0.74f))
+            defaults().pad(10f * uiScale).width(330f * uiScale)
+        }
+        side.add(Label("ENGAGEMENT CONTROL", skin, "title")).padBottom(26f * uiScale).row()
+        side.add(Label("AUTO ENGAGEMENT RANGE", skin)).left().row()
+        side.add(Slider(400f, 2600f, 25f, false, skin).apply {
+            value = settings.engagementRange
+            addListener(object : ChangeListener() {
+                override fun changed(event: ChangeEvent?, actor: Actor?) {
+                    settings.engagementRange = value
+                }
+            })
+        }).fillX().row()
+        side.add(Label("INTERCEPTOR SPEED", skin)).left().row()
+        side.add(Slider(280f, 620f, 10f, false, skin).apply {
+            value = settings.interceptorSpeed
+            addListener(object : ChangeListener() {
+                override fun changed(event: ChangeEvent?, actor: Actor?) {
+                    settings.interceptorSpeed = value
+                }
+            })
+        }).fillX().row()
+        side.add(TextButton("START NEXT WAVE", skin).apply {
+            addListener(object : ChangeListener() {
+                override fun changed(event: ChangeEvent?, actor: Actor?) {
+                    if (!waveInProgress && !isGameOver) startNewWave()
+                }
+            })
+        }).height(86f * uiScale).fillX().padTop(16f * uiScale).row()
+        root.add(side).expand().right().pad(18f * uiScale)
+
         stage.addActor(root)
+        updateHud()
     }
 
-    private fun updateHud() {
-        creditsLabel.setText("CMD CREDITS: $credits | SCORE: $score")
+    private fun loadAudio() {
+        fun loadSound(key: String, path: String) {
+            val file = Gdx.files.internal(path)
+            if (file.exists()) {
+                sounds.put(key, Gdx.audio.newSound(file))
+            }
+        }
+        loadSound("launch", "sfx/launch.mp3")
+        loadSound("detonate", "sfx/detonate.mp3")
+        loadSound("impact", "sfx/impact.mp3")
+    }
+
+    private fun playSfx(name: String, volume: Float) {
+        sounds[name]?.play(volume)
     }
 
     private fun startNewWave() {
         waveInProgress = true
-        threatsRemainingInWave = 8 + wave * 4
-        spawnTimer = 0f
-        timeSinceLastEngagement = settings.launchCooldown
-        statusLabel.setText("WARNING: MULTIPLE INBOUND // WAVE $wave")
+        threatsRemainingInWave = BattleBalance.threatsForWave(wave)
+        spawnTimer = 0.4f
+        timeSinceLastLaunch = settings.launchCooldown
         statusLabel.style = skin.get("critical", Label.LabelStyle::class.java)
+        statusLabel.setText("MULTIPLE INBOUND TRACKS // WAVE $wave")
     }
 
     override fun render(delta: Float) {
         if (isGameOver) {
-            val batch = stage.batch
-            batch.begin()
-            val font = skin.getFont("title")
-            val layout = GlyphLayout(font, "MISSION FAILED")
-            font.draw(batch, layout, (Gdx.graphics.width - layout.width) / 2f, Gdx.graphics.height / 2f + 50f)
-            val fontSmall = skin.getFont("default")
-            val layout2 = GlyphLayout(fontSmall, "FINAL SCORE: $score - TAP TO RESTART")
-            fontSmall.draw(batch, layout2, (Gdx.graphics.width - layout2.width) / 2f, Gdx.graphics.height / 2f - 50f)
-            batch.end()
+            renderGameOver()
             return
         }
-        updateLogic(delta)
-        ScreenUtils.clear(0.01f, 0.02f, 0.05f, 1f, true)
+
+        updateLogic(min(delta, 1f / 30f))
+
+        ScreenUtils.clear(0.01f, 0.02f, 0.04f, 1f, true)
         modelBatch.begin(camera)
-        modelBatch.render(instances, environment)
-        cityBlocks.forEach { 
-            if (it.health > 0) modelBatch.render(it.instance, environment)
-            else {
-                // Could render as rubble or just dark
-                modelBatch.render(it.instance, environment)
-            }
-        }
+        instances.forEach { modelBatch.render(it, environment) }
+        cityBlocks.forEach { if (it.visibleHeight > 1f) modelBatch.render(it.instance, environment) }
         threats.forEach { modelBatch.render(it.instance, environment) }
         interceptors.forEach { modelBatch.render(it.instance, environment) }
-        effects.forEach { modelBatch.render(it.instance, environment) }
         debris.forEach { modelBatch.render(it.instance, environment) }
+        effects.forEach { modelBatch.render(it.instance, environment) }
         modelBatch.end()
-        
-        renderHudOverlay()
-        stage.act(delta); stage.draw()
-        
-        val uiScale = Gdx.graphics.height / 1080f
+
+        stage.act(delta)
+        stage.draw()
+        renderOverlay()
+    }
+
+    private fun renderGameOver() {
+        ScreenUtils.clear(0.01f, 0.02f, 0.04f, 1f, true)
         val batch = stage.batch
         batch.begin()
-        val font = skin.getFont("default")
-        threats.forEach { t ->
-            if (t.isIdentified) {
-                camera.project(tempVec.set(t.position))
-                if (tempVec.z > 0 && tempVec.z < 1) {
-                    val threatLevel = (t.velocity.len() / 400f).coerceIn(0.5f, 1.5f)
-                    batch.color = if (threatLevel > 1.2f) Color.RED else Color.CYAN
-                    val rs = 60f * uiScale
-                    batch.draw(skin.getRegion("white"), tempVec.x - rs / 2, tempVec.y + 45f * uiScale, rs, 2f * uiScale)
-                    font.draw(batch, "[${t.id}] ALT:${(t.position.y / 10f).toInt()}0m", tempVec.x + rs / 2, tempVec.y + 50f * uiScale)
-                    font.draw(batch, "SPD:${(t.velocity.len() * 3.6f).toInt()}km/h", tempVec.x + rs / 2, tempVec.y + 30f * uiScale)
-                }
-            }
-        }
+        val titleFont = skin.getFont("title")
+        val normalFont = skin.getFont("default")
+        val titleLayout = GlyphLayout(titleFont, "CITY LOST")
+        val scoreLayout = GlyphLayout(normalFont, "FINAL SCORE: $score    TAP TO RETURN")
+        titleFont.draw(batch, titleLayout, (Gdx.graphics.width - titleLayout.width) * 0.5f, Gdx.graphics.height * 0.58f)
+        normalFont.draw(batch, scoreLayout, (Gdx.graphics.width - scoreLayout.width) * 0.5f, Gdx.graphics.height * 0.48f)
         batch.end()
     }
 
-    private fun renderHudOverlay() {
-        val uiScale = Gdx.graphics.height / 1080f
+    private fun renderOverlay() {
         val batch = stage.batch
+        val uiScale = Gdx.graphics.height / 1080f
+        val font = skin.getFont("default")
         batch.begin()
-        
-        // Tactical Crosshair
-        batch.color = Color(0f, 1f, 1f, 0.3f)
-        val cx = Gdx.graphics.width / 2f
-        val cy = Gdx.graphics.height / 2f
-        val sz = 40f * uiScale
-        batch.draw(skin.getRegion("white"), cx - sz, cy, sz * 0.4f, 2f)
-        batch.draw(skin.getRegion("white"), cx + sz * 0.6f, cy, sz * 0.4f, 2f)
-        batch.draw(skin.getRegion("white"), cx, cy - sz, 2f, sz * 0.4f)
-        batch.draw(skin.getRegion("white"), cx, cy + sz * 0.6f, 2f, sz * 0.4f)
-        
-        // Radar Minimap
-        val rSize = 250f * uiScale
-        val rx = Gdx.graphics.width - rSize - 20f * uiScale
-        val ry = 20f * uiScale
-        batch.color = Color(0f, 0.1f, 0.2f, 0.7f)
-        batch.draw(skin.getRegion("white"), rx, ry, rSize, rSize)
-        batch.color = Color(0f, 0.5f, 0.8f, 0.5f)
-        
-        // Radar Sweep (visual only)
-        val sweepX = rSize / 2 + rx + cos(radarScanAngle * MathUtils.degreesToRadians) * rSize / 2
-        val sweepY = rSize / 2 + ry + sin(radarScanAngle * MathUtils.degreesToRadians) * rSize / 2
-        batch.draw(skin.getRegion("white"), rSize / 2 + rx, rSize / 2 + ry, sweepX - (rSize / 2 + rx), sweepY - (rSize / 2 + ry))
-        
-        // Threats on Radar
-        threats.forEach { t ->
-            val tx = (t.position.x / 4000f) * rSize / 2 + rx + rSize / 2
-            val tz = (t.position.z / 4000f) * rSize / 2 + ry + rSize / 2
-            if (tx in rx..(rx + rSize) && tz in ry..(ry + rSize)) {
-                batch.color = if (t.isIdentified) Color.RED else Color.YELLOW
-                batch.draw(skin.getRegion("white"), tx - 2f, tz - 2f, 4f, 4f)
+
+        val cx = Gdx.graphics.width * 0.5f
+        val cy = Gdx.graphics.height * 0.5f
+        val cross = 44f * uiScale
+        batch.color = Color(0.2f, 0.92f, 1f, 0.28f)
+        batch.draw(whiteRegion, cx - cross, cy, cross * 0.45f, 2f)
+        batch.draw(whiteRegion, cx + cross * 0.55f, cy, cross * 0.45f, 2f)
+        batch.draw(whiteRegion, cx, cy - cross, 2f, cross * 0.45f)
+        batch.draw(whiteRegion, cx, cy + cross * 0.55f, 2f, cross * 0.45f)
+
+        val radarSize = 220f * uiScale
+        val radarX = Gdx.graphics.width - radarSize - 26f * uiScale
+        val radarY = 24f * uiScale
+        batch.color = Color(0.02f, 0.07f, 0.12f, 0.72f)
+        batch.draw(whiteRegion, radarX, radarY, radarSize, radarSize)
+        batch.color = Color(0.14f, 0.8f, 1f, 0.3f)
+        val originX = radarX + radarSize * 0.5f
+        val originY = radarY + radarSize * 0.5f
+        val sweepX = originX + MathUtils.cosDeg(radarScanAngle) * radarSize * 0.48f
+        val sweepY = originY + MathUtils.sinDeg(radarScanAngle) * radarSize * 0.48f
+        batch.draw(whiteRegion, originX, originY, sweepX - originX, sweepY - originY)
+
+        threats.forEach { threat ->
+            val tx = radarX + radarSize * 0.5f + threat.position.x / 4500f * radarSize * 0.5f
+            val tz = radarY + radarSize * 0.5f + threat.position.z / 4500f * radarSize * 0.5f
+            if (tx in radarX..(radarX + radarSize) && tz in radarY..(radarY + radarSize)) {
+                batch.color = if (threat.isTracked) Color.RED else Color.YELLOW
+                batch.draw(whiteRegion, tx - 2f, tz - 2f, 4f, 4f)
             }
         }
-        
+
+        threats.forEach { threat ->
+            if (!threat.isTracked) return@forEach
+            tempProject.set(threat.position)
+            camera.project(tempProject)
+            if (tempProject.z in 0f..1f) {
+                batch.color = Color(1f, 0.35f, 0.35f, 0.9f)
+                batch.draw(whiteRegion, tempProject.x - 24f, tempProject.y + 30f, 48f, 2f)
+                font.draw(batch, "${threat.id}  ALT ${(threat.position.y * 3.5f).toInt()} m", tempProject.x + 28f, tempProject.y + 42f)
+            }
+        }
+
         batch.color = Color.WHITE
         batch.end()
     }
 
-    private fun updateLogic(delta: Float) {
-        val dt = min(delta, 1/30f)
-        radarScanAngle = (radarScanAngle + dt * 120f) % 360f
-        
-        // Update Screen Shake
-        if (shakeTime > 0) {
-            shakeTime -= dt
-            val currentIntensity = shakeIntensity * (shakeTime / 0.5f).coerceIn(0f, 1f)
-            camera.position.set(baseCameraPos).add(
-                MathUtils.random(-1f, 1f) * currentIntensity,
-                MathUtils.random(-1f, 1f) * currentIntensity,
-                MathUtils.random(-1f, 1f) * currentIntensity
-            )
-        } else {
-            camera.position.set(baseCameraPos)
-        }
-        camera.lookAt(0f, 50f, -200f)
-        camera.update()
+    private fun updateLogic(dt: Float) {
+        radarScanAngle = (radarScanAngle + dt * 110f) % 360f
+        updateCameraShake(dt)
 
         if (waveInProgress) {
             spawnTimer -= dt
             if (spawnTimer <= 0f && threatsRemainingInWave > 0) {
                 spawnThreat()
                 threatsRemainingInWave--
-                spawnTimer = max(0.5f, 2.5f - wave * 0.2f)
+                spawnTimer = BattleBalance.spawnIntervalForWave(wave)
             }
-            if (threatsRemainingInWave <= 0 && threats.isEmpty) {
+            if (threatsRemainingInWave == 0 && threats.isEmpty) {
                 waveInProgress = false
                 wave++
-                credits += 2500
-                statusLabel.setText("AREA SECURED")
+                credits += 1800
                 statusLabel.style = skin.get("status", Label.LabelStyle::class.java)
+                statusLabel.setText("SKY CLEAR // PREPARE NEXT WAVE")
             }
         }
-        updateThreats(dt); updateInterceptors(dt); updateEffects(dt); updateDebris(dt); updateHud()
-        if (health <= 0) { isGameOver = true; statusLabel.setText("CITY LOST"); statusLabel.style = skin.get("critical", Label.LabelStyle::class.java) }
-    }
 
-    private fun spawnDebris(pos: Vector3, count: Int) {
-        repeat(count) {
-            v1.set(MathUtils.random(-1f, 1f), MathUtils.random(0.5f, 2f), MathUtils.random(-1f, 1f)).nor().scl(MathUtils.random(50f, 250f))
-            val inst = ModelInstance(models.get("debris")).apply { transform.setToTranslation(pos) }
-            debris.add(DebrisEntity(inst, pos.cpy(), v1.cpy(), MathUtils.random(1.5f, 3.5f)))
+        updateThreats(dt)
+        updateInterceptors(dt)
+        updateEffects(dt)
+        updateDebris(dt)
+        updateBuildings(dt)
+        updateHud()
+
+        if (cityIntegrity <= 0f) {
+            isGameOver = true
+            statusLabel.style = skin.get("critical", Label.LabelStyle::class.java)
+            statusLabel.setText("DEFENSE FAILED")
         }
     }
 
-    private fun updateDebris(dt: Float) {
-        val it = debris.iterator()
-        while (it.hasNext()) {
-            val d = it.next(); d.life -= dt; d.velocity.y -= 250f * dt; v1.set(d.velocity).scl(dt); d.position.add(v1)
-            d.instance.transform.setToTranslation(d.position); d.instance.transform.rotate(Vector3.X, 200f * dt)
-            if (d.life <= 0f || d.position.y < 0f) it.remove()
+    private fun updateCameraShake(dt: Float) {
+        if (shakeTime > 0f) {
+            shakeTime -= dt
+            val amount = shakeIntensity * (shakeTime / 0.5f).coerceIn(0f, 1f)
+            camera.position.set(cameraBase).add(
+                MathUtils.random(-amount, amount),
+                MathUtils.random(-amount, amount),
+                MathUtils.random(-amount, amount)
+            )
+        } else {
+            camera.position.set(cameraBase)
         }
+        camera.lookAt(0f, 110f, -260f)
+        camera.update()
     }
 
     private fun spawnThreat() {
-        // Start high and far
-        val startPos = Vector3(MathUtils.random(-1500f, 1500f), 1200f, -4000f)
-        // Target area around city
-        val targetPos = Vector3(MathUtils.random(-300f, 300f), 0f, MathUtils.random(-400f, 100f))
-        
-        // Calculate initial velocity for ballistic trajectory
-        val dist = startPos.dst(targetPos)
-        val time = dist / (280f + wave * 25f)
-        val velocity = targetPos.cpy().sub(startPos).scl(1f / time)
-        // Add vertical arch factor
-        velocity.y += 150f 
-
-        val id = "T-${MathUtils.random(1000, 9999)}"
-        val inst = ModelInstance(models.get("t_ballistic")).apply {
-            transform.setToScaling(THREAT_SCALE, THREAT_SCALE, THREAT_SCALE).setTranslation(startPos)
-            setRotationToward(velocity)
-        }
-        threats.add(ThreatEntity(inst, startPos, velocity, id, trailCooldown = MathUtils.random(0f, THREAT_TRAIL_INTERVAL)))
+        val launch = ThreatFactory.createThreatLaunch(wave, cityBlocks.random().position)
+        val instance = ModelInstance(models.get("threat"))
+        val threat = ThreatEntity(
+            instance = instance,
+            position = launch.start,
+            velocity = launch.velocity,
+            id = "T-${MathUtils.random(1000, 9999)}",
+            trailCooldown = MathUtils.random(0f, THREAT_TRAIL_INTERVAL)
+        )
+        syncProjectileTransform(instance, launch.start, launch.velocity, THREAT_SCALE)
+        threats.add(threat)
     }
 
     private fun updateThreats(dt: Float) {
-        val it = threats.iterator()
-        while (it.hasNext()) {
-            val t = it.next()
-            // Apply gravity to threat
-            t.velocity.mulAdd(gravity, dt)
-            v1.set(t.velocity).scl(dt)
-            t.position.add(v1)
-            t.instance.transform.setToScaling(THREAT_SCALE, THREAT_SCALE, THREAT_SCALE).setTranslation(t.position)
-            t.instance.setRotationToward(t.velocity)
+        val iterator = threats.iterator()
+        while (iterator.hasNext()) {
+            val threat = iterator.next()
+            threat.velocity.mulAdd(gravity, dt)
+            threat.position.mulAdd(threat.velocity, dt)
+            syncProjectileTransform(threat.instance, threat.position, threat.velocity, THREAT_SCALE)
 
-            t.trailCooldown -= dt
-            if (t.trailCooldown <= 0f) {
-                spawnTrail(t.position)
-                t.trailCooldown = THREAT_TRAIL_INTERVAL
+            threat.trailCooldown -= dt
+            if (threat.trailCooldown <= 0f) {
+                spawnTrail(threat.position, true)
+                threat.trailCooldown = THREAT_TRAIL_INTERVAL
             }
 
-            if (t.position.y <= 10f || t.position.z > 450f) {
-                health -= 20f
-                spawnBlast(t.position, 100f)
-                spawnDebris(t.position, 15)
-                triggerShake(25f, 0.6f)
-                playSfx("impact", 0.8f)
-                
-                // Use a separate vector for city collision to avoid modifying t.position or t.velocity
-                val impactPos = v3.set(t.position)
-                cityBlocks.forEach {
-                    it.instance.transform.getTranslation(v2)
-                    if (v2.dst(impactPos) < 180f) {
-                        it.health -= 60f
-                        if (it.health <= 0) it.instance.materials.first().set(ColorAttribute.createDiffuse(Color.BLACK))
-                    }
-                }
-                it.remove()
-                continue
+            if (threat.position.dst2(Vector3.Zero) < settings.engagementRange * settings.engagementRange) {
+                threat.isTracked = true
+            }
+
+            if (threat.position.y <= 12f || threat.position.z >= 420f) {
+                impactAt(threat.position, 85f, true)
+                iterator.remove()
             }
         }
     }
 
     private fun updateInterceptors(dt: Float) {
-        val it = interceptors.iterator()
-        while (it.hasNext()) {
-            val i = it.next()
-            val target = i.target
-            if (target != null && threats.contains(target, true)) {
-                val predicted = predictInterceptPoint(i.position, target.position, target.velocity, settings.interceptorSpeed)
-                v1.set(predicted).sub(i.position)
-                if (!v1.isZero(1e-3f)) {
-                    val maxTurn = (220f * dt).coerceAtMost(1f)
-                    tempVec.set(v1).nor().scl(settings.interceptorSpeed)
-                    i.velocity.lerp(tempVec, maxTurn)
-                }
-                i.velocity.nor().scl(settings.interceptorSpeed)
+        val iterator = interceptors.iterator()
+        while (iterator.hasNext()) {
+            val interceptor = iterator.next()
+            val target = interceptor.target
+            if (target == null || !threats.contains(target, true)) {
+                iterator.remove()
+                continue
             }
-            
-            v1.set(i.velocity).scl(dt)
-            i.position.add(v1)
-            i.instance.transform.setToScaling(INTERCEPTOR_SCALE, INTERCEPTOR_SCALE, INTERCEPTOR_SCALE).setTranslation(i.position)
-            i.instance.setRotationToward(i.velocity)
-            
-            if (MathUtils.randomBoolean(0.85f)) spawnTrail(i.position)
-            
-            if (target != null && threats.contains(target, true) && i.position.dst(target.position) < settings.blastRadius) {
-                score += 100
-                credits += 250
-                spawnBlast(i.position, settings.blastRadius * 2.5f)
-                spawnDebris(i.position, 10)
+
+            val aimPoint = InterceptionMath.predictInterceptPoint(interceptor.position, target.position, target.velocity, settings.interceptorSpeed)
+            tempA.set(aimPoint).sub(interceptor.position)
+            if (!tempA.isZero(0.001f)) {
+                tempA.nor().scl(settings.interceptorSpeed)
+                interceptor.velocity.lerp(tempA, (dt * 4.2f).coerceAtMost(1f))
+            }
+            interceptor.velocity.nor().scl(settings.interceptorSpeed)
+            interceptor.position.mulAdd(interceptor.velocity, dt)
+            syncProjectileTransform(interceptor.instance, interceptor.position, interceptor.velocity, INTERCEPTOR_SCALE)
+
+            interceptor.trailCooldown -= dt
+            if (interceptor.trailCooldown <= 0f) {
+                spawnTrail(interceptor.position, false)
+                interceptor.trailCooldown = INTERCEPTOR_TRAIL_INTERVAL
+            }
+
+            if (interceptor.position.dst(target.position) <= settings.blastRadius) {
+                score += 150
+                credits += 180
+                spawnBlast(interceptor.position, settings.blastRadius * 2.2f)
+                spawnDebris(interceptor.position, 10, Color(0.7f, 0.7f, 0.74f, 1f))
                 triggerShake(10f, 0.3f)
-                playSfx("detonate", 0.6f)
+                playSfx("detonate", 0.5f)
                 threats.removeValue(target, true)
-                it.remove()
-            } else if (i.position.y > 4000f || i.position.dst(Vector3.Zero) > 7000f) {
-                it.remove()
+                iterator.remove()
+                continue
+            }
+
+            if (interceptor.position.y > 4400f || interceptor.position.dst2(Vector3.Zero) > 7000f * 7000f) {
+                iterator.remove()
             }
         }
-        timeSinceLastEngagement += dt
-        if (timeSinceLastEngagement >= settings.launchCooldown) {
+
+        timeSinceLastLaunch += dt
+        if (timeSinceLastLaunch >= settings.launchCooldown) {
             val nextTarget = threats
-                .filter { t ->
-                    val d = t.position.len()
-                    if (d < settings.engagementRange) t.isIdentified = true
-                    d < settings.engagementRange && interceptors.none { it.target == t }
+                .filter { threat ->
+                    val inRange = threat.position.dst2(Vector3.Zero) < settings.engagementRange * settings.engagementRange
+                    if (inRange) threat.isTracked = true
+                    inRange && interceptors.none { it.target == threat }
                 }
                 .minByOrNull { it.position.z }
             if (nextTarget != null) {
                 launchInterceptor(nextTarget)
-                timeSinceLastEngagement = 0f
+                timeSinceLastLaunch = 0f
             }
         }
     }
 
     private fun launchInterceptor(target: ThreatEntity) {
-        val launcher = launchers.minByOrNull {
-            it.transform.getTranslation(v1)
-            v1.dst2(target.position)
+        val launcher = launchers.minByOrNull { launcher ->
+            launcher.transform.getTranslation(tempA)
+            tempA.dst2(target.position)
         } ?: return
 
-        launcher.transform.getTranslation(v1)
-        v1.y += 12f // Launch from top of canister
+        launcher.transform.getTranslation(tempA)
+        tempA.y += 18f
+        val aimPoint = InterceptionMath.predictInterceptPoint(tempA, target.position, target.velocity, settings.interceptorSpeed)
+        tempB.set(aimPoint).sub(tempA).nor().scl(settings.interceptorSpeed)
+        launcher.setRotationToward(tempB)
 
-        val interceptPoint = predictInterceptPoint(v1, target.position, target.velocity, settings.interceptorSpeed)
-        v2.set(interceptPoint).sub(v1).nor().scl(settings.interceptorSpeed)
-
-        // Aim launcher toward target
-        launcher.setRotationToward(v2)
-
-        val inst = ModelInstance(models.get("interceptor")).apply {
-            transform.setToScaling(INTERCEPTOR_SCALE, INTERCEPTOR_SCALE, INTERCEPTOR_SCALE).setTranslation(v1)
-            setRotationToward(v2)
-        }
-        interceptors.add(InterceptorEntity(inst, v1.cpy(), v2.cpy(), target))
-        spawnBlast(v1, 15f)
-        playSfx("launch", 0.4f)
+        val instance = ModelInstance(models.get("interceptor"))
+        syncProjectileTransform(instance, tempA, tempB, INTERCEPTOR_SCALE)
+        interceptors.add(
+            InterceptorEntity(
+                instance = instance,
+                position = tempA.cpy(),
+                velocity = tempB.cpy(),
+                target = target,
+                trailCooldown = 0f
+            )
+        )
+        spawnBlast(tempA, 14f)
+        playSfx("launch", 0.35f)
     }
 
-    private fun predictInterceptPoint(
-        interceptorPos: Vector3,
-        targetPos: Vector3,
-        targetVelocity: Vector3,
-        interceptorSpeed: Float
-    ): Vector3 {
-        val toTarget = v3.set(targetPos).sub(interceptorPos)
-        val a = targetVelocity.dot(targetVelocity) - interceptorSpeed * interceptorSpeed
-        val b = 2f * toTarget.dot(targetVelocity)
-        val c = toTarget.dot(toTarget)
+    private fun impactAt(position: Vector3, radius: Float, hostile: Boolean) {
+        spawnBlast(position, radius * 1.2f)
+        spawnDebris(position, if (hostile) 24 else 12, Color(0.4f, 0.38f, 0.36f, 1f))
+        triggerShake(if (hostile) 26f else 12f, 0.55f)
+        playSfx("impact", if (hostile) 0.8f else 0.45f)
 
-        val t = if (abs(a) < 1e-3f) {
-            if (abs(b) < 1e-3f) 0f else (-c / b).coerceAtLeast(0f)
-        } else {
-            val disc = b * b - 4f * a * c
-            if (disc < 0f) 0f
-            else {
-                val sqrtDisc = kotlin.math.sqrt(disc)
-                val t1 = (-b - sqrtDisc) / (2f * a)
-                val t2 = (-b + sqrtDisc) / (2f * a)
-                listOf(t1, t2).filter { it > 0f }.minOrNull() ?: 0f
+        cityBlocks.forEach { building ->
+            val damage = DamageModel.computeBuildingDamage(
+                buildingPosition = building.position,
+                buildingWidth = building.width,
+                buildingDepth = building.depth,
+                impactPosition = position,
+                blastRadius = radius,
+                hostile = hostile
+            )
+            if (damage > 0f) {
+                applyBuildingDamage(building, damage.coerceAtLeast(8f), position)
             }
-        }.coerceIn(0f, 8f)
+        }
 
-        return Vector3(targetPos).mulAdd(targetVelocity, t)
+        if (hostile) {
+            cityIntegrity = max(0f, cityIntegrity - DamageModel.cityIntegrityLoss(hostile = true, destroyedBuilding = false))
+        }
+    }
+
+    private fun applyBuildingDamage(building: BuildingEntity, damage: Float, epicenter: Vector3) {
+        if (building.integrity <= 0f) return
+        building.integrity = max(0f, building.integrity - damage)
+        building.collapseVelocity += damage * 0.0025f
+        building.leanTarget = MathUtils.clamp(
+            building.leanTarget + (building.position.x - epicenter.x).sign() * damage * 0.05f,
+            -16f,
+            16f
+        )
+
+        val material = building.instance.materials.first()
+        val tint = 0.28f + building.integrity / 140f
+        material.set(ColorAttribute.createDiffuse(Color(tint, tint, tint + 0.06f, 1f)))
+
+        if (building.integrity <= 0f) {
+            building.visibleHeight = building.baseHeight * 0.12f
+            building.collapseVelocity = max(building.collapseVelocity, 60f)
+            spawnDebris(building.position.cpy().add(0f, building.baseHeight * 0.35f, 0f), 28, Color(0.25f, 0.25f, 0.28f, 1f))
+            cityIntegrity = max(0f, cityIntegrity - DamageModel.cityIntegrityLoss(hostile = false, destroyedBuilding = true))
+        } else {
+            spawnDebris(building.position.cpy().add(0f, building.baseHeight * 0.45f, 0f), 6, Color(0.3f, 0.3f, 0.34f, 1f))
+        }
+    }
+
+    private fun updateBuildings(dt: Float) {
+        cityBlocks.forEach { building ->
+            if (building.integrity <= 0f) {
+                building.visibleHeight = max(building.baseHeight * 0.08f, building.visibleHeight - building.collapseVelocity * dt)
+            } else if (building.integrity < 100f) {
+                val targetHeight = building.baseHeight * (0.35f + building.integrity / 100f * 0.65f)
+                building.visibleHeight += (targetHeight - building.visibleHeight) * min(1f, dt * 3f)
+            }
+            building.lean += (building.leanTarget - building.lean) * min(1f, dt * 1.7f)
+            syncBuildingTransform(building)
+        }
+    }
+
+    private fun spawnBlast(position: Vector3, size: Float) {
+        val instance = ModelInstance(models.get("blast"))
+        instance.transform.setToScaling(0.1f, 0.1f, 0.1f).trn(position)
+        effects.add(VisualEffect(instance, position.cpy(), 0.75f, 0.75f, EffectType.BLAST, size))
+        impactLight.set(Color(1f, 0.82f, 0.5f, 1f), position, size * 16f)
+    }
+
+    private fun spawnTrail(position: Vector3, hostile: Boolean) {
+        val instance = ModelInstance(models.get("trail"))
+        instance.transform.setToScaling(0.8f, 0.8f, 0.8f).trn(position)
+        val effect = VisualEffect(instance, position.cpy(), if (hostile) 0.7f else 0.55f, if (hostile) 0.7f else 0.55f, EffectType.TRAIL, if (hostile) 3.2f else 2.4f)
+        val material = effect.instance.materials.first()
+        material.set(ColorAttribute.createDiffuse(if (hostile) Color(1f, 0.5f, 0.16f, 1f) else Color(0.86f, 0.94f, 1f, 1f)))
+        effects.add(effect)
+    }
+
+    private fun updateEffects(dt: Float) {
+        val iterator = effects.iterator()
+        var strongest = 0f
+        val strongestPos = tempA.setZero()
+        while (iterator.hasNext()) {
+            val effect = iterator.next()
+            effect.life -= dt
+            val progress = (effect.life / effect.initialLife).coerceIn(0f, 1f)
+            val material = effect.instance.materials.first()
+            val blend = material.get(BlendingAttribute.Type) as? BlendingAttribute
+            if (effect.type == EffectType.BLAST) {
+                val scale = effect.maxScale * (1.2f - progress * progress)
+                effect.instance.transform.setToScaling(scale, scale, scale).trn(effect.position)
+                blend?.opacity = (progress * progress).coerceIn(0f, 1f)
+                val intensity = effect.maxScale * progress * 18f
+                if (intensity > strongest) {
+                    strongest = intensity
+                    strongestPos.set(effect.position)
+                }
+            } else {
+                val scale = 0.8f + (1f - progress) * effect.maxScale
+                effect.instance.transform.setToScaling(scale, scale, scale).trn(effect.position)
+                blend?.opacity = 0.32f * progress
+            }
+            if (effect.life <= 0f) iterator.remove()
+        }
+
+        if (strongest > 0f) {
+            impactLight.set(Color(1f, 0.8f, 0.42f, 1f), strongestPos, strongest)
+        } else {
+            impactLight.intensity = max(0f, impactLight.intensity - dt * 260f)
+        }
+    }
+
+    private fun spawnDebris(position: Vector3, count: Int, color: Color) {
+        repeat(count) {
+            val velocity = Vector3(
+                MathUtils.random(-1f, 1f),
+                MathUtils.random(0.3f, 1.5f),
+                MathUtils.random(-1f, 1f)
+            ).nor().scl(MathUtils.random(40f, 220f))
+            val instance = ModelInstance(models.get("debris"))
+            instance.materials.first().set(ColorAttribute.createDiffuse(color))
+            val size = MathUtils.random(0.35f, 1.5f)
+            instance.transform.setToScaling(size, size, size).trn(position)
+            debris.add(DebrisEntity(instance, position.cpy(), velocity, MathUtils.random(1.1f, 3.2f), size))
+        }
+    }
+
+    private fun updateDebris(dt: Float) {
+        val iterator = debris.iterator()
+        while (iterator.hasNext()) {
+            val piece = iterator.next()
+            piece.life -= dt
+            piece.velocity.y -= 120f * dt
+            piece.position.mulAdd(piece.velocity, dt)
+            piece.rotation.mulAdd(Vector3(1.5f, 0.9f, 1.2f), dt * 120f)
+            piece.instance.transform
+                .setToScaling(piece.scale, piece.scale, piece.scale)
+                .rotate(Vector3.X, piece.rotation.x)
+                .rotate(Vector3.Y, piece.rotation.y)
+                .rotate(Vector3.Z, piece.rotation.z)
+                .trn(piece.position)
+            if (piece.position.y <= 0f || piece.life <= 0f) iterator.remove()
+        }
+    }
+
+    private fun syncProjectileTransform(instance: ModelInstance, position: Vector3, velocity: Vector3, scale: Float) {
+        instance.transform.setToScaling(scale, scale, scale).trn(position)
+        instance.setRotationToward(velocity)
+    }
+
+    private fun syncBuildingTransform(building: BuildingEntity) {
+        val heightScale = (building.visibleHeight / building.baseHeight).coerceAtLeast(0.05f)
+        val y = building.visibleHeight * 0.5f
+        building.instance.transform.idt()
+        building.instance.transform.translate(building.position.x, y, building.position.z)
+        building.instance.transform.rotate(Vector3.Y, building.yaw)
+        building.instance.transform.rotate(Vector3.Z, building.lean)
+        building.instance.transform.scale(1f, heightScale, 1f)
+    }
+
+    private fun updateHud() {
+        creditsLabel.setText("SCORE $score   CREDITS $credits   CITY ${(cityIntegrity.coerceAtLeast(0f)).toInt()}%")
     }
 
     private fun triggerShake(intensity: Float, duration: Float) {
@@ -691,92 +1220,101 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
         shakeTime = max(shakeTime, duration)
     }
 
-    private fun spawnBlast(pos: Vector3, size: Float) {
-        val inst = ModelInstance(models.get("blast")).apply { transform.setToScaling(0.1f, 0.1f, 0.1f).setTranslation(pos) }
-        effects.add(VisualEffect(inst, pos.cpy(), 0.8f, 0.8f, EffectType.BLAST, size))
-        impactLight.set(Color.GOLD, pos, size * 15f)
+    private fun ModelInstance.setRotationToward(direction: Vector3) {
+        if (direction.isZero(0.0001f)) return
+        transform.getTranslation(tempC)
+        tempA.set(direction).nor()
+        tempB.set(Vector3.Y)
+        if (abs(tempA.dot(tempB)) > 0.98f) tempB.set(Vector3.Z)
+        tempD.set(tempB).crs(tempA).nor()
+        tempB.set(tempA).crs(tempD).nor()
+        transform.set(tempD, tempA, tempB, tempC)
     }
 
-    private fun spawnTrail(pos: Vector3) {
-        val inst = ModelInstance(models.get("trail")).apply { transform.setToScaling(0.5f, 0.5f, 0.5f).setTranslation(pos) }
-        effects.add(VisualEffect(inst, pos.cpy(), 1.2f, 1.2f, EffectType.TRAIL, 0.5f))
-    }
-
-    private fun updateEffects(dt: Float) {
-        val it = effects.iterator()
-        var maxL = 0f; val lP = Vector3()
-        while (it.hasNext()) {
-            val e = it.next(); e.life -= dt; val p = e.life / e.initialLife
-            if (e.type == EffectType.BLAST) {
-                val s = e.maxScale * (1.1f - p * p)
-                e.instance.transform.setToScaling(s, s, s).trn(e.position)
-                (e.instance.materials.first().get(BlendingAttribute.Type) as BlendingAttribute).opacity = (p * p * p).coerceIn(0f, 1f)
-                if (e.life > 0.4f) {
-                    val intens = e.maxScale * p * 25f
-                    if (intens > maxL) {
-                        maxL = intens
-                        lP.set(e.position)
-                    }
-                }
-            } else {
-                val s = 0.5f + (1.0f - p) * 4f
-                e.instance.transform.setToScaling(s, s, s).trn(e.position)
-                (e.instance.materials.first().get(BlendingAttribute.Type) as BlendingAttribute).opacity = (p * p * 0.5f).coerceIn(0f, 1f)
-            }
-            if (e.life <= 0) it.remove()
-        }
-        if (maxL > 0) {
-            impactLight.set(Color.GOLD, lP, maxL)
-        } else {
-            impactLight.intensity = max(0f, impactLight.intensity - dt * 600f)
-        }
-    }
-
-    private fun ModelInstance.setRotationToward(dir: Vector3) {
-        if (dir.isZero(1e-6f)) return
-        transform.getTranslation(tempVec)
-        
-        v2.set(dir).nor() // UP vector is the direction of travel
-        // Find an arbitrary right vector (v3)
-        v1.set(Vector3.Y)
-        if (abs(v2.dot(v1)) > 0.99f) v1.set(Vector3.Z)
-        
-        v3.set(v1).crs(v2).nor() // Right
-        v1.set(v2).crs(v3).nor() // Forward
-
-        transform.set(v3, v2, v1, tempVec)
-    }
-
-    override fun resize(w: Int, h: Int) {
-        stage.viewport.update(w, h, true)
-        camera.viewportWidth = w.toFloat()
-        camera.viewportHeight = h.toFloat()
+    override fun resize(width: Int, height: Int) {
+        stage.viewport.update(width, height, true)
+        camera.viewportWidth = width.toFloat()
+        camera.viewportHeight = height.toFloat()
         camera.update()
-        setupHud(skin)
+        setupHud()
     }
 
     override fun dispose() {
         modelBatch.dispose()
-        models.values().forEach { it.dispose() }
-        sounds.values().forEach { it.dispose() }
         stage.dispose()
         skin.dispose()
+        textures.forEach { it.dispose() }
+        models.values().forEach { it.dispose() }
+        sounds.values().forEach { it.dispose() }
     }
 }
 
-data class DefenseSettings(var engagementRange: Float = 1200f, var interceptorSpeed: Float = 700f, var launchCooldown: Float = 0.5f, var blastRadius: Float = 30f)
+private fun Float.sign(): Float = when {
+    this > 0f -> 1f
+    this < 0f -> -1f
+    else -> 0f
+}
+
+data class DefenseSettings(
+    var engagementRange: Float = 1350f,
+    var interceptorSpeed: Float = 420f,
+    var launchCooldown: Float = 0.8f,
+    var blastRadius: Float = 42f
+)
+
 enum class EffectType { BLAST, TRAIL }
-data class BuildingEntity(val instance: ModelInstance, var health: Float)
-data class DebrisEntity(val instance: ModelInstance, val position: Vector3, val velocity: Vector3, var life: Float)
+
+data class BuildingEntity(
+    val instance: ModelInstance,
+    val modelName: String,
+    val position: Vector3,
+    val yaw: Float,
+    val baseHeight: Float,
+    val width: Float,
+    val depth: Float,
+    var integrity: Float,
+    var visibleHeight: Float = baseHeight,
+    var lean: Float = 0f,
+    var leanTarget: Float = 0f,
+    var collapseVelocity: Float = 0f
+)
+
 data class ThreatEntity(
     val instance: ModelInstance,
     val position: Vector3,
     val velocity: Vector3,
-    var id: String,
-    var type: String = "BALLISTIC",
-    var rcs: Float = 0.15f,
-    var isIdentified: Boolean = false,
+    val id: String,
+    var isTracked: Boolean = false,
     var trailCooldown: Float = 0f
 )
-data class InterceptorEntity(val instance: ModelInstance, val position: Vector3, val velocity: Vector3, var target: ThreatEntity?)
-data class VisualEffect(val instance: ModelInstance, val position: Vector3, var life: Float, val initialLife: Float, val type: EffectType, val maxScale: Float = 1f)
+
+data class InterceptorEntity(
+    val instance: ModelInstance,
+    val position: Vector3,
+    val velocity: Vector3,
+    var target: ThreatEntity?,
+    var trailCooldown: Float = 0f
+)
+
+data class VisualEffect(
+    val instance: ModelInstance,
+    val position: Vector3,
+    var life: Float,
+    val initialLife: Float,
+    val type: EffectType,
+    val maxScale: Float
+)
+
+data class DebrisEntity(
+    val instance: ModelInstance,
+    val position: Vector3,
+    val velocity: Vector3,
+    var life: Float,
+    val scale: Float,
+    val rotation: Vector3 = Vector3()
+)
+
+data class SurfaceTextureSet(
+    val diffuse: Texture,
+    val roughness: Texture
+)
