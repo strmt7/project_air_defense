@@ -108,8 +108,6 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
         private const val INTERCEPTOR_TRAIL_INTERVAL = 0.025f
         private const val THREAT_SCALE = 12f
         private const val INTERCEPTOR_SCALE = 16f
-        private const val BUILDING_SPACING_X = 150f
-        private const val BUILDING_SPACING_Z = 190f
     }
 
     init {
@@ -344,6 +342,95 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
         return createTextureSet(diffuse, roughness)
     }
 
+    private fun createSeaTextureSet(): SurfaceTextureSet {
+        val diffuse = Pixmap(512, 512, Pixmap.Format.RGBA8888)
+        val roughness = Pixmap(512, 512, Pixmap.Format.RGBA8888)
+        for (x in 0 until 512) {
+            for (y in 0 until 512) {
+                val wave = kotlin.math.sin((x + y) * 0.045f) * 0.03f
+                val shimmer = kotlin.math.cos(y * 0.08f) * 0.02f
+                val noise = MathUtils.random(-0.018f, 0.018f)
+                diffuse.setColor(
+                    (0.02f + wave + noise).coerceIn(0f, 1f),
+                    (0.12f + shimmer + noise).coerceIn(0f, 1f),
+                    (0.22f + wave + shimmer + noise * 1.2f).coerceIn(0f, 1f),
+                    1f
+                )
+                diffuse.drawPixel(x, y)
+                val r = (0.32f + MathUtils.random(-0.06f, 0.08f)).coerceIn(0.08f, 1f)
+                roughness.setColor(r, r, r, 1f)
+                roughness.drawPixel(x, y)
+            }
+        }
+        return createTextureSet(diffuse, roughness)
+    }
+
+    private fun createBeachTextureSet(): SurfaceTextureSet {
+        val diffuse = Pixmap(512, 512, Pixmap.Format.RGBA8888)
+        val roughness = Pixmap(512, 512, Pixmap.Format.RGBA8888)
+        for (x in 0 until 512) {
+            for (y in 0 until 512) {
+                val dune = kotlin.math.sin(x * 0.03f) * 0.04f + kotlin.math.cos(y * 0.024f) * 0.025f
+                val noise = MathUtils.random(-0.03f, 0.03f)
+                diffuse.setColor(
+                    (0.58f + dune + noise).coerceIn(0f, 1f),
+                    (0.5f + dune * 0.7f + noise).coerceIn(0f, 1f),
+                    (0.34f + noise * 0.6f).coerceIn(0f, 1f),
+                    1f
+                )
+                diffuse.drawPixel(x, y)
+                val r = (0.9f + MathUtils.random(-0.04f, 0.05f)).coerceIn(0.1f, 1f)
+                roughness.setColor(r, r, r, 1f)
+                roughness.drawPixel(x, y)
+            }
+        }
+        return createTextureSet(diffuse, roughness)
+    }
+
+    private fun createParkTextureSet(): SurfaceTextureSet {
+        val diffuse = Pixmap(512, 512, Pixmap.Format.RGBA8888)
+        val roughness = Pixmap(512, 512, Pixmap.Format.RGBA8888)
+        for (x in 0 until 512) {
+            for (y in 0 until 512) {
+                val strip = if ((x / 28 + y / 36) % 2 == 0) 0.03f else -0.02f
+                val noise = MathUtils.random(-0.035f, 0.035f)
+                diffuse.setColor(
+                    (0.06f + strip + noise).coerceIn(0f, 1f),
+                    (0.18f + strip + noise).coerceIn(0f, 1f),
+                    (0.08f + noise).coerceIn(0f, 1f),
+                    1f
+                )
+                diffuse.drawPixel(x, y)
+                val r = (0.86f + MathUtils.random(-0.06f, 0.05f)).coerceIn(0.1f, 1f)
+                roughness.setColor(r, r, r, 1f)
+                roughness.drawPixel(x, y)
+            }
+        }
+        return createTextureSet(diffuse, roughness)
+    }
+
+    private fun createPromenadeTextureSet(): SurfaceTextureSet {
+        val diffuse = Pixmap(512, 512, Pixmap.Format.RGBA8888)
+        val roughness = Pixmap(512, 512, Pixmap.Format.RGBA8888)
+        for (x in 0 until 512) {
+            for (y in 0 until 512) {
+                val tile = if ((x / 48 + y / 48) % 2 == 0) 0.04f else -0.015f
+                val noise = MathUtils.random(-0.02f, 0.02f)
+                diffuse.setColor(
+                    (0.22f + tile + noise).coerceIn(0f, 1f),
+                    (0.2f + tile + noise).coerceIn(0f, 1f),
+                    (0.18f + tile * 0.7f + noise).coerceIn(0f, 1f),
+                    1f
+                )
+                diffuse.drawPixel(x, y)
+                val r = (0.72f + MathUtils.random(-0.06f, 0.04f)).coerceIn(0.1f, 1f)
+                roughness.setColor(r, r, r, 1f)
+                roughness.drawPixel(x, y)
+            }
+        }
+        return createTextureSet(diffuse, roughness)
+    }
+
     private fun createSkyTexture(): Texture {
         val pixmap = Pixmap(1024, 512, Pixmap.Format.RGBA8888)
         for (x in 0 until pixmap.width) {
@@ -458,7 +545,13 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
         val facadeA = createFacadeTextureSet(256, 512, Color(0.08f, 0.1f, 0.14f, 1f), Color(1f, 0.82f, 0.48f, 1f))
         val facadeB = createFacadeTextureSet(256, 512, Color(0.05f, 0.07f, 0.11f, 1f), Color(0.7f, 0.88f, 1f, 1f))
         val facadeC = createFacadeTextureSet(256, 512, Color(0.1f, 0.08f, 0.09f, 1f), Color(1f, 0.62f, 0.3f, 1f))
+        val facadeD = createFacadeTextureSet(256, 512, Color(0.07f, 0.09f, 0.12f, 1f), Color(0.56f, 0.96f, 0.96f, 1f))
+        val facadeE = createFacadeTextureSet(256, 512, Color(0.12f, 0.1f, 0.08f, 1f), Color(1f, 0.9f, 0.62f, 1f))
         val groundSet = createGroundTextureSet()
+        val seaSet = createSeaTextureSet()
+        val beachSet = createBeachTextureSet()
+        val parkSet = createParkTextureSet()
+        val promenadeSet = createPromenadeTextureSet()
         val roadSet = createRoadTextureSet()
         val launcherSet = createMetalTextureSet(Color(0.18f, 0.24f, 0.19f, 1f))
         val radarSet = createMetalTextureSet(Color(0.22f, 0.32f, 0.24f, 1f))
@@ -470,8 +563,8 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
         val moonSet = createSolidTextureSet(Color(0.88f, 0.9f, 1f, 1f), 0.65f)
 
         mb.begin()
-        val ground = mb.part(
-            "ground",
+        val inlandGround = mb.part(
+            "inland_ground",
             GL20.GL_TRIANGLES,
             attr,
             Material(
@@ -482,7 +575,59 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
                 FloatAttribute.createShininess(12f)
             )
         )
-        BoxShapeBuilder.build(ground, 11000f, 3f, 11000f)
+        BoxShapeBuilder.build(inlandGround, 7600f, 3f, 11000f, 1350f, -2f, -300f)
+        val sea = mb.part(
+            "sea",
+            GL20.GL_TRIANGLES,
+            attr,
+            Material(
+                TextureAttribute.createDiffuse(seaSet.diffuse),
+                TextureAttribute.createSpecular(seaSet.roughness),
+                ColorAttribute.createDiffuse(Color.WHITE),
+                ColorAttribute.createSpecular(Color(0.45f, 0.62f, 0.78f, 1f)),
+                FloatAttribute.createShininess(46f)
+            )
+        )
+        BoxShapeBuilder.build(sea, 4200f, 2f, 11000f, -3550f, -3f, -300f)
+        val beach = mb.part(
+            "beach",
+            GL20.GL_TRIANGLES,
+            attr,
+            Material(
+                TextureAttribute.createDiffuse(beachSet.diffuse),
+                TextureAttribute.createSpecular(beachSet.roughness),
+                ColorAttribute.createDiffuse(Color.WHITE),
+                ColorAttribute.createSpecular(Color(0.2f, 0.18f, 0.12f, 1f)),
+                FloatAttribute.createShininess(8f)
+            )
+        )
+        BoxShapeBuilder.build(beach, 900f, 4f, 9800f, -2150f, -1f, -340f)
+        val promenade = mb.part(
+            "promenade",
+            GL20.GL_TRIANGLES,
+            attr,
+            Material(
+                TextureAttribute.createDiffuse(promenadeSet.diffuse),
+                TextureAttribute.createSpecular(promenadeSet.roughness),
+                ColorAttribute.createDiffuse(Color.WHITE),
+                ColorAttribute.createSpecular(Color(0.22f, 0.22f, 0.24f, 1f)),
+                FloatAttribute.createShininess(18f)
+            )
+        )
+        BoxShapeBuilder.build(promenade, 260f, 2f, 9300f, -1500f, 0f, -360f)
+        val park = mb.part(
+            "park",
+            GL20.GL_TRIANGLES,
+            attr,
+            Material(
+                TextureAttribute.createDiffuse(parkSet.diffuse),
+                TextureAttribute.createSpecular(parkSet.roughness),
+                ColorAttribute.createDiffuse(Color.WHITE),
+                ColorAttribute.createSpecular(Color(0.12f, 0.18f, 0.1f, 1f)),
+                FloatAttribute.createShininess(6f)
+            )
+        )
+        BoxShapeBuilder.build(park, 920f, 2f, 4200f, 980f, -1f, -1120f)
         val road = mb.part(
             "road",
             GL20.GL_TRIANGLES,
@@ -495,8 +640,11 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
                 FloatAttribute.createShininess(18f)
             )
         )
-        BoxShapeBuilder.build(road, 11000f, 1f, 36f, 0f, 0f, -120f)
-        BoxShapeBuilder.build(road, 60f, 1f, 9000f, -120f, 0f, -900f)
+        BoxShapeBuilder.build(road, 7200f, 1f, 42f, 600f, 0f, 210f)
+        BoxShapeBuilder.build(road, 5600f, 1f, 38f, 220f, 0f, -1160f)
+        BoxShapeBuilder.build(road, 40f, 1f, 8800f, -1160f, 0f, -280f)
+        BoxShapeBuilder.build(road, 44f, 1f, 7600f, 840f, 0f, -480f)
+        BoxShapeBuilder.build(road, 38f, 1f, 6000f, 1780f, 0f, -580f)
         val glowBand = mb.part(
             "glow",
             GL20.GL_TRIANGLES,
@@ -506,7 +654,8 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
                 BlendingAttribute(0.18f)
             )
         )
-        BoxShapeBuilder.build(glowBand, 5200f, 0.5f, 1400f, 0f, 5f, -600f)
+        BoxShapeBuilder.build(glowBand, 7200f, 0.5f, 1100f, 760f, 6f, -420f)
+        BoxShapeBuilder.build(glowBand, 1800f, 0.5f, 8600f, -1450f, 4f, -320f)
         models.put("ground", mb.end())
 
         fun createBuildingModel(name: String, width: Float, height: Float, depth: Float, texture: SurfaceTextureSet, tint: Color) {
@@ -531,6 +680,10 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
         createBuildingModel("tower_a", 58f, 280f, 58f, facadeA, Color(0.9f, 0.95f, 1f, 1f))
         createBuildingModel("tower_b", 84f, 210f, 84f, facadeB, Color(0.82f, 0.9f, 1f, 1f))
         createBuildingModel("tower_c", 120f, 130f, 90f, facadeC, Color(1f, 0.95f, 0.9f, 1f))
+        createBuildingModel("tower_d", 96f, 360f, 74f, facadeD, Color(0.84f, 0.98f, 1f, 1f))
+        createBuildingModel("tower_e", 146f, 178f, 112f, facadeE, Color(1f, 0.94f, 0.86f, 1f))
+        createBuildingModel("podium", 180f, 78f, 120f, facadeB, Color(0.9f, 0.94f, 1f, 1f))
+        createBuildingModel("hotel", 132f, 118f, 72f, facadeC, Color(1f, 0.96f, 0.9f, 1f))
 
         val launcherMaterial = Material(
             TextureAttribute.createDiffuse(launcherSet.diffuse),
@@ -701,58 +854,104 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
         instances.add(ModelInstance(models.get("ground")).apply { transform.setToTranslation(0f, -2f, 0f) })
         instances.add(ModelInstance(models.get("moon")).apply { transform.setToTranslation(1400f, 1450f, -4200f) })
 
-        val leftLauncher = ModelInstance(models.get("launcher")).apply { transform.setToTranslation(-120f, 4f, 220f) }
-        val rightLauncher = ModelInstance(models.get("launcher")).apply { transform.setToTranslation(120f, 4f, 220f) }
+        val leftLauncher = ModelInstance(models.get("launcher")).apply { transform.setToTranslation(-80f, 4f, 260f) }
+        val rightLauncher = ModelInstance(models.get("launcher")).apply { transform.setToTranslation(140f, 4f, 220f) }
         launchers.add(leftLauncher)
         launchers.add(rightLauncher)
         instances.add(leftLauncher)
         instances.add(rightLauncher)
-        instances.add(ModelInstance(models.get("radar")).apply { transform.setToTranslation(0f, 4f, 160f) })
+        instances.add(ModelInstance(models.get("radar")).apply { transform.setToTranslation(20f, 4f, 120f) })
 
-        for (gridX in -9..9) {
-            for (gridZ in -8..1) {
-                if (abs(gridX) < 2 && gridZ > -2) continue
-                val roll = MathUtils.random(0, 5)
-                val modelName = when {
-                    roll <= 1 -> "tower_a"
-                    roll <= 3 -> "tower_b"
-                    else -> "tower_c"
-                }
-                val baseHeight = when (modelName) {
-                    "tower_a" -> 280f
-                    "tower_b" -> 210f
-                    else -> 130f
-                }
-                val width = when (modelName) {
-                    "tower_a" -> 58f
-                    "tower_b" -> 84f
-                    else -> 120f
-                }
-                val depth = when (modelName) {
-                    "tower_a" -> 58f
-                    "tower_b" -> 84f
-                    else -> 90f
-                }
-                val position = Vector3(
-                    gridX * BUILDING_SPACING_X + MathUtils.random(-24f, 24f),
-                    0f,
-                    gridZ * BUILDING_SPACING_Z - 340f + MathUtils.random(-30f, 30f)
-                )
-                val yaw = MathUtils.random(-12f, 12f)
-                val instance = ModelInstance(models.get(modelName))
-                val entity = BuildingEntity(
-                    instance = instance,
-                    modelName = modelName,
-                    position = position,
-                    yaw = yaw,
-                    baseHeight = baseHeight,
-                    width = width,
-                    depth = depth,
-                    integrity = 100f
-                )
-                syncBuildingTransform(entity)
-                cityBlocks.add(entity)
+        fun addBuilding(modelName: String, x: Float, z: Float, yaw: Float = 0f) {
+            val (baseHeight, width, depth) = when (modelName) {
+                "tower_a" -> Triple(280f, 58f, 58f)
+                "tower_b" -> Triple(210f, 84f, 84f)
+                "tower_c" -> Triple(130f, 120f, 90f)
+                "tower_d" -> Triple(360f, 96f, 74f)
+                "tower_e" -> Triple(178f, 146f, 112f)
+                "podium" -> Triple(78f, 180f, 120f)
+                "hotel" -> Triple(118f, 132f, 72f)
+                else -> Triple(140f, 100f, 80f)
             }
+            val entity = BuildingEntity(
+                instance = ModelInstance(models.get(modelName)),
+                modelName = modelName,
+                position = Vector3(x, 0f, z),
+                yaw = yaw,
+                baseHeight = baseHeight,
+                width = width,
+                depth = depth,
+                integrity = 100f
+            )
+            syncBuildingTransform(entity)
+            cityBlocks.add(entity)
+        }
+
+        val waterfrontStrip = listOf(
+            Triple("hotel", -860f, -2820f),
+            Triple("hotel", -820f, -2220f),
+            Triple("podium", -760f, -1540f),
+            Triple("hotel", -790f, -860f),
+            Triple("hotel", -840f, -180f),
+            Triple("podium", -760f, 620f)
+        )
+        waterfrontStrip.forEachIndexed { index, (model, x, z) ->
+            addBuilding(model, x, z, yaw = if (index % 2 == 0) 6f else -6f)
+        }
+
+        val skylineCore = listOf(
+            Triple("tower_d", -180f, -2560f),
+            Triple("tower_a", 220f, -2480f),
+            Triple("tower_b", 520f, -2380f),
+            Triple("tower_d", 840f, -2220f),
+            Triple("tower_e", 1120f, -2360f),
+            Triple("tower_b", 1480f, -2140f),
+            Triple("tower_a", 1760f, -2400f),
+            Triple("tower_d", 2140f, -2260f),
+            Triple("tower_b", 2420f, -1980f),
+            Triple("tower_e", 2760f, -2140f)
+        )
+        skylineCore.forEachIndexed { index, (model, x, z) ->
+            addBuilding(model, x, z, yaw = if (index % 3 == 0) 12f else -8f)
+        }
+
+        val innerCity = listOf(
+            Triple("tower_c", -120f, -1660f),
+            Triple("tower_b", 260f, -1500f),
+            Triple("tower_c", 620f, -1460f),
+            Triple("tower_e", 980f, -1380f),
+            Triple("tower_b", 1380f, -1280f),
+            Triple("podium", 1820f, -1420f),
+            Triple("tower_c", 2220f, -1260f),
+            Triple("tower_b", 2600f, -1180f),
+            Triple("tower_c", 2960f, -1260f),
+            Triple("tower_b", 340f, -760f),
+            Triple("tower_c", 760f, -700f),
+            Triple("tower_b", 1190f, -640f),
+            Triple("tower_c", 1650f, -680f),
+            Triple("tower_e", 2120f, -720f),
+            Triple("tower_b", 2520f, -620f),
+            Triple("tower_c", 2940f, -740f)
+        )
+        innerCity.forEachIndexed { index, (model, x, z) ->
+            addBuilding(model, x, z, yaw = if (index % 2 == 0) -10f else 10f)
+        }
+
+        val inlandDistrict = listOf(
+            Triple("tower_c", 420f, 180f),
+            Triple("tower_b", 880f, 140f),
+            Triple("podium", 1320f, 180f),
+            Triple("tower_c", 1780f, 60f),
+            Triple("tower_b", 2260f, 80f),
+            Triple("tower_c", 2720f, 40f),
+            Triple("tower_e", 3200f, -40f),
+            Triple("tower_c", 980f, 640f),
+            Triple("tower_b", 1480f, 620f),
+            Triple("tower_c", 1980f, 580f),
+            Triple("tower_b", 2480f, 520f)
+        )
+        inlandDistrict.forEachIndexed { index, (model, x, z) ->
+            addBuilding(model, x, z, yaw = if (index % 2 == 0) 7f else -9f)
         }
     }
 
