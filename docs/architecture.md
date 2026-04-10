@@ -17,6 +17,8 @@
   Lead-solve used by interceptors.
 - `DamageModel`
   Blast falloff and city-integrity accounting.
+- `FireControl`
+  Shared target-priority rules used by tests and the live battle loop. It prioritizes the closest inbound track, then the lower-altitude threat, then the threat closest to the centerline.
 
 ## Rendering Layers
 - Procedural models:
@@ -48,6 +50,6 @@
 - Logic:
   `core/src/test/kotlin/com/airdefense/game/*`
 - Rendering:
-  currently compile-verified, not device-render-verified in this VM.
+  emulator-verified for menu flow, battle entry, HUD state, and projectile readability.
 - Android packaging:
-  Gradle metadata verified; full APK assembly requires an Android SDK plus release keystore for the production channel.
+  debug install verified on emulator; production channel still requires a stable release keystore for update-safe release builds.

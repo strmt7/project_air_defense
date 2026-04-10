@@ -88,10 +88,42 @@ object ThreatFactory {
     }
 }
 
+object FireControl {
+    fun selectNextThreat(
+        threats: List<ThreatSnapshot>,
+        engagementRange: Float,
+        assignedThreatIds: Set<String>
+    ): String? {
+        val engagementRangeSquared = engagementRange * engagementRange
+        var bestThreat: ThreatSnapshot? = null
+        threats.asSequence()
+            .filter { it.id !in assignedThreatIds }
+            .filter { it.position.len2() <= engagementRangeSquared }
+            .forEach { threat ->
+                val incumbent = bestThreat
+                if (incumbent == null || hasPriorityOver(threat.position, incumbent.position)) {
+                    bestThreat = threat
+                }
+            }
+        return bestThreat?.id
+    }
+
+    fun hasPriorityOver(candidate: Vector3, incumbent: Vector3): Boolean {
+        if (candidate.z != incumbent.z) return candidate.z > incumbent.z
+        if (candidate.y != incumbent.y) return candidate.y < incumbent.y
+        return abs(candidate.x) < abs(incumbent.x)
+    }
+}
+
 data class ThreatLaunch(
     val start: Vector3,
     val target: Vector3,
     val velocity: Vector3
+)
+
+data class ThreatSnapshot(
+    val id: String,
+    val position: Vector3
 )
 
 interface RandomSource {
