@@ -128,10 +128,12 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
     private fun createSkin(): Skin {
         val s = Skin()
         val uiScale = Gdx.graphics.height / 1080f
-        val font = BitmapFont().apply { data.setScale(1.05f * uiScale) }
-        val titleFont = BitmapFont().apply { data.setScale(1.7f * uiScale) }
+        val font = BitmapFont().apply { data.setScale(1.28f * uiScale) }
+        val titleFont = BitmapFont().apply { data.setScale(2.02f * uiScale) }
+        val microFont = BitmapFont().apply { data.setScale(1.02f * uiScale) }
         s.add("default", font, BitmapFont::class.java)
         s.add("title", titleFont, BitmapFont::class.java)
+        s.add("micro", microFont, BitmapFont::class.java)
 
         val whitePix = Pixmap(2, 2, Pixmap.Format.RGBA8888)
         whitePix.setColor(Color.WHITE)
@@ -141,42 +143,83 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
         s.add("white", TextureRegionDrawable(com.badlogic.gdx.graphics.g2d.TextureRegion(whiteTex)), Drawable::class.java)
         s.add("white_region", com.badlogic.gdx.graphics.g2d.TextureRegion(whiteTex))
 
-        fun addButton(name: String, fill: Color, stroke: Color) {
-            val p = Pixmap(160, 72, Pixmap.Format.RGBA8888)
-            p.setColor(fill)
-            p.fill()
+        fun addButton(name: String, top: Color, bottom: Color, stroke: Color, glow: Color) {
+            val p = Pixmap(280, 100, Pixmap.Format.RGBA8888)
+            for (y in 0 until p.height) {
+                val t = y / (p.height - 1f)
+                p.setColor(
+                    MathUtils.lerp(top.r, bottom.r, t),
+                    MathUtils.lerp(top.g, bottom.g, t),
+                    MathUtils.lerp(top.b, bottom.b, t),
+                    MathUtils.lerp(top.a, bottom.a, t)
+                )
+                p.drawLine(0, y, p.width - 1, y)
+            }
+            p.setColor(glow)
+            p.fillRectangle(8, 6, p.width - 16, 18)
             p.setColor(stroke)
-            p.drawRectangle(0, 0, 160, 72)
-            p.drawRectangle(1, 1, 158, 70)
+            p.drawRectangle(0, 0, p.width, p.height)
+            p.drawRectangle(1, 1, p.width - 2, p.height - 2)
+            p.drawRectangle(2, 2, p.width - 4, p.height - 4)
             val tex = Texture(p)
             textures.add(tex)
             s.add(name, TextureRegionDrawable(com.badlogic.gdx.graphics.g2d.TextureRegion(tex)), Drawable::class.java)
             p.dispose()
         }
 
-        addButton("btn_up", Color(0.02f, 0.08f, 0.15f, 0.92f), Color(0.2f, 0.84f, 1f, 1f))
-        addButton("btn_down", Color(0.0f, 0.25f, 0.4f, 0.95f), Color(0.6f, 0.94f, 1f, 1f))
+        addButton("btn_up", Color(0.03f, 0.08f, 0.16f, 0.96f), Color(0.01f, 0.14f, 0.25f, 0.98f), Color(0.28f, 0.82f, 1f, 1f), Color(0.24f, 0.62f, 0.82f, 0.2f))
+        addButton("btn_over", Color(0.07f, 0.2f, 0.33f, 0.98f), Color(0.03f, 0.28f, 0.45f, 0.98f), Color(0.78f, 0.96f, 1f, 1f), Color(0.48f, 0.84f, 1f, 0.28f))
+        addButton("btn_down", Color(0f, 0.34f, 0.52f, 0.98f), Color(0.0f, 0.2f, 0.34f, 1f), Color(0.86f, 0.98f, 1f, 1f), Color(0.66f, 0.94f, 1f, 0.2f))
+        addButton("btn_disabled", Color(0.07f, 0.1f, 0.14f, 0.88f), Color(0.03f, 0.06f, 0.1f, 0.9f), Color(0.18f, 0.24f, 0.3f, 1f), Color(0f, 0f, 0f, 0f))
 
         s.add("default", TextButton.TextButtonStyle().apply {
             up = s.getDrawable("btn_up")
+            checked = s.getDrawable("btn_down")
             down = s.getDrawable("btn_down")
-            over = s.newDrawable("btn_up", Color(0.85f, 0.95f, 1f, 1f))
+            over = s.getDrawable("btn_over")
+            disabled = s.getDrawable("btn_disabled")
             this.font = font
             fontColor = Color.WHITE
+            downFontColor = Color(0.92f, 0.98f, 1f, 1f)
+            overFontColor = Color.WHITE
+            checkedFontColor = Color.WHITE
+            disabledFontColor = Color(0.55f, 0.64f, 0.7f, 1f)
         })
         s.add("default", Label.LabelStyle(font, Color.WHITE))
-        s.add("status", Label.LabelStyle(font, Color(0.7f, 0.96f, 1f, 1f)))
+        s.add("status", Label.LabelStyle(microFont, Color(0.7f, 0.96f, 1f, 1f)))
         s.add("warning", Label.LabelStyle(font, Color(1f, 0.84f, 0.4f, 1f)))
         s.add("critical", Label.LabelStyle(font, Color(1f, 0.42f, 0.42f, 1f)))
         s.add("title", Label.LabelStyle(titleFont, Color.WHITE))
 
-        val sliderBack = Pixmap(128, 10, Pixmap.Format.RGBA8888).apply {
-            setColor(0.08f, 0.18f, 0.26f, 1f)
-            fill()
+        val sliderBack = Pixmap(240, 20, Pixmap.Format.RGBA8888).apply {
+            for (y in 0 until height) {
+                val t = y / (height - 1f)
+                setColor(
+                    MathUtils.lerp(0.05f, 0.1f, t),
+                    MathUtils.lerp(0.14f, 0.2f, t),
+                    MathUtils.lerp(0.2f, 0.28f, t),
+                    1f
+                )
+                drawLine(0, y, width - 1, y)
+            }
+            setColor(0.28f, 0.78f, 0.94f, 1f)
+            drawRectangle(0, 0, width, height)
+            drawRectangle(1, 1, width - 2, height - 2)
         }
-        val sliderKnob = Pixmap(20, 28, Pixmap.Format.RGBA8888).apply {
-            setColor(0.4f, 0.9f, 1f, 1f)
-            fill()
+        val sliderKnob = Pixmap(40, 48, Pixmap.Format.RGBA8888).apply {
+            for (y in 0 until height) {
+                val t = y / (height - 1f)
+                setColor(
+                    MathUtils.lerp(0.28f, 0.68f, t),
+                    MathUtils.lerp(0.82f, 0.96f, t),
+                    1f,
+                    1f
+                )
+                drawLine(0, y, width - 1, y)
+            }
+            setColor(0.88f, 0.98f, 1f, 1f)
+            drawRectangle(0, 0, width, height)
+            drawRectangle(1, 1, width - 2, height - 2)
         }
         val sliderBackTex = Texture(sliderBack)
         val sliderKnobTex = Texture(sliderKnob)
@@ -719,16 +762,16 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
         val root = Table().apply { setFillParent(true) }
 
         val top = Table().apply { background = this@BattleScreen.skin.newDrawable("white", Color(0f, 0.04f, 0.08f, 0.82f)) }
-        top.add(statusLabel).expandX().left().pad(14f * uiScale)
-        top.add(creditsLabel).right().pad(14f * uiScale)
+        top.add(statusLabel).expandX().left().pad(20f * uiScale)
+        top.add(creditsLabel).right().pad(20f * uiScale)
         root.add(top).expandX().fillX().top().row()
 
         val side = Table().apply {
-            background = this@BattleScreen.skin.newDrawable("white", Color(0.02f, 0.06f, 0.1f, 0.74f))
-            defaults().pad(10f * uiScale).width(330f * uiScale)
+            background = this@BattleScreen.skin.newDrawable("white", Color(0.02f, 0.06f, 0.1f, 0.82f))
+            defaults().pad(14f * uiScale).width(420f * uiScale)
         }
-        side.add(Label("ENGAGEMENT CONTROL", skin, "title")).padBottom(26f * uiScale).row()
-        side.add(Label("AUTO ENGAGEMENT RANGE", skin)).left().row()
+        side.add(Label("ENGAGEMENT CONTROL", skin, "title")).padTop(10f * uiScale).padBottom(30f * uiScale).row()
+        side.add(Label("AUTO ENGAGEMENT RANGE", skin)).left().padTop(4f * uiScale).row()
         side.add(Slider(400f, 2600f, 25f, false, skin).apply {
             value = settings.engagementRange
             addListener(object : ChangeListener() {
@@ -736,8 +779,8 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
                     settings.engagementRange = value
                 }
             })
-        }).fillX().row()
-        side.add(Label("INTERCEPTOR SPEED", skin)).left().row()
+        }).fillX().height(58f * uiScale).row()
+        side.add(Label("INTERCEPTOR SPEED", skin)).left().padTop(6f * uiScale).row()
         side.add(Slider(280f, 620f, 10f, false, skin).apply {
             value = settings.interceptorSpeed
             addListener(object : ChangeListener() {
@@ -745,7 +788,7 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
                     settings.interceptorSpeed = value
                 }
             })
-        }).fillX().row()
+        }).fillX().height(58f * uiScale).row()
         waveButton = TextButton("START NEXT WAVE", skin).apply {
             addListener(object : ChangeListener() {
                 override fun changed(event: ChangeEvent?, actor: Actor?) {
@@ -753,8 +796,8 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
                 }
             })
         }
-        side.add(waveButton).height(86f * uiScale).fillX().padTop(16f * uiScale).row()
-        root.add(side).expand().right().pad(18f * uiScale)
+        side.add(waveButton).height(116f * uiScale).fillX().padTop(22f * uiScale).padBottom(8f * uiScale).row()
+        root.add(side).expand().right().pad(22f * uiScale)
 
         stage.addActor(root)
         updateHud()
