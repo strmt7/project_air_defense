@@ -5,13 +5,19 @@ import com.badlogic.gdx.math.Vector3
 import kotlin.math.abs
 import kotlin.math.max
 
-object BattleBalance {
-    fun threatsForWave(wave: Int): Int = 7 + wave * 4
+object PhysicsModel {
+    const val THREAT_GRAVITY_Y = -55f
+    const val THREAT_IMPACT_RADIUS = 110f
+    const val THREAT_FAILSAFE_Z = 1800f
+}
 
-    fun spawnIntervalForWave(wave: Int): Float = max(0.65f, 2.25f - wave * 0.1f)
+object BattleBalance {
+    fun threatsForWave(wave: Int): Int = 6 + wave * 3
+
+    fun spawnIntervalForWave(wave: Int): Float = max(0.9f, 2.4f - wave * 0.08f)
 
     fun threatSpeedRangeForWave(wave: Int): ClosedFloatingPointRange<Float> =
-        (260f + wave * 10f)..(330f + wave * 14f)
+        (220f + wave * 8f)..(285f + wave * 10f)
 }
 
 object InterceptionMath {
@@ -77,14 +83,37 @@ object ThreatFactory {
             -4200f
         )
         val target = cityTarget.cpy().add(random.range(-80f, 80f), 0f, random.range(-80f, 80f))
-        val speed = random.range(
+        val horizontalSpeed = random.range(
             BattleBalance.threatSpeedRangeForWave(wave).start,
             BattleBalance.threatSpeedRangeForWave(wave).endInclusive
         )
-        val travelTime = start.dst(target) / speed
-        val velocity = target.cpy().sub(start).scl(1f / travelTime)
-        velocity.y += random.range(210f, 290f)
+        val horizontalDistance = Vector3(target.x - start.x, 0f, target.z - start.z).len().coerceAtLeast(1f)
+        val travelTime = (horizontalDistance / horizontalSpeed).coerceIn(7.5f, 13f)
+        val displacement = target.cpy().sub(start)
+        val velocity = displacement.scl(1f / travelTime)
+        velocity.y -= 0.5f * PhysicsModel.THREAT_GRAVITY_Y * travelTime
         return ThreatLaunch(start, target, velocity)
+    }
+}
+
+object EngagementPhysics {
+    fun closesWithinFuse(
+        interceptorPos: Vector3,
+        interceptorVel: Vector3,
+        targetPos: Vector3,
+        targetVel: Vector3,
+        dt: Float,
+        fuseRadius: Float
+    ): Boolean {
+        val relativePos = targetPos.cpy().sub(interceptorPos)
+        val relativeVel = targetVel.cpy().sub(interceptorVel)
+        val relativeSpeedSquared = relativeVel.len2()
+        val sampleTime = if (relativeSpeedSquared <= 0.0001f) {
+            0f
+        } else {
+            (-relativePos.dot(relativeVel) / relativeSpeedSquared).coerceIn(0f, dt)
+        }
+        return relativePos.mulAdd(relativeVel, sampleTime).len2() <= fuseRadius * fuseRadius
     }
 }
 
@@ -128,8 +157,30 @@ data class ThreatSnapshot(
 
 interface RandomSource {
     fun range(min: Float, max: Float): Float
+
+    fun int(min: Int, max: Int): Int {
+        if (max <= min) return min
+        val sample = range(min.toFloat(), (max + 1).toFloat())
+        return sample.toInt().coerceIn(min, max)
+    }
 }
 
 object DefaultRandomSource : RandomSource {
     override fun range(min: Float, max: Float): Float = MathUtils.random(min, max)
+
+    override fun int(min: Int, max: Int): Int = MathUtils.random(min, max)
+}
+
+class SeededRandomSource(seed: Long) : RandomSource {
+    private val random = java.util.Random(seed)
+
+    override fun range(min: Float, max: Float): Float {
+        if (max <= min) return min
+        return min + random.nextFloat() * (max - min)
+    }
+
+    override fun int(min: Int, max: Int): Int {
+        if (max <= min) return min
+        return min + random.nextInt(max - min + 1)
+    }
 }

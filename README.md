@@ -12,6 +12,7 @@ A high-fidelity libGDX + Kotlin Android prototype where you command a Patriot-in
 - **Live doctrine tuning**: engagement range, interceptor speed, launch cooldown, radar refresh interval, blast radius, and salvo size are adjustable while fighting.
 - **Mixed raids**: ballistic, cruise-like, decoy, and anti-radiation missile profiles.
 - **Counter-battery pressure**: about 1 in 20 threat missiles is anti-radiation and can directly damage radar / ECS / launcher capacity.
+- **Shared simulation core**: the GUI battle and the headless Monte Carlo runner now use the same missile, interceptor, damage, and wave logic.
 
 ## Full 3D Battlespace
 - Textured night skyline backdrop and downscaled night-sky panorama for a more believable urban atmosphere.
@@ -49,8 +50,10 @@ A high-fidelity libGDX + Kotlin Android prototype where you command a Patriot-in
 2. Make sure Java 21 and Android SDK 36 are installed.
 3. Sync Gradle.
 4. Run `.\gradlew.bat :core:test` for gameplay and targeting logic coverage.
-5. Run `.\gradlew.bat :android:installDebug` to install the debug package on an emulator or device.
-6. Launch the `android` module and enter a battle from the main menu.
+5. Run `.\gradlew.bat :core:runBattleMonteCarlo -Pruns=300 -Pwaves=1 -Pseconds=48 -Pstep=0.05` for headless balance sweeps.
+6. Or use `.\scripts\run-battle-monte-carlo.cmd 300 1 48 0.05 20260411` on Windows without changing PowerShell execution policy.
+7. Run `.\gradlew.bat :android:installDebug` to install the debug package on an emulator or device.
+8. Launch the `android` module and enter a battle from the main menu.
 
 ## Build Outputs
 - Local side-load build:
@@ -77,4 +80,5 @@ Production signing variables can be set in `~/.gradle/gradle.properties`, CI sec
 ## Notes
 - This is still a gameplay prototype, not a military simulator.
 - The current renderer targets a high-quality mobile approximation of premium night lighting; it does not use true hardware ray tracing.
+- Waterfront building placement and radar orientation are now validated in tests so the city stays inland and the radar reads top-down toward the horizon.
 - Generated `build/`, `.kotlin/`, and copied native-library output are intentionally excluded from git so the repository stays source-clean.
