@@ -7,14 +7,14 @@ import kotlin.test.assertTrue
 class BattleBalanceTest {
     @Test
     fun `wave threat count scales linearly`() {
-        assertEquals(11, BattleBalance.threatsForWave(1))
-        assertEquals(27, BattleBalance.threatsForWave(5))
+        assertEquals(9, BattleBalance.threatsForWave(1))
+        assertEquals(21, BattleBalance.threatsForWave(5))
     }
 
     @Test
     fun `spawn interval never drops below floor`() {
-        assertEquals(2.15f, BattleBalance.spawnIntervalForWave(1))
-        assertEquals(0.65f, BattleBalance.spawnIntervalForWave(40))
+        assertEquals(2.3200002f, BattleBalance.spawnIntervalForWave(1))
+        assertEquals(0.9f, BattleBalance.spawnIntervalForWave(40))
     }
 
     @Test

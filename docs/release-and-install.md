@@ -27,6 +27,10 @@ If any one of those changes, in-place update fails.
 - Debug QA on emulator or device:
   run `.\gradlew.bat :core:test :android:installDebug`
   then launch `com.airdefense.game.debug`
+- Headless balance QA:
+  run `.\gradlew.bat :core:runBattleMonteCarlo -Pruns=300 -Pwaves=1 -Pseconds=48 -Pstep=0.05`
+- Windows wrapper for the same shared simulation:
+  run `.\scripts\run-battle-monte-carlo.cmd 300 1 48 0.05 20260411`
 
 ## CI Behavior
 - CI now publishes the `local` artifact by default.

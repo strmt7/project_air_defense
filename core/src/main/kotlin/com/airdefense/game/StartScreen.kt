@@ -1,5 +1,6 @@
 package com.airdefense.game
 
+import com.badlogic.gdx.Application
 import com.badlogic.gdx.Gdx
 import com.badlogic.gdx.ScreenAdapter
 import com.badlogic.gdx.graphics.Color
@@ -22,6 +23,7 @@ import com.badlogic.gdx.utils.ScreenUtils
 import com.badlogic.gdx.utils.viewport.ScreenViewport
 
 class StartScreen(private val game: AirDefenseGame) : ScreenAdapter() {
+    private val isAndroid = Gdx.app.type == Application.ApplicationType.Android
     private val stage = Stage(ScreenViewport())
     private val textures = Array<Texture>()
     private val skin = createSkin()
@@ -32,37 +34,73 @@ class StartScreen(private val game: AirDefenseGame) : ScreenAdapter() {
     private var launchRequested = false
 
     init {
+        Gdx.graphics.isContinuousRendering = true
+        val uiScale = Gdx.graphics.height / 1080f
         val root = Table().apply { setFillParent(true) }
-        val titleBlock = Table()
-        titleBlock.add(Label("PROJECT AIR DEFENSE", skin, "title")).row()
-        titleBlock.add(Label("NIGHT SHIELD COMMAND // TACTICAL BUILD 4", skin, "status")).padTop(8f).row()
-        root.add(titleBlock).expandY().top().padTop(120f).row()
+        val body = Table().apply { defaults().top() }
+        val hero = Table().apply {
+            background = this@StartScreen.skin.newDrawable("panel_strong", Color(1f, 1f, 1f, 0.96f))
+            pad(34f * uiScale)
+            defaults().left()
+        }
+        hero.add(Label("PROJECT AIR DEFENSE", skin, "title")).row()
+        hero.add(Label("COASTAL SHIELD GRID // LIVE INTERCEPTION COMMAND", skin, "headline")).padTop(14f * uiScale).row()
+        hero.add(Label("Defend the skyline with faster launches, clearer tracking, and a modernized tactical interface built for phone play.", skin, "status")).width(760f * uiScale).padTop(22f * uiScale).row()
+
+        val statRow = Table().apply { defaults().padRight(14f * uiScale).padTop(20f * uiScale) }
+        statRow.add(Label("REAL-TIME THREAT TRACKING", skin, "tag"))
+        statRow.add(Label("COASTAL CITYSCAPE", skin, "tag"))
+        statRow.add(Label("ANDROID SAFE RENDER PATH", skin, "tag"))
+        hero.add(statRow).left().row()
 
         val menu = Table().apply {
-            defaults().width(430f).height(80f).pad(16f)
+            background = this@StartScreen.skin.newDrawable("panel_soft", Color(1f, 1f, 1f, 0.92f))
+            pad(24f * uiScale)
+            defaults().width(540f * uiScale).height(126f * uiScale).pad(10f * uiScale)
         }
         val startButton = TextButton("ENTER AIRSPACE", skin)
         startButton.addListener(object : ChangeListener() {
             override fun changed(event: ChangeEvent?, actor: Actor?) {
+                Gdx.app.log("StartScreen", "ENTER AIRSPACE pressed")
                 launchRequested = true
                 startButton.isDisabled = true
             }
         })
-        val exitButton = TextButton("EXIT", skin)
-        exitButton.addListener(object : ChangeListener() {
-            override fun changed(event: ChangeEvent?, actor: Actor?) {
-                Gdx.app.exit()
-            }
-        })
         menu.add(startButton).row()
-        menu.add(exitButton).row()
-        root.add(menu).expand().center().row()
+        if (!isAndroid) {
+            val exitButton = TextButton("EXIT", skin)
+            exitButton.addListener(object : ChangeListener() {
+                override fun changed(event: ChangeEvent?, actor: Actor?) {
+                    Gdx.app.log("StartScreen", "EXIT pressed")
+                    Gdx.app.exit()
+                }
+            })
+            menu.add(exitButton).row()
+        }
+        val ops = Table().apply {
+            background = this@StartScreen.skin.newDrawable("panel_soft", Color(1f, 1f, 1f, 0.9f))
+            pad(24f * uiScale)
+            defaults().left().padBottom(12f * uiScale)
+        }
+        ops.add(Label("DEPLOYMENT OVERVIEW", skin, "headline")).row()
+        ops.add(Label("BALLISTIC THREATS  //  PROXIMITY-FUZE INTERCEPTS  //  TOUCH-FIRST COMMAND UI", skin, "status")).width(540f * uiScale).row()
+        ops.add(menu).padTop(12f * uiScale).row()
+        ops.add(Label("PRIMARY DEPLOY CONTROL", skin, "tag")).padTop(4f * uiScale).row()
+
+        body.add(hero).width(860f * uiScale).left().padRight(24f * uiScale)
+        body.add(ops).width(620f * uiScale).top()
+        root.add(body).expand().top().left().padTop(84f * uiScale).padLeft(34f * uiScale).row()
 
         val footer = Table().apply {
-            background = this@StartScreen.skin.newDrawable("white", Color(0f, 0.05f, 0.08f, 0.8f))
+            background = this@StartScreen.skin.newDrawable("panel_soft", Color(1f, 1f, 1f, 0.9f))
         }
-        footer.add(Label("TEL AVIV NIGHT REFERENCE + CC0 SKY PANORAMA INTEGRATED INTO THE SCENE", skin, "default")).pad(12f)
-        root.add(footer).expandX().fillX().bottom().padBottom(20f)
+        val footerCopy = if (isAndroid) {
+            "TAP ENTER AIRSPACE TO DEPLOY // USE SYSTEM BACK TO EXIT"
+        } else {
+            "TEL AVIV NIGHT REFERENCE + CC0 SKY PANORAMA INTEGRATED INTO THE SCENE"
+        }
+        footer.add(Label(footerCopy, skin, "tag")).pad(10f * uiScale)
+        root.add(footer).expandX().fillX().bottom().pad(18f * uiScale)
 
         stage.addActor(root)
         Gdx.input.inputProcessor = stage
@@ -74,9 +112,13 @@ class StartScreen(private val game: AirDefenseGame) : ScreenAdapter() {
         val font = BitmapFont().apply { data.setScale(1.45f * uiScale) }
         val titleFont = BitmapFont().apply { data.setScale(3.65f * uiScale) }
         val statusFont = BitmapFont().apply { data.setScale(1.18f * uiScale) }
+        val headlineFont = BitmapFont().apply { data.setScale(1.62f * uiScale) }
+        val tagFont = BitmapFont().apply { data.setScale(0.92f * uiScale) }
         s.add("default", font, BitmapFont::class.java)
         s.add("title", titleFont, BitmapFont::class.java)
         s.add("status-font", statusFont, BitmapFont::class.java)
+        s.add("headline-font", headlineFont, BitmapFont::class.java)
+        s.add("tag-font", tagFont, BitmapFont::class.java)
 
         val white = Pixmap(2, 2, Pixmap.Format.RGBA8888)
         white.setColor(Color.WHITE)
@@ -87,6 +129,21 @@ class StartScreen(private val game: AirDefenseGame) : ScreenAdapter() {
         s.add("white", whiteRegion, TextureRegion::class.java)
         s.add("white", TextureRegionDrawable(whiteRegion), Drawable::class.java)
         white.dispose()
+
+        fun addPanel(name: String, fill: Color, stroke: Color, accent: Color) {
+            val pixmap = Pixmap(320, 180, Pixmap.Format.RGBA8888)
+            pixmap.setColor(fill)
+            pixmap.fill()
+            pixmap.setColor(accent)
+            pixmap.fillRectangle(0, 0, pixmap.width, 18)
+            pixmap.setColor(stroke)
+            pixmap.drawRectangle(0, 0, pixmap.width, pixmap.height)
+            pixmap.drawRectangle(1, 1, pixmap.width - 2, pixmap.height - 2)
+            val texture = Texture(pixmap)
+            textures.add(texture)
+            s.add(name, TextureRegionDrawable(TextureRegion(texture)), Drawable::class.java)
+            pixmap.dispose()
+        }
 
         fun addButton(name: String, top: Color, bottom: Color, border: Color, glow: Color) {
             val pixmap = Pixmap(280, 104, Pixmap.Format.RGBA8888)
@@ -117,6 +174,8 @@ class StartScreen(private val game: AirDefenseGame) : ScreenAdapter() {
         addButton("btn_over", Color(0.07f, 0.18f, 0.3f, 0.98f), Color(0.02f, 0.28f, 0.46f, 0.98f), Color(0.72f, 0.95f, 1f, 1f), Color(0.42f, 0.82f, 1f, 0.32f))
         addButton("btn_down", Color(0.01f, 0.34f, 0.5f, 0.98f), Color(0.0f, 0.22f, 0.38f, 1f), Color(0.84f, 0.98f, 1f, 1f), Color(0.72f, 0.95f, 1f, 0.22f))
         addButton("btn_disabled", Color(0.08f, 0.1f, 0.13f, 0.9f), Color(0.05f, 0.07f, 0.1f, 0.92f), Color(0.2f, 0.26f, 0.3f, 1f), Color(0f, 0f, 0f, 0f))
+        addPanel("panel_strong", Color(0.02f, 0.06f, 0.11f, 0.88f), Color(0.24f, 0.78f, 0.94f, 1f), Color(0.12f, 0.54f, 0.72f, 0.95f))
+        addPanel("panel_soft", Color(0.02f, 0.05f, 0.1f, 0.7f), Color(0.16f, 0.36f, 0.46f, 1f), Color(0.0f, 0.16f, 0.24f, 0.92f))
 
         s.add("default", TextButton.TextButtonStyle().apply {
             up = s.getDrawable("btn_up")
@@ -133,6 +192,8 @@ class StartScreen(private val game: AirDefenseGame) : ScreenAdapter() {
         })
         s.add("default", Label.LabelStyle(font, Color.WHITE))
         s.add("status", Label.LabelStyle(statusFont, Color(0.68f, 0.95f, 1f, 1f)))
+        s.add("headline", Label.LabelStyle(headlineFont, Color(0.94f, 0.98f, 1f, 1f)))
+        s.add("tag", Label.LabelStyle(tagFont, Color(0.76f, 0.92f, 1f, 1f)))
         s.add("title", Label.LabelStyle(titleFont, Color.WHITE))
         return s
     }
@@ -168,16 +229,18 @@ class StartScreen(private val game: AirDefenseGame) : ScreenAdapter() {
         batch.begin()
         batch.color = Color.WHITE
         batch.draw(skyTexture, 0f, 0f, width, height)
-        batch.setColor(1f, 1f, 1f, 0.65f)
-        batch.draw(cityTexture, 0f, 0f, width, height * 0.56f)
-        batch.setColor(0f, 0.2f, 0.35f, 0.16f)
-        batch.draw(skin.getRegion("white"), 0f, 0f, width, height * 0.6f)
+        batch.setColor(1f, 1f, 1f, 0.78f)
+        batch.draw(cityTexture, width * 0.16f, 0f, width * 0.84f, height * 0.62f)
+        batch.setColor(0f, 0.18f, 0.32f, 0.22f)
+        batch.draw(skin.getRegion("white"), 0f, 0f, width, height * 0.64f)
+        batch.setColor(0.08f, 0.4f, 0.62f, 0.12f)
+        batch.draw(skin.getRegion("white"), 0f, height * 0.38f, width, height * 0.08f)
         batch.setColor(0.15f, 0.92f, 1f, 0.08f)
         batch.draw(skin.getRegion("white"), 0f, scanLineY, width, 3f)
         batch.draw(skin.getRegion("white"), 0f, (scanLineY + 180f) % height, width, 1.5f)
-        batch.setColor(0f, 0f, 0f, 0.36f)
-        batch.draw(skin.getRegion("white"), 0f, height - 180f, width, 180f)
-        batch.draw(skin.getRegion("white"), 0f, 0f, width, 110f)
+        batch.setColor(0f, 0f, 0f, 0.28f)
+        batch.draw(skin.getRegion("white"), 0f, height - 160f, width, 160f)
+        batch.draw(skin.getRegion("white"), 0f, 0f, width, 92f)
         batch.color = Color.WHITE
         batch.end()
 
@@ -185,6 +248,7 @@ class StartScreen(private val game: AirDefenseGame) : ScreenAdapter() {
 
         if (launchRequested) {
             launchRequested = false
+            Gdx.app.log("StartScreen", "Switching to BattleScreen")
             game.screen = BattleScreen(game)
         }
     }

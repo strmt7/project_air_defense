@@ -6,7 +6,11 @@
 - `StartScreen`
   Draws the textured menu scene and transitions into `BattleScreen`.
 - `BattleScreen`
-  Owns battle state, renderables, HUD, audio, effects, and destruction state.
+  Owns renderables, HUD, audio, effects, and destruction presentation.
+- `BattleSimulation`
+  Owns the live battle math used by both the GUI and the headless runner.
+- `BattleWorldLayout`
+  Owns launcher coordinates, city-building placement, shoreline safety constraints, and radar projection rules.
 
 ## Gameplay Layers
 - `BattleBalance`
@@ -19,6 +23,10 @@
   Blast falloff and city-integrity accounting.
 - `FireControl`
   Shared target-priority rules used by tests and the live battle loop. It prioritizes the closest inbound track, then the lower-altitude threat, then the threat closest to the centerline.
+- `BattleSimulation`
+  Shared wave spawning, launcher choice, interceptor guidance, fuse checks, city damage, and score accounting.
+- `RadarProjection`
+  Shared top-down radar mapping so the overlay matches the camera-facing direction of inbound threats.
 
 ## Rendering Layers
 - Procedural models:
@@ -49,6 +57,10 @@
 ## Verification Surface
 - Logic:
   `core/src/test/kotlin/com/airdefense/game/*`
+- Headless balance:
+  `.\gradlew.bat :core:runBattleMonteCarlo -Pruns=300 -Pwaves=1 -Pseconds=48 -Pstep=0.05`
+- Windows shortcut:
+  `scripts/run-battle-monte-carlo.cmd`
 - Rendering:
   emulator-verified for menu flow, battle entry, HUD state, and projectile readability.
 - Android packaging:
