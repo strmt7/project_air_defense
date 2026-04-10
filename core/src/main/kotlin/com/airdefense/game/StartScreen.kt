@@ -58,7 +58,7 @@ class StartScreen(private val game: AirDefenseGame) : ScreenAdapter() {
         root.add(menu).expand().center().row()
 
         val footer = Table().apply {
-            background = skin.newDrawable("white", Color(0f, 0.05f, 0.08f, 0.8f))
+            background = this@StartScreen.skin.newDrawable("white", Color(0f, 0.05f, 0.08f, 0.8f))
         }
         footer.add(Label("TEL AVIV NIGHT REFERENCE + CC0 SKY PANORAMA INTEGRATED INTO THE SCENE", skin, "default")).pad(12f)
         root.add(footer).expandX().fillX().bottom().padBottom(20f)

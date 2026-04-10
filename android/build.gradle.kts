@@ -1,4 +1,7 @@
-import java.io.ByteArrayOutputStream
+import java.io.File
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
     id("com.android.application")
@@ -11,16 +14,31 @@ val releaseKeyAlias = providers.gradleProperty("RELEASE_KEY_ALIAS").orElse(provi
 val releaseKeyPassword = providers.gradleProperty("RELEASE_KEY_PASSWORD").orElse(providers.environmentVariable("RELEASE_KEY_PASSWORD"))
 val explicitVersionCode = providers.gradleProperty("APP_VERSION_CODE").orElse(providers.environmentVariable("APP_VERSION_CODE"))
 val explicitVersionName = providers.gradleProperty("APP_VERSION_NAME").orElse(providers.environmentVariable("APP_VERSION_NAME"))
+val gitExecutable = sequenceOf(
+    "git",
+    "C:/Program Files/Git/cmd/git.exe",
+    "C:/Program Files/Git/bin/git.exe"
+).firstOrNull { candidate ->
+    candidate == "git" || File(candidate).exists()
+}
+fun resolveVersionCodeFromGit(gitExecutable: String, workingDir: File, fallbackVersionCode: String): String {
+    return try {
+        val process = ProcessBuilder(gitExecutable, "rev-list", "--count", "HEAD")
+            .directory(workingDir)
+            .redirectErrorStream(true)
+            .start()
+        val output = process.inputStream.bufferedReader().use { it.readText().trim() }
+        if (process.waitFor() == 0) output.ifBlank { fallbackVersionCode } else fallbackVersionCode
+    } catch (_: Exception) {
+        fallbackVersionCode
+    }
+}
+
 val gitVersionCodeProvider = providers.provider {
     val gitDir = rootProject.file(".git")
-    if (!gitDir.exists()) return@provider "1"
-    val stdout = ByteArrayOutputStream()
-    val result = exec {
-        commandLine("git", "rev-list", "--count", "HEAD")
-        standardOutput = stdout
-        isIgnoreExitValue = true
-    }
-    if (result.exitValue == 0) stdout.toString().trim().ifBlank { "1" } else "1"
+    val fallbackVersionCode = LocalDate.now().format(DateTimeFormatter.BASIC_ISO_DATE)
+    if (!gitDir.exists() || gitExecutable == null) return@provider fallbackVersionCode
+    resolveVersionCodeFromGit(gitExecutable, rootProject.rootDir, fallbackVersionCode)
 }
 val computedVersionCode = explicitVersionCode.orElse(gitVersionCodeProvider).map { it.toInt() }
 val computedVersionName = explicitVersionName.orElse(computedVersionCode.map { "0.1.$it" })
@@ -85,10 +103,6 @@ android {
         targetCompatibility = JavaVersion.VERSION_21
     }
 
-    kotlinOptions {
-        jvmTarget = "21"
-    }
-
     packaging {
         jniLibs {
             useLegacyPackaging = true
@@ -99,15 +113,21 @@ android {
     }
 }
 
+kotlin {
+    compilerOptions {
+        jvmTarget.set(JvmTarget.JVM_21)
+    }
+}
+
 val natives by configurations.creating
 
 dependencies {
     implementation(project(":core"))
 
-    implementation("com.badlogicgames.gdx:gdx-backend-android:1.13.5")
-    implementation("com.badlogicgames.gdx:gdx:1.13.5")
+    val gdxVersion = "1.14.0"
+    implementation("com.badlogicgames.gdx:gdx-backend-android:$gdxVersion")
+    implementation("com.badlogicgames.gdx:gdx:$gdxVersion")
 
-    val gdxVersion = "1.13.5"
     natives("com.badlogicgames.gdx:gdx-platform:$gdxVersion:natives-armeabi-v7a")
     natives("com.badlogicgames.gdx:gdx-platform:$gdxVersion:natives-arm64-v8a")
     natives("com.badlogicgames.gdx:gdx-platform:$gdxVersion:natives-x86")

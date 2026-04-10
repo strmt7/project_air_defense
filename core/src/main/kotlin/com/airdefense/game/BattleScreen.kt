@@ -58,11 +58,12 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
     private val camera = PerspectiveCamera(55f, Gdx.graphics.width.toFloat(), Gdx.graphics.height.toFloat())
     private val stage = Stage(ScreenViewport())
     private val settings = DefenseSettings()
+    private val textures = Array<Texture>()
     private val skin = createSkin()
     private val whiteRegion by lazy { skin.get("white_region", com.badlogic.gdx.graphics.g2d.TextureRegion::class.java) }
+    private var battleSkyTexture: Texture? = null
 
     private val models = ObjectMap<String, Model>()
-    private val textures = Array<Texture>()
     private val instances = Array<ModelInstance>()
     private val launchers = Array<ModelInstance>()
     private val cityBlocks = Array<BuildingEntity>()
@@ -74,6 +75,7 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
 
     private val statusLabel = Label("AIR DEFENSE NETWORK ONLINE", skin, "status")
     private val creditsLabel = Label("", skin, "status")
+    private lateinit var waveButton: TextButton
 
     private val gravity = Vector3(0f, -55f, 0f)
     private val cameraBase = Vector3(0f, 260f, 720f)
@@ -96,26 +98,21 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
     private var radarScanAngle = 0f
     private var shakeTime = 0f
     private var shakeIntensity = 0f
+    private var initializationStep = 0
+    private var initialized = false
+    private var loadingMessage = "Initializing battle systems..."
 
     private companion object {
         private const val WORLD_RADIUS = 9000f
         private const val THREAT_TRAIL_INTERVAL = 0.06f
         private const val INTERCEPTOR_TRAIL_INTERVAL = 0.025f
-        private const val THREAT_SCALE = 6f
-        private const val INTERCEPTOR_SCALE = 8f
+        private const val THREAT_SCALE = 12f
+        private const val INTERCEPTOR_SCALE = 16f
         private const val BUILDING_SPACING_X = 150f
         private const val BUILDING_SPACING_Z = 190f
     }
 
     init {
-        setupEnvironment()
-        setupCamera()
-        generateWorldModels()
-        createWorldInstances()
-        setupHud()
-        loadAudio()
-        startNewWave()
-
         stage.addListener(object : InputAdapter(), com.badlogic.gdx.scenes.scene2d.EventListener {
             override fun handle(event: com.badlogic.gdx.scenes.scene2d.Event?): Boolean {
                 if (isGameOver && event is InputEvent && event.type == InputEvent.Type.touchDown) {
@@ -304,6 +301,39 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
         return createTextureSet(diffuse, roughness)
     }
 
+    private fun createSkyTexture(): Texture {
+        val pixmap = Pixmap(1024, 512, Pixmap.Format.RGBA8888)
+        for (x in 0 until pixmap.width) {
+            for (y in 0 until pixmap.height) {
+                val v = y / (pixmap.height - 1f)
+                val horizonGlow = (1f - kotlin.math.abs(v - 0.35f) * 2.2f).coerceIn(0f, 1f)
+                val baseR = 0.01f + horizonGlow * 0.06f
+                val baseG = 0.02f + horizonGlow * 0.08f
+                val baseB = 0.05f + horizonGlow * 0.16f
+                val noise = MathUtils.random(-0.012f, 0.012f)
+                pixmap.setColor(
+                    (baseR + noise).coerceIn(0f, 1f),
+                    (baseG + noise).coerceIn(0f, 1f),
+                    (baseB + noise * 1.4f).coerceIn(0f, 1f),
+                    1f
+                )
+                pixmap.drawPixel(x, y)
+            }
+        }
+
+        repeat(320) {
+            val x = MathUtils.random(0, pixmap.width - 1)
+            val y = MathUtils.random((pixmap.height * 0.35f).toInt(), pixmap.height - 1)
+            val brightness = MathUtils.random(0.55f, 1f)
+            pixmap.setColor(brightness, brightness, brightness, MathUtils.random(0.45f, 0.95f))
+            pixmap.fillCircle(x, y, MathUtils.random(1, 2))
+        }
+
+        val texture = registerTexture(Texture(pixmap))
+        pixmap.dispose()
+        return texture
+    }
+
     private fun createRoadTextureSet(): SurfaceTextureSet {
         val diffuse = Pixmap(512, 512, Pixmap.Format.RGBA8888)
         val roughness = Pixmap(512, 512, Pixmap.Format.RGBA8888)
@@ -381,8 +411,7 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
                 VertexAttributes.Usage.TextureCoordinates
             ).toLong()
         val mb = ModelBuilder()
-        val skyTexture = loadTexture("textures/sky_panorama_2k.jpg", Color(0.01f, 0.02f, 0.05f, 1f))
-        val skylineTexture = loadTexture("textures/city_backdrop_telaviv.jpg", Color(0.08f, 0.08f, 0.12f, 1f))
+        battleSkyTexture = createSkyTexture()
         val facadeA = createFacadeTextureSet(256, 512, Color(0.08f, 0.1f, 0.14f, 1f), Color(1f, 0.82f, 0.48f, 1f))
         val facadeB = createFacadeTextureSet(256, 512, Color(0.05f, 0.07f, 0.11f, 1f), Color(0.7f, 0.88f, 1f, 1f))
         val facadeC = createFacadeTextureSet(256, 512, Color(0.1f, 0.08f, 0.09f, 1f), Color(1f, 0.62f, 0.3f, 1f))
@@ -396,24 +425,6 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
         val blastSet = createSolidTextureSet(Color(1f, 0.82f, 0.35f, 1f), 0.12f)
         val trailSet = createSolidTextureSet(Color(0.92f, 0.9f, 0.84f, 1f), 0.8f)
         val moonSet = createSolidTextureSet(Color(0.88f, 0.9f, 1f, 1f), 0.65f)
-
-        models.put(
-            "sky",
-            mb.createSphere(
-                WORLD_RADIUS,
-                WORLD_RADIUS,
-                WORLD_RADIUS,
-                40,
-                24,
-                Material(
-                    TextureAttribute.createDiffuse(skyTexture),
-                    ColorAttribute.createDiffuse(Color.WHITE),
-                    ColorAttribute.createEmissive(Color(0.02f, 0.03f, 0.05f, 1f)),
-                    IntAttribute.createCullFace(GL20.GL_NONE)
-                ),
-                attr
-            )
-        )
 
         mb.begin()
         val ground = mb.part(
@@ -454,22 +465,6 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
         )
         BoxShapeBuilder.build(glowBand, 5200f, 0.5f, 1400f, 0f, 5f, -600f)
         models.put("ground", mb.end())
-
-        models.put(
-            "backdrop",
-            mb.createBox(
-                4200f,
-                900f,
-                18f,
-                Material(
-                    TextureAttribute.createDiffuse(skylineTexture),
-                    ColorAttribute.createDiffuse(Color.WHITE),
-                    ColorAttribute.createEmissive(Color(0.2f, 0.18f, 0.14f, 1f)),
-                    BlendingAttribute(0.96f)
-                ),
-                attr
-            )
-        )
 
         fun createBuildingModel(name: String, width: Float, height: Float, depth: Float, texture: SurfaceTextureSet, tint: Color) {
             models.put(
@@ -535,25 +530,26 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
         val threatMaterial = Material(
             TextureAttribute.createDiffuse(threatSet.diffuse),
             TextureAttribute.createSpecular(threatSet.roughness),
-            ColorAttribute.createDiffuse(Color.WHITE),
-            ColorAttribute.createSpecular(Color(0.74f, 0.74f, 0.76f, 1f)),
-            FloatAttribute.createShininess(54f)
+            ColorAttribute.createDiffuse(Color(1f, 0.78f, 0.42f, 1f)),
+            ColorAttribute.createSpecular(Color(1f, 0.88f, 0.66f, 1f)),
+            ColorAttribute.createEmissive(Color(0.18f, 0.08f, 0.03f, 1f)),
+            FloatAttribute.createShininess(78f)
         )
         mb.part("body", GL20.GL_TRIANGLES, attr, threatMaterial).apply {
-            CylinderShapeBuilder.build(this, 4f, 26f, 4f, 18)
+            CylinderShapeBuilder.build(this, 8f, 34f, 8f, 20)
         }
         mb.part("nose", GL20.GL_TRIANGLES, attr, threatMaterial).apply {
-            tmpMatrix.idt().translate(0f, 18f, 0f)
+            tmpMatrix.idt().translate(0f, 22f, 0f)
             setVertexTransform(tmpMatrix)
-            ConeShapeBuilder.build(this, 4.2f, 10f, 4.2f, 18)
+            ConeShapeBuilder.build(this, 8.8f, 13f, 8.8f, 20)
         }
         repeat(4) { index ->
             mb.part("fin_$index", GL20.GL_TRIANGLES, attr, threatMaterial).apply {
                 val yaw = index * 90f
                 tmpMatrix.idt().rotate(Vector3.Y, yaw)
-                tmpMatrix.translate(0f, -8f, 0f)
+                tmpMatrix.translate(0f, -10f, 0f)
                 setVertexTransform(tmpMatrix)
-                BoxShapeBuilder.build(this, 5.5f, 6f, 0.4f)
+                BoxShapeBuilder.build(this, 8f, 10f, 0.8f)
             }
         }
         models.put("threat", mb.end())
@@ -562,25 +558,26 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
         val interceptorMaterial = Material(
             TextureAttribute.createDiffuse(interceptorSet.diffuse),
             TextureAttribute.createSpecular(interceptorSet.roughness),
-            ColorAttribute.createDiffuse(Color.WHITE),
-            ColorAttribute.createSpecular(Color(0.9f, 0.92f, 0.96f, 1f)),
-            FloatAttribute.createShininess(64f)
+            ColorAttribute.createDiffuse(Color(0.82f, 0.96f, 1f, 1f)),
+            ColorAttribute.createSpecular(Color(0.94f, 0.98f, 1f, 1f)),
+            ColorAttribute.createEmissive(Color(0.05f, 0.12f, 0.18f, 1f)),
+            FloatAttribute.createShininess(92f)
         )
         mb.part("body", GL20.GL_TRIANGLES, attr, interceptorMaterial).apply {
-            CylinderShapeBuilder.build(this, 2.2f, 24f, 2.2f, 18)
+            CylinderShapeBuilder.build(this, 5.4f, 32f, 5.4f, 20)
         }
         mb.part("nose", GL20.GL_TRIANGLES, attr, interceptorMaterial).apply {
-            tmpMatrix.idt().translate(0f, 16f, 0f)
+            tmpMatrix.idt().translate(0f, 21f, 0f)
             setVertexTransform(tmpMatrix)
-            ConeShapeBuilder.build(this, 2.6f, 7f, 2.6f, 18)
+            ConeShapeBuilder.build(this, 5.8f, 11f, 5.8f, 20)
         }
         repeat(4) { index ->
             mb.part("fin_$index", GL20.GL_TRIANGLES, attr, interceptorMaterial).apply {
                 val yaw = index * 90f + 45f
                 tmpMatrix.idt().rotate(Vector3.Y, yaw)
-                tmpMatrix.translate(0f, -8f, 0f)
+                tmpMatrix.translate(0f, -10f, 0f)
                 setVertexTransform(tmpMatrix)
-                BoxShapeBuilder.build(this, 3f, 3f, 0.25f)
+                BoxShapeBuilder.build(this, 5f, 6f, 0.55f)
             }
         }
         models.put("interceptor", mb.end())
@@ -658,9 +655,7 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
     }
 
     private fun createWorldInstances() {
-        instances.add(ModelInstance(models.get("sky")))
         instances.add(ModelInstance(models.get("ground")).apply { transform.setToTranslation(0f, -2f, 0f) })
-        instances.add(ModelInstance(models.get("backdrop")).apply { transform.setToTranslation(0f, 320f, -2250f) })
         instances.add(ModelInstance(models.get("moon")).apply { transform.setToTranslation(1400f, 1450f, -4200f) })
 
         val leftLauncher = ModelInstance(models.get("launcher")).apply { transform.setToTranslation(-120f, 4f, 220f) }
@@ -723,13 +718,13 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
         val uiScale = Gdx.graphics.height / 1080f
         val root = Table().apply { setFillParent(true) }
 
-        val top = Table().apply { background = skin.newDrawable("white", Color(0f, 0.04f, 0.08f, 0.82f)) }
+        val top = Table().apply { background = this@BattleScreen.skin.newDrawable("white", Color(0f, 0.04f, 0.08f, 0.82f)) }
         top.add(statusLabel).expandX().left().pad(14f * uiScale)
         top.add(creditsLabel).right().pad(14f * uiScale)
         root.add(top).expandX().fillX().top().row()
 
         val side = Table().apply {
-            background = skin.newDrawable("white", Color(0.02f, 0.06f, 0.1f, 0.74f))
+            background = this@BattleScreen.skin.newDrawable("white", Color(0.02f, 0.06f, 0.1f, 0.74f))
             defaults().pad(10f * uiScale).width(330f * uiScale)
         }
         side.add(Label("ENGAGEMENT CONTROL", skin, "title")).padBottom(26f * uiScale).row()
@@ -751,17 +746,19 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
                 }
             })
         }).fillX().row()
-        side.add(TextButton("START NEXT WAVE", skin).apply {
+        waveButton = TextButton("START NEXT WAVE", skin).apply {
             addListener(object : ChangeListener() {
                 override fun changed(event: ChangeEvent?, actor: Actor?) {
                     if (!waveInProgress && !isGameOver) startNewWave()
                 }
             })
-        }).height(86f * uiScale).fillX().padTop(16f * uiScale).row()
+        }
+        side.add(waveButton).height(86f * uiScale).fillX().padTop(16f * uiScale).row()
         root.add(side).expand().right().pad(18f * uiScale)
 
         stage.addActor(root)
         updateHud()
+        refreshWaveButton()
     }
 
     private fun loadAudio() {
@@ -787,9 +784,16 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
         timeSinceLastLaunch = settings.launchCooldown
         statusLabel.style = skin.get("critical", Label.LabelStyle::class.java)
         statusLabel.setText("MULTIPLE INBOUND TRACKS // WAVE $wave")
+        refreshWaveButton()
     }
 
     override fun render(delta: Float) {
+        if (!initialized) {
+            runInitializationStep()
+            renderLoading()
+            return
+        }
+
         if (isGameOver) {
             renderGameOver()
             return
@@ -798,6 +802,15 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
         updateLogic(min(delta, 1f / 30f))
 
         ScreenUtils.clear(0.01f, 0.02f, 0.04f, 1f, true)
+        battleSkyTexture?.let { sky ->
+            val batch = stage.batch
+            stage.viewport.apply()
+            batch.projectionMatrix = stage.camera.combined
+            batch.begin()
+            batch.color = Color.WHITE
+            batch.draw(sky, 0f, 0f, Gdx.graphics.width.toFloat(), Gdx.graphics.height.toFloat())
+            batch.end()
+        }
         modelBatch.begin(camera)
         instances.forEach { modelBatch.render(it, environment) }
         cityBlocks.forEach { if (it.visibleHeight > 1f) modelBatch.render(it.instance, environment) }
@@ -810,6 +823,57 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
         stage.act(delta)
         stage.draw()
         renderOverlay()
+    }
+
+    private fun runInitializationStep() {
+        when (initializationStep) {
+            0 -> {
+                loadingMessage = "Bringing command network online..."
+                setupEnvironment()
+                setupCamera()
+            }
+            1 -> {
+                loadingMessage = "Generating city geometry..."
+                generateWorldModels()
+            }
+            2 -> {
+                loadingMessage = "Deploying launchers and radar..."
+                createWorldInstances()
+            }
+            3 -> {
+                loadingMessage = "Calibrating engagement controls..."
+                setupHud()
+                loadAudio()
+                startNewWave()
+                initialized = true
+            }
+        }
+        initializationStep++
+    }
+
+    private fun renderLoading() {
+        ScreenUtils.clear(0.01f, 0.02f, 0.04f, 1f, true)
+        val batch = stage.batch
+        val font = skin.getFont("default")
+        val titleFont = skin.getFont("title")
+        val titleLayout = GlyphLayout(titleFont, "INITIALIZING BATTLESPACE")
+        val statusLayout = GlyphLayout(font, loadingMessage)
+        val progress = (initializationStep.coerceAtMost(4)) / 4f
+        val barWidth = Gdx.graphics.width * 0.34f
+        val barHeight = 16f
+        val barX = (Gdx.graphics.width - barWidth) * 0.5f
+        val barY = Gdx.graphics.height * 0.42f
+
+        batch.begin()
+        batch.color = Color.WHITE
+        titleFont.draw(batch, titleLayout, (Gdx.graphics.width - titleLayout.width) * 0.5f, Gdx.graphics.height * 0.58f)
+        font.draw(batch, statusLayout, (Gdx.graphics.width - statusLayout.width) * 0.5f, Gdx.graphics.height * 0.5f)
+        batch.color = Color(0.04f, 0.1f, 0.16f, 0.95f)
+        batch.draw(whiteRegion, barX, barY, barWidth, barHeight)
+        batch.color = Color(0.2f, 0.84f, 1f, 1f)
+        batch.draw(whiteRegion, barX, barY, barWidth * progress, barHeight)
+        batch.color = Color.WHITE
+        batch.end()
     }
 
     private fun renderGameOver() {
@@ -893,6 +957,7 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
                 credits += 1800
                 statusLabel.style = skin.get("status", Label.LabelStyle::class.java)
                 statusLabel.setText("SKY CLEAR // PREPARE NEXT WAVE")
+                refreshWaveButton()
             }
         }
 
@@ -907,6 +972,7 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
             isGameOver = true
             statusLabel.style = skin.get("critical", Label.LabelStyle::class.java)
             statusLabel.setText("DEFENSE FAILED")
+            refreshWaveButton()
         }
     }
 
@@ -1010,18 +1076,34 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
 
         timeSinceLastLaunch += dt
         if (timeSinceLastLaunch >= settings.launchCooldown) {
-            val nextTarget = threats
-                .filter { threat ->
-                    val inRange = threat.position.dst2(Vector3.Zero) < settings.engagementRange * settings.engagementRange
-                    if (inRange) threat.isTracked = true
-                    inRange && interceptors.none { it.target == threat }
-                }
-                .minByOrNull { it.position.z }
+            val nextTarget = findNextLaunchTarget()
             if (nextTarget != null) {
                 launchInterceptor(nextTarget)
                 timeSinceLastLaunch = 0f
             }
         }
+    }
+
+    private fun findNextLaunchTarget(): ThreatEntity? {
+        val engagementRangeSquared = settings.engagementRange * settings.engagementRange
+        var bestThreat: ThreatEntity? = null
+        threats.forEach { threat ->
+            val inRange = threat.position.dst2(Vector3.Zero) < engagementRangeSquared
+            if (inRange) {
+                threat.isTracked = true
+            }
+            if (!inRange || interceptors.any { it.target == threat }) return@forEach
+
+            val incumbent = bestThreat
+            if (incumbent == null || isHigherPriorityThreat(threat, incumbent)) {
+                bestThreat = threat
+            }
+        }
+        return bestThreat
+    }
+
+    private fun isHigherPriorityThreat(candidate: ThreatEntity, incumbent: ThreatEntity): Boolean {
+        return FireControl.hasPriorityOver(candidate.position, incumbent.position)
     }
 
     private fun launchInterceptor(target: ThreatEntity) {
@@ -1122,10 +1204,27 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
 
     private fun spawnTrail(position: Vector3, hostile: Boolean) {
         val instance = ModelInstance(models.get("trail"))
-        instance.transform.setToScaling(0.8f, 0.8f, 0.8f).trn(position)
-        val effect = VisualEffect(instance, position.cpy(), if (hostile) 0.7f else 0.55f, if (hostile) 0.7f else 0.55f, EffectType.TRAIL, if (hostile) 3.2f else 2.4f)
+        val initialScale = if (hostile) 1.35f else 1.05f
+        instance.transform.setToScaling(initialScale, initialScale, initialScale).trn(position)
+        val effect = VisualEffect(
+            instance,
+            position.cpy(),
+            if (hostile) 0.95f else 0.72f,
+            if (hostile) 0.95f else 0.72f,
+            EffectType.TRAIL,
+            if (hostile) 5.2f else 4.1f
+        )
         val material = effect.instance.materials.first()
-        material.set(ColorAttribute.createDiffuse(if (hostile) Color(1f, 0.5f, 0.16f, 1f) else Color(0.86f, 0.94f, 1f, 1f)))
+        material.set(
+            ColorAttribute.createDiffuse(
+                if (hostile) Color(1f, 0.42f, 0.08f, 1f) else Color(0.46f, 0.9f, 1f, 1f)
+            )
+        )
+        material.set(
+            ColorAttribute.createEmissive(
+                if (hostile) Color(0.45f, 0.12f, 0.02f, 1f) else Color(0.08f, 0.28f, 0.36f, 1f)
+            )
+        )
         effects.add(effect)
     }
 
@@ -1149,9 +1248,9 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
                     strongestPos.set(effect.position)
                 }
             } else {
-                val scale = 0.8f + (1f - progress) * effect.maxScale
+                val scale = 1.2f + (1f - progress) * effect.maxScale
                 effect.instance.transform.setToScaling(scale, scale, scale).trn(effect.position)
-                blend?.opacity = 0.32f * progress
+                blend?.opacity = 0.5f * progress
             }
             if (effect.life <= 0f) iterator.remove()
         }
@@ -1212,7 +1311,32 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
     }
 
     private fun updateHud() {
-        creditsLabel.setText("SCORE $score   CREDITS $credits   CITY ${(cityIntegrity.coerceAtLeast(0f)).toInt()}%")
+        val waveState = when {
+            isGameOver -> "STATUS LOST"
+            waveInProgress -> "WAVE $wave LIVE // ${threats.size + threatsRemainingInWave} HOSTILES"
+            else -> "WAVE $wave READY"
+        }
+        creditsLabel.setText(
+            "SCORE $score   CREDITS $credits   CITY ${(cityIntegrity.coerceAtLeast(0f)).toInt()}%   $waveState"
+        )
+    }
+
+    private fun refreshWaveButton() {
+        if (!::waveButton.isInitialized) return
+        when {
+            isGameOver -> {
+                waveButton.setText("DEFENSE FAILED")
+                waveButton.isDisabled = true
+            }
+            waveInProgress -> {
+                waveButton.setText("WAVE $wave ACTIVE")
+                waveButton.isDisabled = true
+            }
+            else -> {
+                waveButton.setText("START NEXT WAVE")
+                waveButton.isDisabled = false
+            }
+        }
     }
 
     private fun triggerShake(intensity: Float, duration: Float) {
