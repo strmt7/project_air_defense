@@ -24,6 +24,7 @@ import com.badlogic.gdx.graphics.g3d.attributes.IntAttribute
 import com.badlogic.gdx.graphics.g3d.attributes.TextureAttribute
 import com.badlogic.gdx.graphics.g3d.environment.DirectionalLight
 import com.badlogic.gdx.graphics.g3d.environment.PointLight
+import com.badlogic.gdx.graphics.g3d.loader.ObjLoader
 import com.badlogic.gdx.graphics.g3d.utils.ModelBuilder
 import com.badlogic.gdx.graphics.g3d.utils.shapebuilders.BoxShapeBuilder
 import com.badlogic.gdx.graphics.g3d.utils.shapebuilders.ConeShapeBuilder
@@ -848,6 +849,17 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
                 attr
             )
         )
+
+        val engelHouseFile = Gdx.files.internal("models/engel_house.obj")
+        if (engelHouseFile.exists()) {
+            val engelHouse = ObjLoader().loadModel(engelHouseFile)
+            engelHouse.materials.forEach { material ->
+                material.set(ColorAttribute.createDiffuse(Color(0.94f, 0.92f, 0.88f, 1f)))
+                material.set(ColorAttribute.createSpecular(Color(0.18f, 0.18f, 0.2f, 1f)))
+                material.set(FloatAttribute.createShininess(14f))
+            }
+            models.put("engel_house", engelHouse)
+        }
     }
 
     private fun createWorldInstances() {
@@ -953,6 +965,22 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
         inlandDistrict.forEachIndexed { index, (model, x, z) ->
             addBuilding(model, x, z, yaw = if (index % 2 == 0) 7f else -9f)
         }
+
+        fun addImportedLandmark(key: String, x: Float, z: Float, yaw: Float, scale: Float) {
+            val model = models.get(key) ?: return
+            instances.add(
+                ModelInstance(model).apply {
+                    transform.idt()
+                    transform.translate(x, 0f, z)
+                    transform.rotate(Vector3.X, -90f)
+                    transform.rotate(Vector3.Y, yaw)
+                    transform.scale(scale, scale, scale)
+                }
+            )
+        }
+
+        addImportedLandmark("engel_house", -1210f, -980f, 90f, 2.4f)
+        addImportedLandmark("engel_house", -1180f, -1760f, 90f, 2.4f)
     }
 
     private fun setupHud() {
@@ -1136,15 +1164,6 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
         val uiScale = Gdx.graphics.height / 1080f
         val font = skin.getFont("default")
         batch.begin()
-
-        val cx = Gdx.graphics.width * 0.5f
-        val cy = Gdx.graphics.height * 0.5f
-        val cross = 44f * uiScale
-        batch.color = Color(0.2f, 0.92f, 1f, 0.28f)
-        batch.draw(whiteRegion, cx - cross, cy, cross * 0.45f, 2f)
-        batch.draw(whiteRegion, cx + cross * 0.55f, cy, cross * 0.45f, 2f)
-        batch.draw(whiteRegion, cx, cy - cross, 2f, cross * 0.45f)
-        batch.draw(whiteRegion, cx, cy + cross * 0.55f, 2f, cross * 0.45f)
 
         val radarSize = 220f * uiScale
         val radarX = Gdx.graphics.width - radarSize - 26f * uiScale

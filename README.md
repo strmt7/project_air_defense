@@ -24,6 +24,12 @@ A high-fidelity libGDX + Kotlin Android prototype where you command a Patriot-in
 - Lockheed PAC-3 product page: https://www.lockheedmartin.com/en-us/products/pac-3-advanced-capability-3.html
 - U.S. Army Patriot article: https://www.army.mil/article/171144/patriot_missile_system
 
+## Imported Open Assets
+- `android/assets/models/engel_house.obj`
+  Imported from the MIT-licensed [Ladybug Tools / 3D Models](https://github.com/ladybug-tools/3d-models) repository.
+  Source asset: `obj/engel-house/AngelHouse_Bauhaus-in-Israel-r2.obj`
+  Reference notes in the source repo identify it as Engel House / Beit Engel, a Bauhaus-in-Israel model associated with Tel Aviv.
+
 ## Security And Performance
 - **ProGuard/R8 enabled**: minification and obfuscation for production security.
 - **GLES 3.0 + MSAA**: modern hardware-accelerated rendering with anti-aliasing.
