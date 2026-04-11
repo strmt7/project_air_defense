@@ -4,7 +4,7 @@
 [![Android APK](https://img.shields.io/github/actions/workflow/status/strmt7/project_air_defense/android-release-apk.yml?branch=main&label=android-apk)](https://github.com/strmt7/project_air_defense/actions/workflows/android-release-apk.yml)
 [![Quality](https://img.shields.io/github/actions/workflow/status/strmt7/project_air_defense/quality.yml?branch=main&label=quality)](https://github.com/strmt7/project_air_defense/actions/workflows/quality.yml)
 [![Ktlint](https://img.shields.io/github/actions/workflow/status/strmt7/project_air_defense/ktlint.yml?branch=main&label=ktlint)](https://github.com/strmt7/project_air_defense/actions/workflows/ktlint.yml)
-[![caveman](https://img.shields.io/badge/caveman-555?logo=github&labelColor=555)](https://github.com/JuliusBrussee/caveman/releases/tag/v1.5.0)
+[![caveman](https://img.shields.io/badge/caveman-555?logo=github&labelColor=555)](https://github.com/JuliusBrussee/caveman)
 <!-- END GENERATED BADGES -->
 
 A high-fidelity libGDX + Kotlin Android prototype where you command a Patriot-inspired battery in a living 3D battlespace.
@@ -18,6 +18,8 @@ A high-fidelity libGDX + Kotlin Android prototype where you command a Patriot-in
 - Release/install behavior: `docs/release-and-install.md`
 - Benchmark suite: `docs/benchmark-suite.md`
 - Benchmark sources: `docs/benchmark-sources.md`
+- Android visual QA: `docs/android-visual-qa.md`
+- Android visual QA sources: `docs/reference/android-visual-qa-sources.md`
 - Popular 3D Android game workflows: `docs/popular-3d-android-game-workflows.md`
 - Level asset pipeline: `docs/level-asset-pipeline.md`
 - Level asset source map: `docs/level-asset-source-map.md`
@@ -75,9 +77,11 @@ A high-fidelity libGDX + Kotlin Android prototype where you command a Patriot-in
 8. Or use `.\scripts\run-battle-monte-carlo.cmd 300 1 48 0.05 20260411` on Windows without changing PowerShell execution policy.
 9. Run `.\scripts\run-benchmark-suite.cmd` for the report-oriented benchmark suite.
    It captures build timings, startup macrobenchmarks, runtime frame telemetry, runtime-health artifacts, Monte Carlo balance metrics, and standards reports under `benchmark-results/`.
-10. Run `python3 tools/update_readme_badges.py --check` after badge metadata changes.
-11. Run `.\gradlew.bat :android:installDebug` to install the debug package on an emulator or device.
-12. Launch the `android` module and enter a battle from the main menu.
+10. Run `powershell -ExecutionPolicy Bypass -File .\tools\android_visual_qa\bootstrap.ps1` once on a Windows workstation that will do emulator QA.
+11. Run `py -3 .\tools\android_visual_qa\visual_qa.py probe` before screen-driven emulator checks.
+12. Run `python3 tools/update_readme_badges.py --check` after badge metadata changes.
+13. Run `.\gradlew.bat :android:installDebug` to install the debug package on an emulator or device.
+14. Launch the `android` module and enter a battle from the main menu.
 
 ## Build Outputs
 - Local side-load build:

@@ -9,6 +9,7 @@ Compact provenance map for the repo's AI workflow and asset-sourcing surfaces.
 | `travisvn/awesome-claude-skills` | cross-agent repo-skill organization ideas | `docs/reference/ai-agent-skills.md` |
 | `amitshekhariitbhu/awesome-android-complete-reference` | Android reference categories for docs and skills | `skills/android-3d-air-defense/SKILL.md`, `docs/popular-3d-android-game-workflows.md` |
 | `OloOcki/awesome-citygml` | city-dataset and tool discovery for future levels | `docs/level-asset-source-map.md`, `.agents/skills/level-asset-curation/SKILL.md` |
+| `Genymobile/scrcpy`, `appium/appium`, `mobile-dev-inc/Maestro`, `AirtestProject/Airtest`, `tesseract-ocr/tesseract`, `opencv/opencv`, `adbutils`, and `pytesseract` | repo-local Android screen-verification toolchain and evaluated alternatives | `docs/android-visual-qa.md`, `docs/reference/android-visual-qa-sources.md`, `.agents/skills/android-visual-qa/SKILL.md`, `tools/android_visual_qa/` |
 | `pinterest/ktlint` and `org.jlleitschuh.gradle.ktlint` | Kotlin format/lint gate | root `build.gradle.kts`, `.editorconfig`, `.github/workflows/ktlint.yml` |
 
 ## Local rule

@@ -11,7 +11,6 @@ import com.badlogic.gdx.graphics.PerspectiveCamera
 import com.badlogic.gdx.graphics.Pixmap
 import com.badlogic.gdx.graphics.Texture
 import com.badlogic.gdx.graphics.VertexAttributes
-import com.badlogic.gdx.graphics.g2d.BitmapFont
 import com.badlogic.gdx.graphics.g2d.GlyphLayout
 import com.badlogic.gdx.graphics.g2d.TextureRegion
 import com.badlogic.gdx.graphics.g3d.Environment
@@ -45,8 +44,6 @@ import com.badlogic.gdx.scenes.scene2d.ui.Slider
 import com.badlogic.gdx.scenes.scene2d.ui.Table
 import com.badlogic.gdx.scenes.scene2d.ui.TextButton
 import com.badlogic.gdx.scenes.scene2d.utils.ChangeListener
-import com.badlogic.gdx.scenes.scene2d.utils.Drawable
-import com.badlogic.gdx.scenes.scene2d.utils.TextureRegionDrawable
 import com.badlogic.gdx.utils.Array
 import com.badlogic.gdx.utils.ObjectMap
 import com.badlogic.gdx.utils.ScreenUtils
@@ -76,7 +73,7 @@ class BattleScreen(
     private val stage = Stage(ScreenViewport())
     private val settings = DefenseSettings()
     private val textures = Array<Texture>()
-    private val skin = createSkin()
+    private val skin = TacticalUiSkin.create(textures, TacticalUiDensity.BATTLE)
     private val whiteRegion by lazy { skin.get("white_region", com.badlogic.gdx.graphics.g2d.TextureRegion::class.java) }
     private var battleSkyTexture: Texture? = null
     private var battleSkyRegion: TextureRegion? = null
@@ -99,11 +96,14 @@ class BattleScreen(
     private val sounds = ObjectMap<String, Sound>()
     private lateinit var simulation: BattleSimulation
 
-    private val statusLabel = Label("AIR DEFENSE NETWORK ONLINE", skin, "status")
-    private val creditsLabel = Label("", skin, "status")
+    private val statusLabel = Label("AIR DEFENSE NETWORK ONLINE", skin, "headline")
+    private val creditsLabel = Label("", skin, "headline")
     private lateinit var waveButton: TextButton
     private lateinit var rangeValueLabel: Label
-    private lateinit var speedValueLabel: Label
+    private lateinit var fuseValueLabel: Label
+    private lateinit var doctrineValueLabel: Label
+    private lateinit var doctrineDetailLabel: Label
+    private lateinit var doctrineButton: TextButton
 
     private val cameraBase = Vector3(280f, 380f, 1760f)
     private val cameraLookAt = Vector3(980f, 120f, -2550f)
@@ -267,210 +267,6 @@ class BattleScreen(
             },
         )
         Gdx.input.inputProcessor = stage
-    }
-
-    private fun createSkin(): Skin {
-        val s = Skin()
-        val uiScale = Gdx.graphics.height / 1080f
-        val font = BitmapFont().apply { data.setScale(1.28f * uiScale) }
-        val titleFont = BitmapFont().apply { data.setScale(1.72f * uiScale) }
-        val microFont = BitmapFont().apply { data.setScale(1.02f * uiScale) }
-        val displayFont = BitmapFont().apply { data.setScale(1.42f * uiScale) }
-        s.add("default", font, BitmapFont::class.java)
-        s.add("title", titleFont, BitmapFont::class.java)
-        s.add("micro", microFont, BitmapFont::class.java)
-        s.add("display", displayFont, BitmapFont::class.java)
-
-        val whitePix = Pixmap(2, 2, Pixmap.Format.RGBA8888)
-        whitePix.setColor(Color.WHITE)
-        whitePix.fill()
-        val whiteTex = Texture(whitePix)
-        textures.add(whiteTex)
-        s.add(
-            "white",
-            TextureRegionDrawable(
-                com.badlogic.gdx.graphics.g2d
-                    .TextureRegion(whiteTex),
-            ),
-            Drawable::class.java,
-        )
-        s.add(
-            "white_region",
-            com.badlogic.gdx.graphics.g2d
-                .TextureRegion(whiteTex),
-        )
-
-        fun addPanel(
-            name: String,
-            fill: Color,
-            stroke: Color,
-            accent: Color,
-        ) {
-            val p = Pixmap(360, 220, Pixmap.Format.RGBA8888)
-            p.setColor(fill)
-            p.fill()
-            p.setColor(accent)
-            p.fillRectangle(0, 0, p.width, 16)
-            p.setColor(stroke)
-            p.drawRectangle(0, 0, p.width, p.height)
-            p.drawRectangle(1, 1, p.width - 2, p.height - 2)
-            val tex = Texture(p)
-            textures.add(tex)
-            s.add(
-                name,
-                TextureRegionDrawable(
-                    com.badlogic.gdx.graphics.g2d
-                        .TextureRegion(tex),
-                ),
-                Drawable::class.java,
-            )
-            p.dispose()
-        }
-
-        fun addButton(
-            name: String,
-            top: Color,
-            bottom: Color,
-            stroke: Color,
-            glow: Color,
-        ) {
-            val p = Pixmap(360, 120, Pixmap.Format.RGBA8888)
-            for (y in 0 until p.height) {
-                val t = y / (p.height - 1f)
-                p.setColor(
-                    MathUtils.lerp(top.r, bottom.r, t),
-                    MathUtils.lerp(top.g, bottom.g, t),
-                    MathUtils.lerp(top.b, bottom.b, t),
-                    MathUtils.lerp(top.a, bottom.a, t),
-                )
-                p.drawLine(0, y, p.width - 1, y)
-            }
-            p.setColor(glow)
-            p.fillRectangle(8, 6, p.width - 16, 18)
-            p.setColor(stroke)
-            p.drawRectangle(0, 0, p.width, p.height)
-            p.drawRectangle(1, 1, p.width - 2, p.height - 2)
-            p.drawRectangle(2, 2, p.width - 4, p.height - 4)
-            val tex = Texture(p)
-            textures.add(tex)
-            s.add(
-                name,
-                TextureRegionDrawable(
-                    com.badlogic.gdx.graphics.g2d
-                        .TextureRegion(tex),
-                ),
-                Drawable::class.java,
-            )
-            p.dispose()
-        }
-
-        addButton(
-            "btn_up",
-            Color(0.03f, 0.08f, 0.16f, 0.96f),
-            Color(0.01f, 0.14f, 0.25f, 0.98f),
-            Color(0.28f, 0.82f, 1f, 1f),
-            Color(0.24f, 0.62f, 0.82f, 0.2f),
-        )
-        addButton(
-            "btn_over",
-            Color(0.07f, 0.2f, 0.33f, 0.98f),
-            Color(0.03f, 0.28f, 0.45f, 0.98f),
-            Color(0.78f, 0.96f, 1f, 1f),
-            Color(0.48f, 0.84f, 1f, 0.28f),
-        )
-        addButton(
-            "btn_down",
-            Color(0f, 0.34f, 0.52f, 0.98f),
-            Color(0.0f, 0.2f, 0.34f, 1f),
-            Color(0.86f, 0.98f, 1f, 1f),
-            Color(0.66f, 0.94f, 1f, 0.2f),
-        )
-        addButton(
-            "btn_disabled",
-            Color(0.07f, 0.1f, 0.14f, 0.88f),
-            Color(0.03f, 0.06f, 0.1f, 0.9f),
-            Color(0.18f, 0.24f, 0.3f, 1f),
-            Color(0f, 0f, 0f, 0f),
-        )
-        addPanel("hud_panel", Color(0.01f, 0.04f, 0.08f, 0.58f), Color(0.18f, 0.42f, 0.54f, 0.95f), Color(0.12f, 0.52f, 0.7f, 0.8f))
-        addPanel("hud_soft", Color(0.01f, 0.04f, 0.08f, 0.42f), Color(0.12f, 0.24f, 0.3f, 0.88f), Color(0.03f, 0.14f, 0.2f, 0.72f))
-
-        s.add(
-            "default",
-            TextButton.TextButtonStyle().apply {
-                up = s.getDrawable("btn_up")
-                checked = s.getDrawable("btn_down")
-                down = s.getDrawable("btn_down")
-                over = s.getDrawable("btn_over")
-                disabled = s.getDrawable("btn_disabled")
-                this.font = font
-                fontColor = Color.WHITE
-                downFontColor = Color(0.92f, 0.98f, 1f, 1f)
-                overFontColor = Color.WHITE
-                checkedFontColor = Color.WHITE
-                disabledFontColor = Color(0.55f, 0.64f, 0.7f, 1f)
-            },
-        )
-        s.add("default", Label.LabelStyle(font, Color.WHITE))
-        s.add("display", Label.LabelStyle(displayFont, Color(0.92f, 0.98f, 1f, 1f)))
-        s.add("status", Label.LabelStyle(microFont, Color(0.7f, 0.96f, 1f, 1f)))
-        s.add("warning", Label.LabelStyle(font, Color(1f, 0.84f, 0.4f, 1f)))
-        s.add("critical", Label.LabelStyle(font, Color(1f, 0.42f, 0.42f, 1f)))
-        s.add("title", Label.LabelStyle(titleFont, Color.WHITE))
-
-        val sliderBack =
-            Pixmap(320, 24, Pixmap.Format.RGBA8888).apply {
-                for (y in 0 until height) {
-                    val t = y / (height - 1f)
-                    setColor(
-                        MathUtils.lerp(0.05f, 0.1f, t),
-                        MathUtils.lerp(0.14f, 0.2f, t),
-                        MathUtils.lerp(0.2f, 0.28f, t),
-                        1f,
-                    )
-                    drawLine(0, y, width - 1, y)
-                }
-                setColor(0.28f, 0.78f, 0.94f, 1f)
-                drawRectangle(0, 0, width, height)
-                drawRectangle(1, 1, width - 2, height - 2)
-            }
-        val sliderKnob =
-            Pixmap(52, 64, Pixmap.Format.RGBA8888).apply {
-                for (y in 0 until height) {
-                    val t = y / (height - 1f)
-                    setColor(
-                        MathUtils.lerp(0.28f, 0.68f, t),
-                        MathUtils.lerp(0.82f, 0.96f, t),
-                        1f,
-                        1f,
-                    )
-                    drawLine(0, y, width - 1, y)
-                }
-                setColor(0.88f, 0.98f, 1f, 1f)
-                drawRectangle(0, 0, width, height)
-                drawRectangle(1, 1, width - 2, height - 2)
-            }
-        val sliderBackTex = Texture(sliderBack)
-        val sliderKnobTex = Texture(sliderKnob)
-        textures.add(sliderBackTex)
-        textures.add(sliderKnobTex)
-        s.add(
-            "default-horizontal",
-            Slider.SliderStyle(
-                TextureRegionDrawable(
-                    com.badlogic.gdx.graphics.g2d
-                        .TextureRegion(sliderBackTex),
-                ),
-                TextureRegionDrawable(
-                    com.badlogic.gdx.graphics.g2d
-                        .TextureRegion(sliderKnobTex),
-                ),
-            ),
-        )
-        whitePix.dispose()
-        sliderBack.dispose()
-        sliderKnob.dispose()
-        return s
     }
 
     private fun setupEnvironment() {
@@ -1927,8 +1723,8 @@ class BattleScreen(
 
         val top =
             Table().apply {
-                background = this@BattleScreen.skin.getDrawable("hud_soft")
-                pad(8f * uiScale)
+                background = this@BattleScreen.skin.getDrawable("hud_panel")
+                pad(12f * uiScale)
             }
         val missionBlock = Table().apply { defaults().left() }
         missionBlock.add(Label("BATTLESPACE", skin, "title")).row()
@@ -1947,23 +1743,23 @@ class BattleScreen(
 
         val dock =
             Table().apply {
-                background = this@BattleScreen.skin.getDrawable("hud_soft")
-                pad(10f * uiScale)
-                defaults().pad(6f * uiScale)
+                background = this@BattleScreen.skin.getDrawable("hud_panel")
+                pad(14f * uiScale)
+                defaults().pad(8f * uiScale)
             }
 
         val rangeCard =
             Table().apply {
                 background = this@BattleScreen.skin.getDrawable("hud_soft")
-                pad(12f * uiScale)
+                pad(14f * uiScale)
                 defaults().left()
             }
         rangeValueLabel = Label("", skin, "display")
-        rangeCard.add(Label("AUTO ENGAGEMENT RANGE", skin, "status")).row()
+        rangeCard.add(Label("AUTO ENGAGE RANGE", skin, "status")).row()
         rangeCard.add(rangeValueLabel).padTop(8f * uiScale).row()
         rangeCard
             .add(
-                Slider(800f, 2800f, 25f, false, skin).apply {
+                Slider(1200f, 3200f, 25f, false, skin).apply {
                     value = settings.engagementRange
                     addListener(
                         object : ChangeListener() {
@@ -1977,48 +1773,87 @@ class BattleScreen(
                         },
                     )
                 },
-            ).width(320f * uiScale)
+            ).width(340f * uiScale)
             .fillX()
-            .height(48f * uiScale)
+            .height(56f * uiScale)
             .padTop(10f * uiScale)
 
-        val speedCard =
+        val fuseCard =
             Table().apply {
                 background = this@BattleScreen.skin.getDrawable("hud_soft")
-                pad(12f * uiScale)
+                pad(14f * uiScale)
                 defaults().left()
             }
-        speedValueLabel = Label("", skin, "display")
-        speedCard.add(Label("INTERCEPTOR SPEED", skin, "status")).row()
-        speedCard.add(speedValueLabel).padTop(8f * uiScale).row()
-        speedCard
+        fuseValueLabel = Label("", skin, "display")
+        fuseCard.add(Label("FUZE WINDOW", skin, "status")).row()
+        fuseCard.add(fuseValueLabel).padTop(8f * uiScale).row()
+        fuseCard
             .add(
-                Slider(320f, 700f, 10f, false, skin).apply {
-                    value = settings.interceptorSpeed
+                Slider(56f, 120f, 2f, false, skin).apply {
+                    value = settings.blastRadius
                     addListener(
                         object : ChangeListener() {
                             override fun changed(
                                 event: ChangeEvent?,
                                 actor: Actor?,
                             ) {
-                                settings.interceptorSpeed = value
+                                settings.blastRadius = value
                                 updateHud()
                             }
                         },
                     )
                 },
-            ).width(320f * uiScale)
+            ).width(340f * uiScale)
             .fillX()
-            .height(48f * uiScale)
+            .height(56f * uiScale)
             .padTop(10f * uiScale)
+
+        val doctrineCard =
+            Table().apply {
+                background = this@BattleScreen.skin.getDrawable("hud_soft")
+                pad(14f * uiScale)
+                defaults().left()
+            }
+        doctrineValueLabel = Label("", skin, "display")
+        doctrineDetailLabel =
+            Label("", skin, "status").apply {
+                setWrap(true)
+            }
+        doctrineButton =
+            TextButton("CYCLE DOCTRINE", skin).apply {
+                addListener(
+                    object : ChangeListener() {
+                        override fun changed(
+                            event: ChangeEvent?,
+                            actor: Actor?,
+                        ) {
+                            settings.doctrine = settings.doctrine.next()
+                            updateHud()
+                        }
+                    },
+                )
+            }
+        doctrineCard.add(Label("DOCTRINE", skin, "status")).row()
+        doctrineCard.add(doctrineValueLabel).padTop(8f * uiScale).row()
+        doctrineCard
+            .add(doctrineDetailLabel)
+            .width(340f * uiScale)
+            .padTop(6f * uiScale)
+            .row()
+        doctrineCard
+            .add(doctrineButton)
+            .width(340f * uiScale)
+            .height(96f * uiScale)
+            .fillX()
+            .padTop(12f * uiScale)
 
         val actionCard =
             Table().apply {
                 background = this@BattleScreen.skin.getDrawable("hud_soft")
-                pad(12f * uiScale)
+                pad(14f * uiScale)
                 defaults().left()
             }
-        actionCard.add(Label("WAVE COMMAND", skin, "status")).row()
+        actionCard.add(Label("WAVE", skin, "status")).row()
         waveButton =
             TextButton("START NEXT WAVE", skin).apply {
                 addListener(
@@ -2034,20 +1869,34 @@ class BattleScreen(
             }
         actionCard
             .add(waveButton)
-            .width(320f * uiScale)
+            .width(340f * uiScale)
             .height(96f * uiScale)
             .fillX()
             .padTop(12f * uiScale)
 
-        dock.add(rangeCard).width(342f * uiScale).fillY()
-        dock.add(speedCard).width(342f * uiScale).fillY()
-        dock.add(actionCard).width(342f * uiScale).fillY()
+        val firstRow = Table().apply { defaults().pad(6f * uiScale) }
+        firstRow.add(rangeCard).width(364f * uiScale).fillY()
+        firstRow.add(fuseCard).width(364f * uiScale).fillY()
+        val secondRow = Table().apply { defaults().pad(6f * uiScale) }
+        secondRow.add(doctrineCard).width(364f * uiScale).fillY()
+        secondRow.add(actionCard).width(364f * uiScale).fillY()
+        dock
+            .add(Label("CONTROL", skin, "status"))
+            .left()
+            .padLeft(6f * uiScale)
+            .row()
+        dock.add(firstRow).left().row()
+        dock
+            .add(secondRow)
+            .left()
+            .padTop(2f * uiScale)
+            .row()
         root
             .add(dock)
-            .expandX()
-            .fillX()
+            .expand()
             .bottom()
-            .pad(12f * uiScale)
+            .left()
+            .pad(14f * uiScale)
 
         stage.addActor(root)
         updateHud()
@@ -2244,7 +2093,7 @@ class BattleScreen(
         ScreenUtils.clear(0.01f, 0.02f, 0.04f, 1f, true)
         val batch = stage.batch
         val font = skin.getFont("default")
-        val titleFont = skin.getFont("title")
+        val titleFont = skin.getFont("title-font")
         val titleLayout = GlyphLayout(titleFont, "INITIALIZING BATTLESPACE")
         val statusLayout = GlyphLayout(font, loadingMessage)
         val diagnosticsLayout = GlyphLayout(font, buildDiagnosticsLine())
@@ -2276,7 +2125,7 @@ class BattleScreen(
         ScreenUtils.clear(0.01f, 0.02f, 0.04f, 1f, true)
         val batch = stage.batch
         batch.begin()
-        val titleFont = skin.getFont("title")
+        val titleFont = skin.getFont("title-font")
         val normalFont = skin.getFont("default")
         val titleLayout = GlyphLayout(titleFont, "CITY LOST")
         val scoreLayout = GlyphLayout(normalFont, "FINAL SCORE: $score    TAP TO RETURN")
@@ -2729,17 +2578,25 @@ class BattleScreen(
         val waveState =
             when {
                 isGameOver -> "STATUS LOST"
-                waveInProgress -> "WAVE $wave LIVE // ${threats.size + threatsRemainingInWave} HOSTILES"
+                waveInProgress -> "WAVE $wave LIVE / ${threats.size + threatsRemainingInWave} HOSTILES"
                 else -> "WAVE $wave READY"
             }
+        val effectiveRange = DefenseTuning.engagementRange(settings)
+        val effectiveFuse = DefenseTuning.blastRadius(settings)
         if (::rangeValueLabel.isInitialized) {
-            rangeValueLabel.setText("${settings.engagementRange.toInt()} M")
+            rangeValueLabel.setText("${effectiveRange.toInt()} M")
         }
-        if (::speedValueLabel.isInitialized) {
-            speedValueLabel.setText("${settings.interceptorSpeed.toInt()} M/S")
+        if (::fuseValueLabel.isInitialized) {
+            fuseValueLabel.setText("${effectiveFuse.toInt()} M")
+        }
+        if (::doctrineValueLabel.isInitialized) {
+            doctrineValueLabel.setText(settings.doctrine.label)
+        }
+        if (::doctrineDetailLabel.isInitialized) {
+            doctrineDetailLabel.setText(settings.doctrine.summary)
         }
         creditsLabel.setText(
-            "SCORE $score   CREDITS $credits   CITY ${(cityIntegrity.coerceAtLeast(0f)).toInt()}%   $waveState",
+            "CITY ${(cityIntegrity.coerceAtLeast(0f)).toInt()}%   SCORE $score   CR $credits   $waveState",
         )
     }
 

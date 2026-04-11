@@ -5,6 +5,51 @@ import com.badlogic.gdx.math.Vector3
 import kotlin.math.abs
 import kotlin.math.max
 
+enum class DefenseDoctrine(
+    val label: String,
+    val summary: String,
+    val launchCadenceMultiplier: Float,
+    val launcherReloadMultiplier: Float,
+    val engagementRangeBias: Float,
+    val fuseRadiusBias: Float,
+    val maxAssignmentsPerThreat: Int,
+    val recommitWindowSeconds: Float,
+) {
+    DISCIPLINED(
+        label = "DISCIPLINED",
+        summary = "Single-shot coverage with more conservative battery spacing.",
+        launchCadenceMultiplier = 1.18f,
+        launcherReloadMultiplier = 1.14f,
+        engagementRangeBias = -120f,
+        fuseRadiusBias = -6f,
+        maxAssignmentsPerThreat = 1,
+        recommitWindowSeconds = 3.2f,
+    ),
+    ADAPTIVE(
+        label = "ADAPTIVE",
+        summary = "Balanced coverage with selective late-track reinforcement.",
+        launchCadenceMultiplier = 1f,
+        launcherReloadMultiplier = 1f,
+        engagementRangeBias = 0f,
+        fuseRadiusBias = 0f,
+        maxAssignmentsPerThreat = 1,
+        recommitWindowSeconds = 4.5f,
+    ),
+    SHIELD_WALL(
+        label = "SHIELD WALL",
+        summary = "Aggressive layered fire with critical-track double taps.",
+        launchCadenceMultiplier = 0.82f,
+        launcherReloadMultiplier = 0.84f,
+        engagementRangeBias = 180f,
+        fuseRadiusBias = 8f,
+        maxAssignmentsPerThreat = 2,
+        recommitWindowSeconds = 6.2f,
+    ),
+    ;
+
+    fun next(): DefenseDoctrine = entries[(ordinal + 1) % entries.size]
+}
+
 object PhysicsModel {
     const val THREAT_GRAVITY_Y = -55f
     const val THREAT_IMPACT_RADIUS = 110f
@@ -17,6 +62,25 @@ object BattleBalance {
     fun spawnIntervalForWave(wave: Int): Float = max(0.9f, 2.4f - wave * 0.08f)
 
     fun threatSpeedRangeForWave(wave: Int): ClosedFloatingPointRange<Float> = (220f + wave * 8f)..(285f + wave * 10f)
+}
+
+object DefenseTuning {
+    fun engagementRange(settings: DefenseSettings): Float =
+        (settings.engagementRange + settings.doctrine.engagementRangeBias).coerceIn(1200f, 3400f)
+
+    fun launchCooldown(settings: DefenseSettings): Float =
+        (settings.launchCooldown * settings.doctrine.launchCadenceMultiplier).coerceIn(0.16f, 1.4f)
+
+    fun launcherReload(settings: DefenseSettings): Float = (0.44f * settings.doctrine.launcherReloadMultiplier).coerceIn(0.2f, 1.3f)
+
+    fun blastRadius(settings: DefenseSettings): Float = (settings.blastRadius + settings.doctrine.fuseRadiusBias).coerceIn(56f, 128f)
+
+    fun turnRate(settings: DefenseSettings): Float =
+        when (settings.doctrine) {
+            DefenseDoctrine.DISCIPLINED -> 3.8f
+            DefenseDoctrine.ADAPTIVE -> 4.4f
+            DefenseDoctrine.SHIELD_WALL -> 4.9f
+        }
 }
 
 object InterceptionMath {
@@ -129,18 +193,30 @@ object FireControl {
     fun selectNextThreat(
         threats: List<ThreatSnapshot>,
         engagementRange: Float,
-        assignedThreatIds: Set<String>,
+        assignedThreatIds: Set<String> = emptySet(),
+        assignmentCounts: Map<String, Int> = emptyMap(),
+        doctrine: DefenseDoctrine = DefenseDoctrine.ADAPTIVE,
     ): String? {
         val engagementRangeSquared = engagementRange * engagementRange
         var bestThreat: ThreatSnapshot? = null
+        var bestScore = Float.NEGATIVE_INFINITY
         threats
             .asSequence()
-            .filter { it.id !in assignedThreatIds }
             .filter { it.position.len2() <= engagementRangeSquared }
             .forEach { threat ->
+                val assignedCount = max(assignmentCounts[threat.id] ?: 0, if (threat.id in assignedThreatIds) 1 else 0)
+                if (assignedCount >= doctrine.maxAssignmentsPerThreat) return@forEach
+
+                val timeToImpact = estimateTimeToImpact(threat)
+                if (assignedCount > 0 && timeToImpact > doctrine.recommitWindowSeconds) return@forEach
+
+                val score = scoreThreat(threat, engagementRange, timeToImpact, assignedCount)
                 val incumbent = bestThreat
-                if (incumbent == null || hasPriorityOver(threat.position, incumbent.position)) {
+                if (incumbent == null || score > bestScore ||
+                    (score == bestScore && hasPriorityOver(threat.position, incumbent.position))
+                ) {
                     bestThreat = threat
+                    bestScore = score
                 }
             }
         return bestThreat?.id
@@ -154,6 +230,41 @@ object FireControl {
         if (candidate.y != incumbent.y) return candidate.y < incumbent.y
         return abs(candidate.x) < abs(incumbent.x)
     }
+
+    private fun scoreThreat(
+        threat: ThreatSnapshot,
+        engagementRange: Float,
+        timeToImpact: Float,
+        assignedCount: Int,
+    ): Float {
+        val normalizedDistance = 1f - (threat.position.len() / engagementRange).coerceIn(0f, 1f)
+        val centerlineBias = 1f - (abs(threat.position.x) / engagementRange).coerceIn(0f, 1f)
+        val altitudeUrgency = 1f - (threat.position.y / 2400f).coerceIn(0f, 1f)
+        val timeUrgency = (10f - timeToImpact).coerceIn(-1f, 10f)
+        val terminalBonus = if (threat.position.z >= -260f) 1.4f else 0f
+        return timeUrgency * 5.4f +
+            normalizedDistance * 2.6f +
+            centerlineBias * 1.6f +
+            altitudeUrgency * 1.2f +
+            terminalBonus -
+            assignedCount * 3.4f
+    }
+
+    private fun estimateTimeToImpact(threat: ThreatSnapshot): Float {
+        val toTarget = threat.targetPosition.cpy().sub(threat.position)
+        val distance = toTarget.len().coerceAtLeast(1f)
+        val closingSpeed =
+            if (threat.velocity.isZero(0.001f)) {
+                0f
+            } else {
+                max(0f, threat.velocity.dot(toTarget.nor()))
+            }
+        if (closingSpeed <= 0.001f) {
+            val fallbackDistance = max(0f, abs(threat.position.z)) + max(0f, threat.position.y * 0.35f)
+            return (fallbackDistance / 280f).coerceIn(0.4f, 30f)
+        }
+        return (distance / closingSpeed).coerceIn(0.25f, 30f)
+    }
 }
 
 data class ThreatLaunch(
@@ -165,6 +276,8 @@ data class ThreatLaunch(
 data class ThreatSnapshot(
     val id: String,
     val position: Vector3,
+    val velocity: Vector3 = Vector3.Zero.cpy(),
+    val targetPosition: Vector3 = Vector3.Zero.cpy(),
 )
 
 interface RandomSource {

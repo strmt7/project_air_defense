@@ -16,6 +16,7 @@ These repo-local skills are mandatory guidance surfaces for external agents.
 | `caveman` | any normal progress update or summary | token use stays low without losing proof |
 | `caveman-help` | an agent or user needs the current caveman mode map | one-shot help without changing active mode |
 | `verification-loop` | after non-trivial changes | verification is explicit and bounded |
+| `android-visual-qa` | emulator navigation, screenshots, OCR, or template-driven tapping on libGDX surfaces | screen verification stops depending on guessed taps |
 | `level-asset-curation` | importing city, structure, terrain, or texture assets | asset sourcing stays legal, documented, and mobile-safe |
 | `android-3d-air-defense` | modifying gameplay, graphics, UI, Android behavior, or benchmarks | repo-specific game workflow is reused instead of re-derived |
 

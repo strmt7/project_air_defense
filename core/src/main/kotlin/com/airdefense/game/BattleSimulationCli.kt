@@ -102,6 +102,8 @@ private fun buildJsonReport(
           "stepSeconds": $stepSeconds,
           "seed": $baseSeed,
           "doctrine": {
+            "mode": "${settings.doctrine.name}",
+            "label": "${settings.doctrine.label}",
             "engagementRange": ${settings.engagementRange},
             "interceptorSpeed": ${settings.interceptorSpeed},
             "launchCooldown": ${settings.launchCooldown},
@@ -143,6 +145,11 @@ fun main(args: Array<String>) {
             interceptorSpeed = args.getOrNull(doctrineOffset + 1)?.toFloatOrNull() ?: defaultSettings.interceptorSpeed,
             launchCooldown = args.getOrNull(doctrineOffset + 2)?.toFloatOrNull() ?: defaultSettings.launchCooldown,
             blastRadius = args.getOrNull(doctrineOffset + 3)?.toFloatOrNull() ?: defaultSettings.blastRadius,
+            doctrine =
+                args
+                    .getOrNull(doctrineOffset + 4)
+                    ?.uppercase()
+                    ?.let { requested -> DefenseDoctrine.entries.firstOrNull { it.name == requested } } ?: defaultSettings.doctrine,
         )
 
     val results =
@@ -167,7 +174,8 @@ fun main(args: Array<String>) {
             "range=${settings.engagementRange.roundToInt()} " +
             "speed=${settings.interceptorSpeed.roundToInt()} " +
             "cooldown=${"%.2f".format(settings.launchCooldown)} " +
-            "blast=${settings.blastRadius.roundToInt()}"
+            "blast=${settings.blastRadius.roundToInt()} " +
+            "mode=${settings.doctrine.name}"
     println(
         doctrineLine,
     )

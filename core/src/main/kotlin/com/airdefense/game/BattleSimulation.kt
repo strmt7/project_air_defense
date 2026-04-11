@@ -9,6 +9,7 @@ data class DefenseSettings(
     var interceptorSpeed: Float = 700f,
     var launchCooldown: Float = 0.3f,
     var blastRadius: Float = 82f,
+    var doctrine: DefenseDoctrine = DefenseDoctrine.SHIELD_WALL,
 )
 
 data class SimulationBuilding(
@@ -110,6 +111,7 @@ class BattleSimulation(
 
     private val gravity = Vector3(0f, PhysicsModel.THREAT_GRAVITY_Y, 0f)
     private val launcherPads = launcherPositions.map { it.cpy() }
+    private val launcherReadyIn = MutableList(launcherPads.size.coerceAtLeast(1)) { 0f }
     private val defenseOrigin =
         if (launcherPads.isEmpty()) {
             BattleWorldLayout.defenseOrigin.cpy()
@@ -173,7 +175,7 @@ class BattleSimulation(
         waveInProgress = true
         threatsRemainingInWave = BattleBalance.threatsForWave(wave)
         spawnTimer = 0.4f
-        timeSinceLastLaunch = settings.launchCooldown
+        timeSinceLastLaunch = DefenseTuning.launchCooldown(settings)
         return true
     }
 
@@ -189,6 +191,7 @@ class BattleSimulation(
         val buildingDamageEvents = mutableListOf<BuildingDamageEvent>()
         var waveCleared = false
         var gameOverTriggered = false
+        val effectiveBlastRadius = DefenseTuning.blastRadius(settings)
 
         if (waveInProgress) {
             spawnTimer -= dt
@@ -206,6 +209,10 @@ class BattleSimulation(
             }
         }
 
+        launcherReadyIn.indices.forEach { index ->
+            launcherReadyIn[index] = max(0f, launcherReadyIn[index] - dt)
+        }
+
         val threatsIterator = threats.iterator()
         while (threatsIterator.hasNext()) {
             val threat = threatsIterator.next()
@@ -218,7 +225,8 @@ class BattleSimulation(
                 threat.trailCooldown = THREAT_TRAIL_INTERVAL
             }
 
-            threat.isTracked = threat.position.dst2(defenseOrigin) < settings.engagementRange * settings.engagementRange
+            threat.isTracked =
+                threat.position.dst2(defenseOrigin) < DefenseTuning.engagementRange(settings) * DefenseTuning.engagementRange(settings)
 
             val reachedTarget =
                 threat.position.dst2(threat.targetPosition) <= PhysicsModel.THREAT_IMPACT_RADIUS * PhysicsModel.THREAT_IMPACT_RADIUS
@@ -264,7 +272,7 @@ class BattleSimulation(
             val desiredVelocity = aimPoint.cpy().sub(interceptor.position)
             if (!desiredVelocity.isZero(0.001f)) {
                 desiredVelocity.nor().scl(settings.interceptorSpeed)
-                interceptor.velocity.lerp(desiredVelocity, (dt * 4.2f).coerceAtMost(1f))
+                interceptor.velocity.lerp(desiredVelocity, (dt * DefenseTuning.turnRate(settings)).coerceAtMost(1f))
             }
             interceptor.velocity.nor().scl(settings.interceptorSpeed)
             interceptor.position.mulAdd(interceptor.velocity, dt)
@@ -282,13 +290,13 @@ class BattleSimulation(
                     targetPos = target.position,
                     targetVel = target.velocity,
                     dt = dt,
-                    fuseRadius = settings.blastRadius,
+                    fuseRadius = effectiveBlastRadius,
                 )
             ) {
                 score += 150
                 credits += 180
                 totalThreatsIntercepted++
-                blastEvents += BlastEvent(interceptor.position.cpy(), settings.blastRadius * 2.2f, BlastKind.INTERCEPT)
+                blastEvents += BlastEvent(interceptor.position.cpy(), effectiveBlastRadius * 2.2f, BlastKind.INTERCEPT)
                 removedThreatIds += target.id
                 removedInterceptorIds += interceptor.id
                 threats.remove(target)
@@ -303,12 +311,14 @@ class BattleSimulation(
         }
 
         timeSinceLastLaunch += dt
-        if (timeSinceLastLaunch >= settings.launchCooldown) {
+        if (timeSinceLastLaunch >= DefenseTuning.launchCooldown(settings)) {
             val nextTarget = selectNextThreat()
             if (nextTarget != null) {
                 val launch = launchInterceptor(nextTarget)
-                launchedInterceptors += launch
-                timeSinceLastLaunch = 0f
+                if (launch != null) {
+                    launchedInterceptors += launch
+                    timeSinceLastLaunch = 0f
+                }
             }
         }
 
@@ -372,19 +382,34 @@ class BattleSimulation(
     }
 
     private fun selectNextThreat(): SimulationThreat? {
-        val assignedThreatIds = interceptors.mapNotNull { it.targetId }.toSet()
+        val assignmentCounts =
+            interceptors
+                .mapNotNull { it.targetId }
+                .groupingBy { it }
+                .eachCount()
         val selected =
             FireControl.selectNextThreat(
-                threats = threats.map { ThreatSnapshot(it.id, it.position.cpy()) },
-                engagementRange = settings.engagementRange,
-                assignedThreatIds = assignedThreatIds,
+                threats =
+                    threats.map {
+                        ThreatSnapshot(
+                            id = it.id,
+                            position = it.position.cpy(),
+                            velocity = it.velocity.cpy(),
+                            targetPosition = it.targetPosition.cpy(),
+                        )
+                    },
+                engagementRange = DefenseTuning.engagementRange(settings),
+                assignmentCounts = assignmentCounts,
+                doctrine = settings.doctrine,
             ) ?: return null
         return findThreat(selected)
     }
 
-    private fun launchInterceptor(target: SimulationThreat): InterceptorLaunchEvent {
+    private fun launchInterceptor(target: SimulationThreat): InterceptorLaunchEvent? {
+        val availableLaunchers = launcherPads.indices.filter { launcherReadyIn.getOrElse(it) { 0f } <= 0f }
+        if (availableLaunchers.isEmpty()) return null
         val launcherIndex =
-            launcherPads.indices.minByOrNull { index ->
+            availableLaunchers.minByOrNull { index ->
                 launcherPads[index].dst2(target.position)
             } ?: 0
         val launchPosition = launcherPads[launcherIndex].cpy().add(0f, 18f, 0f)
@@ -407,6 +432,7 @@ class BattleSimulation(
             )
         interceptors += interceptor
         totalInterceptorsLaunched++
+        launcherReadyIn[launcherIndex] = DefenseTuning.launcherReload(settings)
         return InterceptorLaunchEvent(
             interceptorId = interceptor.id,
             launcherIndex = launcherIndex,
