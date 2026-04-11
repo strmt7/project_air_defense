@@ -87,6 +87,14 @@ android {
             matchingFallbacks += listOf("debug")
         }
 
+        create("benchmark") {
+            initWith(getByName("release"))
+            applicationIdSuffix = ".benchmark"
+            versionNameSuffix = "-benchmark"
+            signingConfig = signingConfigs.getByName("debug")
+            matchingFallbacks += listOf("release")
+        }
+
         release {
             isMinifyEnabled = true
             isShrinkResources = true
@@ -127,6 +135,7 @@ dependencies {
     val gdxVersion = "1.14.0"
     implementation("com.badlogicgames.gdx:gdx-backend-android:$gdxVersion")
     implementation("com.badlogicgames.gdx:gdx:$gdxVersion")
+    runtimeOnly("androidx.profileinstaller:profileinstaller:1.4.1")
 
     natives("com.badlogicgames.gdx:gdx-platform:$gdxVersion:natives-armeabi-v7a")
     natives("com.badlogicgames.gdx:gdx-platform:$gdxVersion:natives-arm64-v8a")
@@ -152,6 +161,7 @@ tasks.register("printAppIdentity") {
     description = "Prints package ids and version metadata for debug/local/release channels."
     doLast {
         println("[identity] release package=com.airdefense.game versionCode=${computedVersionCode.get()} versionName=${computedVersionName.get()}")
+        println("[identity] benchmark package=com.airdefense.game.benchmark versionCode=${computedVersionCode.get()} versionName=${computedVersionName.get()}-benchmark")
         println("[identity] local package=com.airdefense.game.local versionCode=${computedVersionCode.get()} versionName=${computedVersionName.get()}-local")
         println("[identity] debug package=com.airdefense.game.debug versionCode=${computedVersionCode.get()} versionName=${computedVersionName.get()}-debug")
     }

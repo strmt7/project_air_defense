@@ -1457,7 +1457,7 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
             buildingDefinitions = buildingDefinitions,
             launcherPositions = launcherPositions,
             settings = settings,
-            random = DefaultRandomSource
+            random = game.launchConfig.benchmarkSeed?.let(::SeededRandomSource) ?: DefaultRandomSource
         )
 
         fun addImportedLandmark(key: String, x: Float, z: Float, yaw: Float, targetHeight: Float) {

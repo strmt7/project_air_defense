@@ -1,6 +1,7 @@
 .gradle/
 .kotlin/
 build/
+benchmark-results/
 **/build/
 android/libs/
 .idea/

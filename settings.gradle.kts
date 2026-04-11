@@ -14,4 +14,4 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = "project_air_defense"
-include(":android", ":core")
+include(":android", ":benchmarks", ":core")
