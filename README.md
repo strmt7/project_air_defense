@@ -6,6 +6,9 @@ A high-fidelity libGDX + Kotlin Android prototype where you command a Patriot-in
 - Agent operating guide: `AGENTS.md`
 - Architecture reference: `docs/architecture.md`
 - Release/install behavior: `docs/release-and-install.md`
+- Benchmark suite: `docs/benchmark-suite.md`
+- Benchmark sources: `docs/benchmark-sources.md`
+- Project skill: `skills/android-3d-air-defense/SKILL.md`
 
 ## Major Gameplay Upgrades
 - **Fire-control loop, not point-and-shoot**: scan -> track table -> prioritize -> salvo engage -> terminal intercept.
@@ -36,6 +39,7 @@ A high-fidelity libGDX + Kotlin Android prototype where you command a Patriot-in
 - **GLES 3.0 + MSAA**: modern hardware-accelerated rendering with anti-aliasing.
 - **Optimized memory**: minimal allocations in the main loop using math buffers and pooled entities.
 - **Strict repositories**: only Google and Maven Central are used for dependency resolution.
+- **Report-oriented benchmark suite**: build timing, startup, battle entry, frame timing, runtime health capture, simulation sweeps, lint, detekt, dependency health, and APK size snapshots.
 
 ## Toolchain
 - Android Gradle Plugin `8.13.0`
@@ -52,8 +56,10 @@ A high-fidelity libGDX + Kotlin Android prototype where you command a Patriot-in
 4. Run `.\gradlew.bat :core:test` for gameplay and targeting logic coverage.
 5. Run `.\gradlew.bat :core:runBattleMonteCarlo -Pruns=300 -Pwaves=1 -Pseconds=48 -Pstep=0.05` for headless balance sweeps.
 6. Or use `.\scripts\run-battle-monte-carlo.cmd 300 1 48 0.05 20260411` on Windows without changing PowerShell execution policy.
-7. Run `.\gradlew.bat :android:installDebug` to install the debug package on an emulator or device.
-8. Launch the `android` module and enter a battle from the main menu.
+7. Run `.\scripts\run-benchmark-suite.cmd` for the report-oriented benchmark suite.
+   It captures build timings, macrobenchmarks, runtime-health artifacts, Monte Carlo balance metrics, and standards reports under `benchmark-results/`.
+8. Run `.\gradlew.bat :android:installDebug` to install the debug package on an emulator or device.
+9. Launch the `android` module and enter a battle from the main menu.
 
 ## Build Outputs
 - Local side-load build:

@@ -2,8 +2,13 @@ package com.airdefense.game
 
 import com.badlogic.gdx.Game
 
-class AirDefenseGame : Game() {
+class AirDefenseGame(
+    val launchConfig: GameLaunchConfig = GameLaunchConfig()
+) : Game() {
     override fun create() {
-        setScreen(StartScreen(this))
+        when (launchConfig.launchTarget) {
+            LaunchTarget.MENU -> setScreen(StartScreen(this))
+            LaunchTarget.BATTLE -> setScreen(BattleScreen(this))
+        }
     }
 }

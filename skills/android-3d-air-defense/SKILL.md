@@ -1,29 +1,47 @@
 ---
 name: android-3d-air-defense
-description: Use this skill when building or iterating on the Air Defense Warrior Android 3D missile-defense prototype, including realistic projectile tuning, libGDX scene setup, and balancing interceptor guidance.
+description: Use this skill when building, debugging, balancing, profiling, or visually upgrading the Project Air Defense Android 3D missile-defense prototype, especially for libGDX battle flow, mobile rendering quality, interception logic, HUD ergonomics, and emulator-verified Android fixes.
 ---
 
 # Android 3D Air Defense Skill
 
-Use this workflow whenever you modify gameplay, visuals, or physics in this repository.
+Use this workflow whenever you modify gameplay, visuals, physics, UI, or Android behavior in this repository.
+
+## Reference files
+
+- [references/curated-skill-stack.md](references/curated-skill-stack.md)
+- [references/source-map.md](references/source-map.md)
+- [references/awesome-claude-skills-source-map.md](references/awesome-claude-skills-source-map.md)
+- [references/awesome-android-complete-reference-links.md](references/awesome-android-complete-reference-links.md)
 
 ## Objectives
-- Keep the game fully 3D (models, camera, and world-space motion).
-- Preserve physically plausible ballistic motion (`g = -9.81 m/s^2`).
-- Keep touch controls responsive in landscape mode.
-- Prioritize small, testable changes with clear difficulty progression.
+- Keep the game fully 3D with readable mobile combat.
+- Preserve physically plausible but gameplay-readable ballistic motion (`g = -9.81 m/s^2`).
+- Keep touch controls large, modern, and reliable in landscape mode.
+- Prefer proof-driven iteration over speculative rewrites.
 
 ## Workflow
-1. **Tune physics first**
-   - Update missile spawn altitude, speed, and gravity interactions.
-   - Keep interceptor velocity high enough for feasible interceptions.
-2. **Validate game feel**
-   - Ensure cooldown, wave progression, and spawn timing create pressure without impossible states.
-3. **Preserve rendering performance**
-   - Reuse procedural models where possible.
-   - Avoid per-frame allocations in hot loops.
-4. **Check Android compatibility**
-   - Keep `minSdk >= 28` and ensure required ABIs are bundled.
+1. **Confirm the exact failing surface first**
+   - Separate process crash, render freeze, wrong button path, scene unreadability, gameplay balance, and packaging failure.
+   - Treat "process alive" and "screen usable" as different checks.
+2. **Use the shared simulation core as the source of truth**
+   - Put gameplay math in shared logic and keep GUI behavior aligned with it.
+   - Add or update pure Kotlin tests when tuning interception, wave timing, radar rules, damage, or layout contracts.
+3. **Preserve a coherent world scale**
+   - Measure imported model bounds.
+   - Keep buildings, roads, launchers, missiles, effects, and HUD cues in one scale language.
+   - Never let waterfront buildings drift into the sea or let the radar disagree with the battle view.
+4. **Improve graphics in the right order**
+   - Depth and horizon layering before more geometry.
+   - Night lighting and emissive rhythm before heavier effects.
+   - Mobile-safe textures, materials, and one safe Android render path before advanced shaders.
+5. **Modernize controls as a mobile game, not a desktop port**
+   - Large hit targets, strong pressed and disabled states, and clear primary-action emphasis.
+6. **Verify with hard proof**
+   - Run local tests.
+   - Run the headless Monte Carlo simulation.
+   - Build and install on Android.
+   - Capture screenshots and logs from the emulator or device.
 
 ## Balancing defaults
 - Incoming missile speed: `38..52 + wave * 1.6`.
@@ -31,7 +49,10 @@ Use this workflow whenever you modify gameplay, visuals, or physics in this repo
 - Interceptor blast radius: `9`.
 - Cooldown: `1.2s`.
 
-## Definition of done for gameplay updates
-- Missiles visibly follow ballistic arcs.
-- Player can reliably neutralize threats with timing skill.
-- HUD reflects wave, readiness, and active threats.
+## Definition of done
+
+- Missiles visibly follow believable ballistic or cruise-like paths.
+- Interceptors can fail sometimes, but not because the simulation is rigged against the player.
+- HUD reflects wave, readiness, and active threat state correctly.
+- The battle remains visually readable on a phone-sized screen.
+- The emulator or device verification evidence agrees with the code change.
