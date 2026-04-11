@@ -92,7 +92,7 @@ private class NightSceneShader(
         val specularColor = (material.get(ColorAttribute.Specular) as? ColorAttribute)?.color
         val emissiveColor = (material.get(ColorAttribute.Emissive) as? ColorAttribute)?.color
         val shininess = (material.get(FloatAttribute.Shininess) as? FloatAttribute)?.value ?: 24f
-        val cullFace = (material.get(IntAttribute.CullFace) as? IntAttribute)?.value?.toInt() ?: GL20.GL_BACK
+        val cullFace = (material.get(IntAttribute.CullFace) as? IntAttribute)?.value ?: GL20.GL_BACK
 
         val diffuseTexture = diffuseAttribute?.textureDescription?.texture ?: fallbackDiffuse
         val roughnessTexture = roughnessAttribute?.textureDescription?.texture ?: fallbackRoughness
@@ -122,9 +122,7 @@ private class NightSceneShader(
         renderable.meshPart.render(program)
     }
 
-    override fun end() {
-        program.end()
-    }
+    override fun end() = Unit
 
     override fun dispose() {
         program.dispose()

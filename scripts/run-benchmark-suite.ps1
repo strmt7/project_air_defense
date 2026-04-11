@@ -109,15 +109,19 @@ function Get-BattleFrameTelemetry {
 
     $matches = [regex]::Matches(
         $LogText,
-        "BattleFrame:\s+LIVE\s+(\d+)s\s+//\s+(\d+)\s+FPS(?:\s+//\s+Q\s+([A-Z]+)\s+//\s+FX(\d+))?\s+//\s+T(\d+)\s+I(\d+)"
+        "BattleFrame:\s+LIVE\s+(\d+)s\s+//\s+FPS\s+([0-9.]+)\s+//\s+FT\s+([0-9.]+)\/([0-9.]+)\/([0-9.]+)\s+//\s+Q\s+([A-Z]+)\s+//\s+FX(\d+)\s+//\s+T(\d+)\s+I(\d+)"
     )
     if ($matches.Count -eq 0) {
         return $null
     }
 
     $fpsSamples = @()
+    $p95Samples = @()
+    $maxSamples = @()
     foreach ($match in $matches) {
-        $fpsSamples += [int]$match.Groups[2].Value
+        $fpsSamples += [double]::Parse($match.Groups[2].Value, [System.Globalization.CultureInfo]::InvariantCulture)
+        $p95Samples += [double]::Parse($match.Groups[4].Value, [System.Globalization.CultureInfo]::InvariantCulture)
+        $maxSamples += [double]::Parse($match.Groups[5].Value, [System.Globalization.CultureInfo]::InvariantCulture)
     }
 
     $last = $matches[$matches.Count - 1]
@@ -129,10 +133,15 @@ function Get-BattleFrameTelemetry {
         minFps = ($fpsSamples | Measure-Object -Minimum).Minimum
         maxFps = ($fpsSamples | Measure-Object -Maximum).Maximum
         liveSeconds = [int]$last.Groups[1].Value
-        qualityMode = if ($last.Groups[3].Success) { $last.Groups[3].Value } else { $null }
-        effects = if ($last.Groups[4].Success) { [int]$last.Groups[4].Value } else { $null }
-        threats = [int]$last.Groups[5].Value
-        interceptors = [int]$last.Groups[6].Value
+        lastWindowFrameP50Ms = [double]::Parse($last.Groups[3].Value, [System.Globalization.CultureInfo]::InvariantCulture)
+        lastWindowFrameP95Ms = [double]::Parse($last.Groups[4].Value, [System.Globalization.CultureInfo]::InvariantCulture)
+        lastWindowFrameMaxMs = [double]::Parse($last.Groups[5].Value, [System.Globalization.CultureInfo]::InvariantCulture)
+        worstWindowFrameP95Ms = ($p95Samples | Measure-Object -Maximum).Maximum
+        worstWindowFrameMaxMs = ($maxSamples | Measure-Object -Maximum).Maximum
+        qualityMode = if ($last.Groups[6].Success) { $last.Groups[6].Value } else { $null }
+        effects = if ($last.Groups[7].Success) { [int]$last.Groups[7].Value } else { $null }
+        threats = [int]$last.Groups[8].Value
+        interceptors = [int]$last.Groups[9].Value
     }
 }
 
@@ -388,11 +397,13 @@ try {
     $lines += "- Crash buffer empty: $($runtimeHealth.crashBufferEmpty)"
     if ($runtimeHealth.battleFrameTelemetry) {
         $lines += "- Battle frame telemetry: avg $($runtimeHealth.battleFrameTelemetry.averageFps) FPS across $($runtimeHealth.battleFrameTelemetry.sampleCount) samples; last sample at $($runtimeHealth.battleFrameTelemetry.liveSeconds)s with T$($runtimeHealth.battleFrameTelemetry.threats) I$($runtimeHealth.battleFrameTelemetry.interceptors)"
+        $lines += "- Last window frame times (p50/p95/max): $($runtimeHealth.battleFrameTelemetry.lastWindowFrameP50Ms) / $($runtimeHealth.battleFrameTelemetry.lastWindowFrameP95Ms) / $($runtimeHealth.battleFrameTelemetry.lastWindowFrameMaxMs) ms"
+        $lines += "- Worst recorded window (p95/max): $($runtimeHealth.battleFrameTelemetry.worstWindowFrameP95Ms) / $($runtimeHealth.battleFrameTelemetry.worstWindowFrameMaxMs) ms"
         if ($runtimeHealth.battleFrameTelemetry.qualityMode) {
             $lines += "- Battle quality telemetry: $($runtimeHealth.battleFrameTelemetry.qualityMode) with FX$($runtimeHealth.battleFrameTelemetry.effects)"
         }
     }
-    $lines += "- Note: `dumpsys gfxinfo` can undercount SurfaceView-based libGDX rendering, so BattleFrame log telemetry is the primary runtime frame-health signal when present."
+    $lines += "- Note: `dumpsys gfxinfo` can undercount SurfaceView-based libGDX rendering, so BattleFrame log telemetry is the primary runtime frame-health signal."
 
     if ($simulation) {
         $lines += ""

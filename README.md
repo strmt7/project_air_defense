@@ -4,7 +4,7 @@
 [![Android APK](https://img.shields.io/github/actions/workflow/status/strmt7/project_air_defense/android-release-apk.yml?branch=main&label=android-apk)](https://github.com/strmt7/project_air_defense/actions/workflows/android-release-apk.yml)
 [![Quality](https://img.shields.io/github/actions/workflow/status/strmt7/project_air_defense/quality.yml?branch=main&label=quality)](https://github.com/strmt7/project_air_defense/actions/workflows/quality.yml)
 [![Ktlint](https://img.shields.io/github/actions/workflow/status/strmt7/project_air_defense/ktlint.yml?branch=main&label=ktlint)](https://github.com/strmt7/project_air_defense/actions/workflows/ktlint.yml)
-[![Caveman](https://img.shields.io/badge/Caveman-555?logo=github&labelColor=555)](https://github.com/JuliusBrussee/caveman/releases/tag/v1.5.0)
+[![caveman](https://img.shields.io/badge/caveman-555?logo=github&labelColor=555)](https://github.com/JuliusBrussee/caveman/releases/tag/v1.5.0)
 <!-- END GENERATED BADGES -->
 
 A high-fidelity libGDX + Kotlin Android prototype where you command a Patriot-inspired battery in a living 3D battlespace.
@@ -54,12 +54,12 @@ A high-fidelity libGDX + Kotlin Android prototype where you command a Patriot-in
 - **Optimized memory**: minimal allocations in the main loop using math buffers and pooled entities.
 - **Strict repositories**: only Google and Maven Central are used for dependency resolution.
 - **Mandatory Kotlin format/lint**: KtLint is the formatting gate; Detekt remains the semantic/code-smell audit.
-- **Report-oriented benchmark suite**: build timing, startup, battle entry, frame timing, runtime health capture, simulation sweeps, KtLint, lint, detekt, dependency health, and APK size snapshots.
+- **Report-oriented benchmark suite**: build timing, startup, battle entry, runtime frame telemetry, runtime health capture, simulation sweeps, KtLint, lint, detekt, dependency health, and APK size snapshots.
 
 ## Toolchain
-- Android Gradle Plugin `8.13.0`
-- Gradle `8.13`
-- Kotlin `2.2.21`
+- Android Gradle Plugin `9.1.0`
+- Gradle `9.3.1`
+- Kotlin JVM plugin `2.3.20`
 - libGDX `1.14.0`
 - Java `21`
 - Compile / target SDK `36`
@@ -74,7 +74,7 @@ A high-fidelity libGDX + Kotlin Android prototype where you command a Patriot-in
 7. Run `.\gradlew.bat :core:runBattleMonteCarlo -Pruns=300 -Pwaves=1 -Pseconds=48 -Pstep=0.05` for headless balance sweeps.
 8. Or use `.\scripts\run-battle-monte-carlo.cmd 300 1 48 0.05 20260411` on Windows without changing PowerShell execution policy.
 9. Run `.\scripts\run-benchmark-suite.cmd` for the report-oriented benchmark suite.
-   It captures build timings, macrobenchmarks, runtime-health artifacts, Monte Carlo balance metrics, and standards reports under `benchmark-results/`.
+   It captures build timings, startup macrobenchmarks, runtime frame telemetry, runtime-health artifacts, Monte Carlo balance metrics, and standards reports under `benchmark-results/`.
 10. Run `python3 tools/update_readme_badges.py --check` after badge metadata changes.
 11. Run `.\gradlew.bat :android:installDebug` to install the debug package on an emulator or device.
 12. Launch the `android` module and enter a battle from the main menu.

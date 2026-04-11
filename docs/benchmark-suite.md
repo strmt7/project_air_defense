@@ -7,8 +7,8 @@ This repository now has a benchmark suite for more than correctness.
 - Clean, warm, and standards-audit build timing
 - Android startup timing
 - Direct-to-battle startup timing
-- Active battle frame timing
 - Runtime health capture with `dumpsys gfxinfo`, `meminfo`, crash buffer, logcat, and screenshot evidence
+- Runtime battle frame telemetry windows with rolling FPS and frame-time stats
 - Headless Monte Carlo battle balance analysis
 - KtLint format/lint gate
 - Android Lint
@@ -57,6 +57,6 @@ The suite writes artifacts under `benchmark-results/<timestamp>/`:
 - Battle frame benchmarks launch directly into battle with a fixed seed so measurements are repeatable.
 - The standards audit now includes `ktlintCheck`, so formatting drift is part of the benchmarked engineering-health surface.
 - Macrobenchmark execution on the emulator is intentionally allowed for comparative local work, but final performance decisions should still be re-checked on a physical device.
-- For libGDX / SurfaceView rendering, `dumpsys gfxinfo` is supplementary only. Use the macrobenchmark traces and sampled frame metrics as the primary frame-health signal.
+- For libGDX / SurfaceView rendering, `dumpsys gfxinfo` is supplementary only. Use the runtime `BattleFrame` telemetry windows as the primary frame-health signal.
 - Baseline Profile generation is intentionally not enabled in this repo-level suite because the standard Android plugin flow creates internal release-like variants that conflict with this project's signing-safety rules.
 - This suite is report-oriented. It is intended to show the current state of performance and engineering health, not only binary pass or fail.

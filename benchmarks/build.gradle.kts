@@ -1,6 +1,5 @@
 plugins {
     id("com.android.test")
-    id("org.jetbrains.kotlin.android")
 }
 
 android {
@@ -22,13 +21,6 @@ android {
     targetProjectPath = ":android"
     experimentalProperties["android.experimental.self-instrumenting"] = true
 }
-
-kotlin {
-    compilerOptions {
-        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_21)
-    }
-}
-
 dependencies {
     implementation("androidx.benchmark:benchmark-macro-junit4:1.4.1")
     implementation("androidx.benchmark:benchmark-macro:1.4.1")
