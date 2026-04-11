@@ -8,6 +8,7 @@ A high-fidelity libGDX + Kotlin Android prototype where you command a Patriot-in
 - Release/install behavior: `docs/release-and-install.md`
 - Benchmark suite: `docs/benchmark-suite.md`
 - Benchmark sources: `docs/benchmark-sources.md`
+- Popular 3D Android game workflows: `docs/popular-3d-android-game-workflows.md`
 - Project skill: `skills/android-3d-air-defense/SKILL.md`
 
 ## Major Gameplay Upgrades
