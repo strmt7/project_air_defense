@@ -31,28 +31,30 @@ class InterceptionMathTest {
 
     @Test
     fun `proximity fuse detects a crossing intercept window`() {
-        val detonates = EngagementPhysics.closesWithinFuse(
-            interceptorPos = Vector3(0f, 0f, 0f),
-            interceptorVel = Vector3(100f, 0f, 0f),
-            targetPos = Vector3(50f, 20f, 0f),
-            targetVel = Vector3(-100f, -5f, 0f),
-            dt = 0.5f,
-            fuseRadius = 30f
-        )
+        val detonates =
+            EngagementPhysics.closesWithinFuse(
+                interceptorPos = Vector3(0f, 0f, 0f),
+                interceptorVel = Vector3(100f, 0f, 0f),
+                targetPos = Vector3(50f, 20f, 0f),
+                targetVel = Vector3(-100f, -5f, 0f),
+                dt = 0.5f,
+                fuseRadius = 30f,
+            )
 
         assertTrue(detonates)
     }
 
     @Test
     fun `proximity fuse ignores distant crossing paths`() {
-        val detonates = EngagementPhysics.closesWithinFuse(
-            interceptorPos = Vector3(0f, 0f, 0f),
-            interceptorVel = Vector3(40f, 0f, 0f),
-            targetPos = Vector3(400f, 180f, 0f),
-            targetVel = Vector3(-20f, 0f, 0f),
-            dt = 0.5f,
-            fuseRadius = 25f
-        )
+        val detonates =
+            EngagementPhysics.closesWithinFuse(
+                interceptorPos = Vector3(0f, 0f, 0f),
+                interceptorVel = Vector3(40f, 0f, 0f),
+                targetPos = Vector3(400f, 180f, 0f),
+                targetVel = Vector3(-20f, 0f, 0f),
+                dt = 0.5f,
+                fuseRadius = 25f,
+            )
 
         assertFalse(detonates)
     }

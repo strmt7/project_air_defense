@@ -1,0 +1,48 @@
+name: Quality
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: gradle
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Accept Android SDK licenses
+        run: yes | sdkmanager --licenses || true
+
+      - name: Install required Android SDK packages
+        run: |
+          sdkmanager --install \
+            "platform-tools" \
+            "platforms;android-36" \
+            "build-tools;36.0.0"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Check README badge block
+        run: python3 tools/update_readme_badges.py --check
+
+      - name: Run repo quality lane
+        run: |
+          ./gradlew --no-daemon :core:test
+          ./gradlew --no-daemon :core:runBattleMonteCarlo -Pruns=60 -Pwaves=1 -Pseconds=48 -Pstep=0.05 -Pseed=20260411

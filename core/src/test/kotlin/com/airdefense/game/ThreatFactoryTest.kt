@@ -1,27 +1,32 @@
 package com.airdefense.game
 
 import com.badlogic.gdx.math.Vector3
+import kotlin.math.abs
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
-import kotlin.math.abs
 
 class ThreatFactoryTest {
     @Test
     fun `threat factory produces downward-moving attack profile toward city`() {
-        val values = ArrayDeque(
-            listOf(
-                0f,
-                1800f,
-                0f,
-                0f,
-                300f,
-                250f
+        val values =
+            ArrayDeque(
+                listOf(
+                    0f,
+                    1800f,
+                    0f,
+                    0f,
+                    300f,
+                    250f,
+                ),
             )
-        )
-        val random = object : RandomSource {
-            override fun range(min: Float, max: Float): Float = values.removeFirst()
-        }
+        val random =
+            object : RandomSource {
+                override fun range(
+                    min: Float,
+                    max: Float,
+                ): Float = values.removeFirst()
+            }
 
         val launch = ThreatFactory.createThreatLaunch(4, Vector3(50f, 0f, -200f), random)
 
@@ -33,13 +38,18 @@ class ThreatFactoryTest {
 
     @Test
     fun `ballistic launch reaches intended target under gravity`() {
-        val launch = ThreatFactory.createThreatLaunch(
-            wave = 2,
-            cityTarget = Vector3(120f, 0f, -180f),
-            random = object : RandomSource {
-                override fun range(min: Float, max: Float): Float = (min + max) * 0.5f
-            }
-        )
+        val launch =
+            ThreatFactory.createThreatLaunch(
+                wave = 2,
+                cityTarget = Vector3(120f, 0f, -180f),
+                random =
+                    object : RandomSource {
+                        override fun range(
+                            min: Float,
+                            max: Float,
+                        ): Float = (min + max) * 0.5f
+                    },
+            )
 
         val position = launch.start.cpy()
         val velocity = launch.velocity.cpy()

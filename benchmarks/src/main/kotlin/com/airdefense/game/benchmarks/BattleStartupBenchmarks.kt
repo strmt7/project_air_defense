@@ -15,16 +15,17 @@ class BattleStartupBenchmarks {
     val benchmarkRule = MacrobenchmarkRule()
 
     @Test
-    fun coldBattleStartupNoCompilation() = benchmarkRule.measureRepeated(
-        packageName = TARGET_PACKAGE,
-        metrics = listOf(StartupTimingMetric()),
-        compilationMode = CompilationMode.None(),
-        iterations = DEFAULT_ITERATIONS,
-        startupMode = StartupMode.COLD,
-        setupBlock = {
-            pressHome()
+    fun coldBattleStartupNoCompilation() =
+        benchmarkRule.measureRepeated(
+            packageName = TARGET_PACKAGE,
+            metrics = listOf(StartupTimingMetric()),
+            compilationMode = CompilationMode.None(),
+            iterations = DEFAULT_ITERATIONS,
+            startupMode = StartupMode.COLD,
+            setupBlock = {
+                pressHome()
+            },
+        ) {
+            startActivityAndWait(battleIntent())
         }
-    ) {
-        startActivityAndWait(battleIntent())
-    }
 }

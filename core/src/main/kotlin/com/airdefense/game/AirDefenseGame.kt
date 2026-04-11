@@ -3,7 +3,7 @@ package com.airdefense.game
 import com.badlogic.gdx.Game
 
 class AirDefenseGame(
-    val launchConfig: GameLaunchConfig = GameLaunchConfig()
+    val launchConfig: GameLaunchConfig = GameLaunchConfig(),
 ) : Game() {
     override fun create() {
         when (launchConfig.launchTarget) {

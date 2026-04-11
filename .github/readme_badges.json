@@ -1,0 +1,27 @@
+{
+  "owner": "strmt7",
+  "repo": "project_air_defense",
+  "branch": "main",
+  "badges": [
+    {
+      "alt": "Android APK",
+      "image": "https://img.shields.io/github/actions/workflow/status/{repo_path}/android-release-apk.yml?branch={branch}&label=android-apk",
+      "target": "https://github.com/{repo_path}/actions/workflows/android-release-apk.yml"
+    },
+    {
+      "alt": "Quality",
+      "image": "https://img.shields.io/github/actions/workflow/status/{repo_path}/quality.yml?branch={branch}&label=quality",
+      "target": "https://github.com/{repo_path}/actions/workflows/quality.yml"
+    },
+    {
+      "alt": "Ktlint",
+      "image": "https://img.shields.io/github/actions/workflow/status/{repo_path}/ktlint.yml?branch={branch}&label=ktlint",
+      "target": "https://github.com/{repo_path}/actions/workflows/ktlint.yml"
+    },
+    {
+      "alt": "Caveman",
+      "image": "https://img.shields.io/badge/Caveman-555?logo=github&labelColor=555",
+      "target": "https://github.com/JuliusBrussee/caveman/releases/tag/v1.5.0"
+    }
+  ]
+}

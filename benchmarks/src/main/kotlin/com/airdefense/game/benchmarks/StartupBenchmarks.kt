@@ -15,30 +15,32 @@ class StartupBenchmarks {
     val benchmarkRule = MacrobenchmarkRule()
 
     @Test
-    fun coldStartupNoCompilation() = benchmarkRule.measureRepeated(
-        packageName = TARGET_PACKAGE,
-        metrics = listOf(StartupTimingMetric()),
-        compilationMode = CompilationMode.None(),
-        iterations = DEFAULT_ITERATIONS,
-        startupMode = StartupMode.COLD,
-        setupBlock = {
-            pressHome()
+    fun coldStartupNoCompilation() =
+        benchmarkRule.measureRepeated(
+            packageName = TARGET_PACKAGE,
+            metrics = listOf(StartupTimingMetric()),
+            compilationMode = CompilationMode.None(),
+            iterations = DEFAULT_ITERATIONS,
+            startupMode = StartupMode.COLD,
+            setupBlock = {
+                pressHome()
+            },
+        ) {
+            startActivityAndWait(menuIntent())
         }
-    ) {
-        startActivityAndWait(menuIntent())
-    }
 
     @Test
-    fun warmStartupNoCompilation() = benchmarkRule.measureRepeated(
-        packageName = TARGET_PACKAGE,
-        metrics = listOf(StartupTimingMetric()),
-        compilationMode = CompilationMode.None(),
-        iterations = DEFAULT_ITERATIONS,
-        startupMode = StartupMode.WARM,
-        setupBlock = {
-            pressHome()
+    fun warmStartupNoCompilation() =
+        benchmarkRule.measureRepeated(
+            packageName = TARGET_PACKAGE,
+            metrics = listOf(StartupTimingMetric()),
+            compilationMode = CompilationMode.None(),
+            iterations = DEFAULT_ITERATIONS,
+            startupMode = StartupMode.WARM,
+            setupBlock = {
+                pressHome()
+            },
+        ) {
+            startActivityAndWait(menuIntent())
         }
-    ) {
-        startActivityAndWait(menuIntent())
-    }
 }

@@ -104,6 +104,38 @@ function Get-RegexValue {
     return $null
 }
 
+function Get-BattleFrameTelemetry {
+    param([string]$LogText)
+
+    $matches = [regex]::Matches(
+        $LogText,
+        "BattleFrame:\s+LIVE\s+(\d+)s\s+//\s+(\d+)\s+FPS(?:\s+//\s+Q\s+([A-Z]+)\s+//\s+FX(\d+))?\s+//\s+T(\d+)\s+I(\d+)"
+    )
+    if ($matches.Count -eq 0) {
+        return $null
+    }
+
+    $fpsSamples = @()
+    foreach ($match in $matches) {
+        $fpsSamples += [int]$match.Groups[2].Value
+    }
+
+    $last = $matches[$matches.Count - 1]
+    $averageFps = ($fpsSamples | Measure-Object -Average).Average
+
+    return [pscustomobject]@{
+        sampleCount = $matches.Count
+        averageFps = [math]::Round($averageFps, 1)
+        minFps = ($fpsSamples | Measure-Object -Minimum).Minimum
+        maxFps = ($fpsSamples | Measure-Object -Maximum).Maximum
+        liveSeconds = [int]$last.Groups[1].Value
+        qualityMode = if ($last.Groups[3].Success) { $last.Groups[3].Value } else { $null }
+        effects = if ($last.Groups[4].Success) { [int]$last.Groups[4].Value } else { $null }
+        threats = [int]$last.Groups[5].Value
+        interceptors = [int]$last.Groups[6].Value
+    }
+}
+
 function Capture-Screenshot {
     param([string]$Path)
 
@@ -148,6 +180,7 @@ function Capture-RuntimeHealth {
     $logcat = (& $adb logcat -d -t 400) -join [Environment]::NewLine
     $crashLog = (& $adb logcat -d -b crash) -join [Environment]::NewLine
     $appPid = (& $adb shell "pidof -s $targetPackage").Trim()
+    $battleFrameTelemetry = Get-BattleFrameTelemetry -LogText $logcat
 
     $gfxinfo | Set-Content -Path $gfxinfoPath
     $meminfo | Set-Content -Path $meminfoPath
@@ -173,6 +206,7 @@ function Capture-RuntimeHealth {
         frameTime99thPercentileMs = Get-RegexValue -Text $gfxinfo -Pattern "99th percentile:\s+(\d+)ms"
         totalPssKb = Get-RegexValue -Text $meminfo -Pattern "TOTAL PSS:\s+([\d,]+)"
         crashBufferEmpty = [string]::IsNullOrWhiteSpace($crashLog)
+        battleFrameTelemetry = $battleFrameTelemetry
         screenshot = $screenshotPath
         launchLog = $launchLog
         gfxinfo = $gfxinfoPath
@@ -298,6 +332,7 @@ try {
     }
 
     $standards = [pscustomobject]@{
+        ktlintGatePassed = $true
         detektAndroidIssues = Get-XmlIssueCount -Path $reports.detektAndroidXml -TagName "error"
         detektCoreIssues = Get-XmlIssueCount -Path $reports.detektCoreXml -TagName "error"
         detektBenchmarksIssues = Get-XmlIssueCount -Path $reports.detektBenchmarksXml -TagName "error"
@@ -351,7 +386,13 @@ try {
     $lines += "- Frame percentiles (50/90/95/99): $($runtimeHealth.frameTime50thPercentileMs) / $($runtimeHealth.frameTime90thPercentileMs) / $($runtimeHealth.frameTime95thPercentileMs) / $($runtimeHealth.frameTime99thPercentileMs) ms"
     $lines += "- Total PSS: $($runtimeHealth.totalPssKb) KB"
     $lines += "- Crash buffer empty: $($runtimeHealth.crashBufferEmpty)"
-    $lines += "- Note: `dumpsys gfxinfo` can undercount frames for SurfaceView-based libGDX rendering, so treat macrobenchmark traces as the primary frame-health source."
+    if ($runtimeHealth.battleFrameTelemetry) {
+        $lines += "- Battle frame telemetry: avg $($runtimeHealth.battleFrameTelemetry.averageFps) FPS across $($runtimeHealth.battleFrameTelemetry.sampleCount) samples; last sample at $($runtimeHealth.battleFrameTelemetry.liveSeconds)s with T$($runtimeHealth.battleFrameTelemetry.threats) I$($runtimeHealth.battleFrameTelemetry.interceptors)"
+        if ($runtimeHealth.battleFrameTelemetry.qualityMode) {
+            $lines += "- Battle quality telemetry: $($runtimeHealth.battleFrameTelemetry.qualityMode) with FX$($runtimeHealth.battleFrameTelemetry.effects)"
+        }
+    }
+    $lines += "- Note: `dumpsys gfxinfo` can undercount SurfaceView-based libGDX rendering, so BattleFrame log telemetry is the primary runtime frame-health signal when present."
 
     if ($simulation) {
         $lines += ""
@@ -386,6 +427,7 @@ try {
     $lines += ""
     $lines += "## Standards Snapshot"
     $lines += ""
+    $lines += "- Ktlint gate passed: $($standards.ktlintGatePassed)"
     $lines += "- Android detekt issues: $($standards.detektAndroidIssues)"
     $lines += "- Core detekt issues: $($standards.detektCoreIssues)"
     $lines += "- Benchmarks detekt issues: $($standards.detektBenchmarksIssues)"

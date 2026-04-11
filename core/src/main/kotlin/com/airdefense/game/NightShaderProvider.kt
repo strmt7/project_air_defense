@@ -17,12 +17,13 @@ import com.badlogic.gdx.graphics.g3d.utils.RenderContext
 import com.badlogic.gdx.graphics.glutils.ShaderProgram
 import com.badlogic.gdx.math.Matrix3
 
-class NightShaderProvider(private val impactLight: PointLight) : BaseShaderProvider() {
+class NightShaderProvider(
+    private val impactLight: PointLight,
+) : BaseShaderProvider() {
     private val whiteDiffuse = createSolidTexture(255)
     private val midRoughness = createSolidTexture(180)
 
-    override fun createShader(renderable: Renderable): Shader =
-        NightSceneShader(renderable, impactLight, whiteDiffuse, midRoughness)
+    override fun createShader(renderable: Renderable): Shader = NightSceneShader(renderable, impactLight, whiteDiffuse, midRoughness)
 
     override fun dispose() {
         super.dispose()
@@ -45,7 +46,7 @@ private class NightSceneShader(
     renderable: Renderable,
     private val impactLight: PointLight,
     private val fallbackDiffuse: Texture,
-    private val fallbackRoughness: Texture
+    private val fallbackRoughness: Texture,
 ) : Shader {
     private val program = ShaderProgram(VERTEX_SHADER, FRAGMENT_SHADER)
     private val normalMatrix = Matrix3()
@@ -61,7 +62,10 @@ private class NightSceneShader(
 
     override fun canRender(instance: Renderable?): Boolean = true
 
-    override fun begin(camera: Camera, context: RenderContext) {
+    override fun begin(
+        camera: Camera,
+        context: RenderContext,
+    ) {
         this.context = context
         program.bind()
         context.setDepthTest(GL20.GL_LEQUAL)
@@ -101,7 +105,11 @@ private class NightSceneShader(
         program.setUniformi("u_diffuseTex", 0)
         program.setUniformi("u_roughnessTex", 1)
         program.setUniformf("u_diffuseColor", diffuseColor ?: com.badlogic.gdx.graphics.Color.WHITE)
-        program.setUniformf("u_specularColor", specularColor ?: com.badlogic.gdx.graphics.Color(0.24f, 0.28f, 0.34f, 1f))
+        program.setUniformf(
+            "u_specularColor",
+            specularColor ?: com.badlogic.gdx.graphics
+                .Color(0.24f, 0.28f, 0.34f, 1f),
+        )
         program.setUniformf("u_emissiveColor", emissiveColor ?: com.badlogic.gdx.graphics.Color.CLEAR)
         program.setUniformf("u_roughnessBias", (96f / shininess.coerceAtLeast(8f)).coerceIn(0.35f, 1.6f))
         program.setUniformf("u_pointLightPos", impactLight.position)

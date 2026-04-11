@@ -10,7 +10,7 @@ class BattleWorldLayoutTest {
         BattleWorldLayout.buildingDefinitions().forEach { definition ->
             assertTrue(
                 definition.position.z >= BattleWorldLayout.WATERFRONT_SAFE_Z,
-                "building ${definition.id} sits too far into the waterfront at z=${definition.position.z}"
+                "building ${definition.id} sits too far into the waterfront at z=${definition.position.z}",
             )
         }
     }

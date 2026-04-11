@@ -7,12 +7,13 @@ import kotlin.test.assertTrue
 class BattleSimulationTest {
     @Test
     fun `simulation accounting stays internally consistent`() {
-        val simulation = BattleSimulation(
-            buildingDefinitions = BattleWorldLayout.buildingDefinitions(),
-            launcherPositions = BattleWorldLayout.launcherPositions(),
-            settings = DefenseSettings(),
-            random = SeededRandomSource(42L)
-        )
+        val simulation =
+            BattleSimulation(
+                buildingDefinitions = BattleWorldLayout.buildingDefinitions(),
+                launcherPositions = BattleWorldLayout.launcherPositions(),
+                settings = DefenseSettings(),
+                random = SeededRandomSource(42L),
+            )
 
         assertTrue(simulation.startNewWave())
 
@@ -29,13 +30,14 @@ class BattleSimulationTest {
 
     @Test
     fun `batch runner shows bounded but non-zero threat leakage`() {
-        val results = BattleMonteCarloRunner.run(
-            runs = 48,
-            waves = 1,
-            maxSecondsPerWave = 48f,
-            stepSeconds = 0.05f,
-            baseSeed = 9000L
-        )
+        val results =
+            BattleMonteCarloRunner.run(
+                runs = 48,
+                waves = 1,
+                maxSecondsPerWave = 48f,
+                stepSeconds = 0.05f,
+                baseSeed = 9000L,
+            )
 
         val averageInterceptRate = results.map { it.interceptRate }.average()
 
@@ -47,22 +49,28 @@ class BattleSimulationTest {
 
     @Test
     fun `headless simulation targets real building coordinates`() {
-        val simulation = BattleSimulation(
-            buildingDefinitions = BattleWorldLayout.buildingDefinitions(),
-            launcherPositions = BattleWorldLayout.launcherPositions(),
-            settings = DefenseSettings(),
-            random = object : RandomSource {
-                override fun range(min: Float, max: Float): Float = (min + max) * 0.5f
-            }
-        )
+        val simulation =
+            BattleSimulation(
+                buildingDefinitions = BattleWorldLayout.buildingDefinitions(),
+                launcherPositions = BattleWorldLayout.launcherPositions(),
+                settings = DefenseSettings(),
+                random =
+                    object : RandomSource {
+                        override fun range(
+                            min: Float,
+                            max: Float,
+                        ): Float = (min + max) * 0.5f
+                    },
+            )
 
         simulation.startNewWave()
         simulation.step(0.4f)
 
         val threat = simulation.threats.first()
-        val nearestBuildingDistance = simulation.buildings.minOf { building ->
-            building.position.dst(Vector3(threat.targetPosition.x, 0f, threat.targetPosition.z))
-        }
+        val nearestBuildingDistance =
+            simulation.buildings.minOf { building ->
+                building.position.dst(Vector3(threat.targetPosition.x, 0f, threat.targetPosition.z))
+            }
 
         assertTrue(nearestBuildingDistance < 140f)
     }

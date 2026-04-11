@@ -55,7 +55,14 @@ import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
 
-class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
+class BattleScreen(
+    private val game: AirDefenseGame,
+) : ScreenAdapter() {
+    private val qualityProfile =
+        GraphicsQualityProfiles.resolve(
+            requestedMode = game.launchConfig.graphicsQualityMode,
+            deviceClass = game.launchConfig.devicePerformanceClass,
+        )
     private val environment = Environment()
     private val impactLight = PointLight()
     private val cityGlowLight = PointLight()
@@ -127,6 +134,8 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
     private var renderedBattleFrames = 0
     private var launcherLeftPulse = 0f
     private var launcherRightPulse = 0f
+    private var hostileTrailSamples = 0
+    private var interceptorTrailSamples = 0
 
     private val initializationTasks by lazy {
         listOf(
@@ -157,7 +166,7 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
                 loadAudio()
                 startNewWave()
                 initialized = true
-            }
+            },
         )
     }
 
@@ -169,17 +178,93 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
         private const val INTERCEPTOR_SCALE = 3.4f
     }
 
+    private fun scaledSceneTextureSize(
+        base: Int,
+        minimum: Int = 64,
+    ): Int = max(minimum, (base * qualityProfile.sceneTextureScale).toInt())
+
+    private fun scaledFacadeSize(
+        base: Int,
+        minimum: Int,
+    ): Int = max(minimum, (base * qualityProfile.facadeTextureScale).toInt())
+
+    private fun currentEffectBudgetScale(): Float {
+        val scenePressure = threats.size + interceptors.size * 0.75f + effects.size / 18f
+        val pressureScale =
+            when {
+                scenePressure >= 18f -> 0.62f
+                scenePressure >= 12f -> 0.78f
+                scenePressure >= 8f -> 0.9f
+                else -> 1f
+            }
+        return qualityProfile.effectBudgetScale * pressureScale
+    }
+
+    private fun activeTrailEffectCount(): Int {
+        var count = 0
+        effects.forEach { effect ->
+            if (effect.type == EffectType.TRAIL) count++
+        }
+        return count
+    }
+
+    private fun adjustedEffectCount(
+        baseCount: Int,
+        minimum: Int,
+    ): Int {
+        val scaled = (baseCount * currentEffectBudgetScale()).toInt()
+        return max(minimum, min(baseCount, scaled))
+    }
+
+    private fun adjustedTrailStride(baseStride: Int): Int {
+        val scenePressure = threats.size + interceptors.size + effects.size / 20
+        val extraStride =
+            when {
+                scenePressure >= 22 -> 2
+                scenePressure >= 14 -> 1
+                else -> 0
+            }
+        return (baseStride + extraStride).coerceAtLeast(1)
+    }
+
+    private fun canSpawnTrail(hostile: Boolean): Boolean {
+        val activeTrailEffects = activeTrailEffectCount()
+        if (activeTrailEffects >= qualityProfile.maxTrailEffects) return false
+
+        val stride =
+            adjustedTrailStride(
+                if (hostile) qualityProfile.hostileTrailStride else qualityProfile.interceptorTrailStride,
+            )
+        if (stride <= 1) return true
+
+        val sampleIndex =
+            if (hostile) {
+                hostileTrailSamples += 1
+                hostileTrailSamples
+            } else {
+                interceptorTrailSamples += 1
+                interceptorTrailSamples
+            }
+        return sampleIndex % stride == 1
+    }
+
     init {
         Gdx.graphics.isContinuousRendering = true
-        stage.addListener(object : InputAdapter(), com.badlogic.gdx.scenes.scene2d.EventListener {
-            override fun handle(event: com.badlogic.gdx.scenes.scene2d.Event?): Boolean {
-                if (isGameOver && event is InputEvent && event.type == InputEvent.Type.touchDown) {
-                    game.screen = StartScreen(game)
-                    return true
+        Gdx.app.log(
+            "BattleQuality",
+            "requested=${game.launchConfig.graphicsQualityMode} effective=${qualityProfile.label} deviceClass=${game.launchConfig.devicePerformanceClass}",
+        )
+        stage.addListener(
+            object : InputAdapter(), com.badlogic.gdx.scenes.scene2d.EventListener {
+                override fun handle(event: com.badlogic.gdx.scenes.scene2d.Event?): Boolean {
+                    if (isGameOver && event is InputEvent && event.type == InputEvent.Type.touchDown) {
+                        game.screen = StartScreen(game)
+                        return true
+                    }
+                    return false
                 }
-                return false
-            }
-        })
+            },
+        )
         Gdx.input.inputProcessor = stage
     }
 
@@ -200,10 +285,26 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
         whitePix.fill()
         val whiteTex = Texture(whitePix)
         textures.add(whiteTex)
-        s.add("white", TextureRegionDrawable(com.badlogic.gdx.graphics.g2d.TextureRegion(whiteTex)), Drawable::class.java)
-        s.add("white_region", com.badlogic.gdx.graphics.g2d.TextureRegion(whiteTex))
+        s.add(
+            "white",
+            TextureRegionDrawable(
+                com.badlogic.gdx.graphics.g2d
+                    .TextureRegion(whiteTex),
+            ),
+            Drawable::class.java,
+        )
+        s.add(
+            "white_region",
+            com.badlogic.gdx.graphics.g2d
+                .TextureRegion(whiteTex),
+        )
 
-        fun addPanel(name: String, fill: Color, stroke: Color, accent: Color) {
+        fun addPanel(
+            name: String,
+            fill: Color,
+            stroke: Color,
+            accent: Color,
+        ) {
             val p = Pixmap(360, 220, Pixmap.Format.RGBA8888)
             p.setColor(fill)
             p.fill()
@@ -214,11 +315,24 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
             p.drawRectangle(1, 1, p.width - 2, p.height - 2)
             val tex = Texture(p)
             textures.add(tex)
-            s.add(name, TextureRegionDrawable(com.badlogic.gdx.graphics.g2d.TextureRegion(tex)), Drawable::class.java)
+            s.add(
+                name,
+                TextureRegionDrawable(
+                    com.badlogic.gdx.graphics.g2d
+                        .TextureRegion(tex),
+                ),
+                Drawable::class.java,
+            )
             p.dispose()
         }
 
-        fun addButton(name: String, top: Color, bottom: Color, stroke: Color, glow: Color) {
+        fun addButton(
+            name: String,
+            top: Color,
+            bottom: Color,
+            stroke: Color,
+            glow: Color,
+        ) {
             val p = Pixmap(360, 120, Pixmap.Format.RGBA8888)
             for (y in 0 until p.height) {
                 val t = y / (p.height - 1f)
@@ -226,7 +340,7 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
                     MathUtils.lerp(top.r, bottom.r, t),
                     MathUtils.lerp(top.g, bottom.g, t),
                     MathUtils.lerp(top.b, bottom.b, t),
-                    MathUtils.lerp(top.a, bottom.a, t)
+                    MathUtils.lerp(top.a, bottom.a, t),
                 )
                 p.drawLine(0, y, p.width - 1, y)
             }
@@ -238,30 +352,64 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
             p.drawRectangle(2, 2, p.width - 4, p.height - 4)
             val tex = Texture(p)
             textures.add(tex)
-            s.add(name, TextureRegionDrawable(com.badlogic.gdx.graphics.g2d.TextureRegion(tex)), Drawable::class.java)
+            s.add(
+                name,
+                TextureRegionDrawable(
+                    com.badlogic.gdx.graphics.g2d
+                        .TextureRegion(tex),
+                ),
+                Drawable::class.java,
+            )
             p.dispose()
         }
 
-        addButton("btn_up", Color(0.03f, 0.08f, 0.16f, 0.96f), Color(0.01f, 0.14f, 0.25f, 0.98f), Color(0.28f, 0.82f, 1f, 1f), Color(0.24f, 0.62f, 0.82f, 0.2f))
-        addButton("btn_over", Color(0.07f, 0.2f, 0.33f, 0.98f), Color(0.03f, 0.28f, 0.45f, 0.98f), Color(0.78f, 0.96f, 1f, 1f), Color(0.48f, 0.84f, 1f, 0.28f))
-        addButton("btn_down", Color(0f, 0.34f, 0.52f, 0.98f), Color(0.0f, 0.2f, 0.34f, 1f), Color(0.86f, 0.98f, 1f, 1f), Color(0.66f, 0.94f, 1f, 0.2f))
-        addButton("btn_disabled", Color(0.07f, 0.1f, 0.14f, 0.88f), Color(0.03f, 0.06f, 0.1f, 0.9f), Color(0.18f, 0.24f, 0.3f, 1f), Color(0f, 0f, 0f, 0f))
+        addButton(
+            "btn_up",
+            Color(0.03f, 0.08f, 0.16f, 0.96f),
+            Color(0.01f, 0.14f, 0.25f, 0.98f),
+            Color(0.28f, 0.82f, 1f, 1f),
+            Color(0.24f, 0.62f, 0.82f, 0.2f),
+        )
+        addButton(
+            "btn_over",
+            Color(0.07f, 0.2f, 0.33f, 0.98f),
+            Color(0.03f, 0.28f, 0.45f, 0.98f),
+            Color(0.78f, 0.96f, 1f, 1f),
+            Color(0.48f, 0.84f, 1f, 0.28f),
+        )
+        addButton(
+            "btn_down",
+            Color(0f, 0.34f, 0.52f, 0.98f),
+            Color(0.0f, 0.2f, 0.34f, 1f),
+            Color(0.86f, 0.98f, 1f, 1f),
+            Color(0.66f, 0.94f, 1f, 0.2f),
+        )
+        addButton(
+            "btn_disabled",
+            Color(0.07f, 0.1f, 0.14f, 0.88f),
+            Color(0.03f, 0.06f, 0.1f, 0.9f),
+            Color(0.18f, 0.24f, 0.3f, 1f),
+            Color(0f, 0f, 0f, 0f),
+        )
         addPanel("hud_panel", Color(0.01f, 0.04f, 0.08f, 0.58f), Color(0.18f, 0.42f, 0.54f, 0.95f), Color(0.12f, 0.52f, 0.7f, 0.8f))
         addPanel("hud_soft", Color(0.01f, 0.04f, 0.08f, 0.42f), Color(0.12f, 0.24f, 0.3f, 0.88f), Color(0.03f, 0.14f, 0.2f, 0.72f))
 
-        s.add("default", TextButton.TextButtonStyle().apply {
-            up = s.getDrawable("btn_up")
-            checked = s.getDrawable("btn_down")
-            down = s.getDrawable("btn_down")
-            over = s.getDrawable("btn_over")
-            disabled = s.getDrawable("btn_disabled")
-            this.font = font
-            fontColor = Color.WHITE
-            downFontColor = Color(0.92f, 0.98f, 1f, 1f)
-            overFontColor = Color.WHITE
-            checkedFontColor = Color.WHITE
-            disabledFontColor = Color(0.55f, 0.64f, 0.7f, 1f)
-        })
+        s.add(
+            "default",
+            TextButton.TextButtonStyle().apply {
+                up = s.getDrawable("btn_up")
+                checked = s.getDrawable("btn_down")
+                down = s.getDrawable("btn_down")
+                over = s.getDrawable("btn_over")
+                disabled = s.getDrawable("btn_disabled")
+                this.font = font
+                fontColor = Color.WHITE
+                downFontColor = Color(0.92f, 0.98f, 1f, 1f)
+                overFontColor = Color.WHITE
+                checkedFontColor = Color.WHITE
+                disabledFontColor = Color(0.55f, 0.64f, 0.7f, 1f)
+            },
+        )
         s.add("default", Label.LabelStyle(font, Color.WHITE))
         s.add("display", Label.LabelStyle(displayFont, Color(0.92f, 0.98f, 1f, 1f)))
         s.add("status", Label.LabelStyle(microFont, Color(0.7f, 0.96f, 1f, 1f)))
@@ -269,44 +417,55 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
         s.add("critical", Label.LabelStyle(font, Color(1f, 0.42f, 0.42f, 1f)))
         s.add("title", Label.LabelStyle(titleFont, Color.WHITE))
 
-        val sliderBack = Pixmap(320, 24, Pixmap.Format.RGBA8888).apply {
-            for (y in 0 until height) {
-                val t = y / (height - 1f)
-                setColor(
-                    MathUtils.lerp(0.05f, 0.1f, t),
-                    MathUtils.lerp(0.14f, 0.2f, t),
-                    MathUtils.lerp(0.2f, 0.28f, t),
-                    1f
-                )
-                drawLine(0, y, width - 1, y)
+        val sliderBack =
+            Pixmap(320, 24, Pixmap.Format.RGBA8888).apply {
+                for (y in 0 until height) {
+                    val t = y / (height - 1f)
+                    setColor(
+                        MathUtils.lerp(0.05f, 0.1f, t),
+                        MathUtils.lerp(0.14f, 0.2f, t),
+                        MathUtils.lerp(0.2f, 0.28f, t),
+                        1f,
+                    )
+                    drawLine(0, y, width - 1, y)
+                }
+                setColor(0.28f, 0.78f, 0.94f, 1f)
+                drawRectangle(0, 0, width, height)
+                drawRectangle(1, 1, width - 2, height - 2)
             }
-            setColor(0.28f, 0.78f, 0.94f, 1f)
-            drawRectangle(0, 0, width, height)
-            drawRectangle(1, 1, width - 2, height - 2)
-        }
-        val sliderKnob = Pixmap(52, 64, Pixmap.Format.RGBA8888).apply {
-            for (y in 0 until height) {
-                val t = y / (height - 1f)
-                setColor(
-                    MathUtils.lerp(0.28f, 0.68f, t),
-                    MathUtils.lerp(0.82f, 0.96f, t),
-                    1f,
-                    1f
-                )
-                drawLine(0, y, width - 1, y)
+        val sliderKnob =
+            Pixmap(52, 64, Pixmap.Format.RGBA8888).apply {
+                for (y in 0 until height) {
+                    val t = y / (height - 1f)
+                    setColor(
+                        MathUtils.lerp(0.28f, 0.68f, t),
+                        MathUtils.lerp(0.82f, 0.96f, t),
+                        1f,
+                        1f,
+                    )
+                    drawLine(0, y, width - 1, y)
+                }
+                setColor(0.88f, 0.98f, 1f, 1f)
+                drawRectangle(0, 0, width, height)
+                drawRectangle(1, 1, width - 2, height - 2)
             }
-            setColor(0.88f, 0.98f, 1f, 1f)
-            drawRectangle(0, 0, width, height)
-            drawRectangle(1, 1, width - 2, height - 2)
-        }
         val sliderBackTex = Texture(sliderBack)
         val sliderKnobTex = Texture(sliderKnob)
         textures.add(sliderBackTex)
         textures.add(sliderKnobTex)
-        s.add("default-horizontal", Slider.SliderStyle(
-            TextureRegionDrawable(com.badlogic.gdx.graphics.g2d.TextureRegion(sliderBackTex)),
-            TextureRegionDrawable(com.badlogic.gdx.graphics.g2d.TextureRegion(sliderKnobTex))
-        ))
+        s.add(
+            "default-horizontal",
+            Slider.SliderStyle(
+                TextureRegionDrawable(
+                    com.badlogic.gdx.graphics.g2d
+                        .TextureRegion(sliderBackTex),
+                ),
+                TextureRegionDrawable(
+                    com.badlogic.gdx.graphics.g2d
+                        .TextureRegion(sliderKnobTex),
+                ),
+            ),
+        )
         whitePix.dispose()
         sliderBack.dispose()
         sliderKnob.dispose()
@@ -335,7 +494,10 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
         camera.update()
     }
 
-    private fun loadTexture(path: String, fallbackColor: Color): Texture {
+    private fun loadTexture(
+        path: String,
+        fallbackColor: Color,
+    ): Texture {
         val file = Gdx.files.internal(path)
         if (file.exists()) {
             return registerTexture(Texture(file))
@@ -346,20 +508,31 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
         return registerTexture(Texture(pixmap)).also { pixmap.dispose() }
     }
 
-    private fun registerTexture(texture: Texture, repeat: Boolean = false): Texture {
+    private fun registerTexture(
+        texture: Texture,
+        repeat: Boolean = false,
+    ): Texture {
         texture.setFilter(Texture.TextureFilter.Linear, Texture.TextureFilter.Linear)
         if (repeat) texture.setWrap(Texture.TextureWrap.Repeat, Texture.TextureWrap.Repeat)
         textures.add(texture)
         return texture
     }
 
-    private fun createTiledAttribute(texture: Texture, scaleU: Float, scaleV: Float): TextureAttribute =
+    private fun createTiledAttribute(
+        texture: Texture,
+        scaleU: Float,
+        scaleV: Float,
+    ): TextureAttribute =
         TextureAttribute.createDiffuse(texture).apply {
             this.scaleU = scaleU
             this.scaleV = scaleV
         }
 
-    private fun createTextureSet(diffuse: Pixmap, roughness: Pixmap, repeat: Boolean = true): SurfaceTextureSet {
+    private fun createTextureSet(
+        diffuse: Pixmap,
+        roughness: Pixmap,
+        repeat: Boolean = true,
+    ): SurfaceTextureSet {
         val diffuseTexture = registerTexture(Texture(diffuse), repeat)
         val roughnessTexture = registerTexture(Texture(roughness), repeat)
         diffuse.dispose()
@@ -367,16 +540,29 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
         return SurfaceTextureSet(diffuseTexture, roughnessTexture)
     }
 
-    private fun createSolidTextureSet(color: Color, roughnessValue: Float): SurfaceTextureSet {
-        val diffuse = Pixmap(4, 4, Pixmap.Format.RGBA8888).apply { setColor(color); fill() }
-        val roughness = Pixmap(4, 4, Pixmap.Format.RGBA8888).apply {
-            setColor(roughnessValue, roughnessValue, roughnessValue, 1f)
-            fill()
-        }
+    private fun createSolidTextureSet(
+        color: Color,
+        roughnessValue: Float,
+    ): SurfaceTextureSet {
+        val diffuse =
+            Pixmap(4, 4, Pixmap.Format.RGBA8888).apply {
+                setColor(color)
+                fill()
+            }
+        val roughness =
+            Pixmap(4, 4, Pixmap.Format.RGBA8888).apply {
+                setColor(roughnessValue, roughnessValue, roughnessValue, 1f)
+                fill()
+            }
         return createTextureSet(diffuse, roughness, repeat = false)
     }
 
-    private fun createFacadeTextureSet(width: Int, height: Int, base: Color, lit: Color): SurfaceTextureSet {
+    private fun createFacadeTextureSet(
+        width: Int,
+        height: Int,
+        base: Color,
+        lit: Color,
+    ): SurfaceTextureSet {
         val diffuse = Pixmap(width, height, Pixmap.Format.RGBA8888)
         val roughness = Pixmap(width, height, Pixmap.Format.RGBA8888)
         diffuse.setColor(base)
@@ -393,7 +579,7 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
                     (base.r + verticalBand + noise).coerceIn(0f, 1f),
                     (base.g + horizontalBand + noise).coerceIn(0f, 1f),
                     (base.b + noise).coerceIn(0f, 1f),
-                    1f
+                    1f,
                 )
                 diffuse.drawPixel(x, y)
             }
@@ -413,7 +599,7 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
     }
 
     private fun createGroundTextureSet(): SurfaceTextureSet {
-        val textureSize = 256
+        val textureSize = scaledSceneTextureSize(256, minimum = 128)
         val diffuse = Pixmap(textureSize, textureSize, Pixmap.Format.RGBA8888)
         val roughness = Pixmap(textureSize, textureSize, Pixmap.Format.RGBA8888)
         for (x in 0 until textureSize) {
@@ -424,7 +610,7 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
                     (0.07f + noise + striping).coerceIn(0f, 1f),
                     (0.075f + noise).coerceIn(0f, 1f),
                     (0.08f + noise * 0.7f).coerceIn(0f, 1f),
-                    1f
+                    1f,
                 )
                 diffuse.drawPixel(x, y)
                 val r = (0.82f + MathUtils.random(-0.1f, 0.08f)).coerceIn(0.1f, 1f)
@@ -436,7 +622,7 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
     }
 
     private fun createSeaTextureSet(): SurfaceTextureSet {
-        val textureSize = 256
+        val textureSize = scaledSceneTextureSize(256, minimum = 128)
         val diffuse = Pixmap(textureSize, textureSize, Pixmap.Format.RGBA8888)
         val roughness = Pixmap(textureSize, textureSize, Pixmap.Format.RGBA8888)
         for (x in 0 until textureSize) {
@@ -448,7 +634,7 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
                     (0.02f + wave + noise).coerceIn(0f, 1f),
                     (0.12f + shimmer + noise).coerceIn(0f, 1f),
                     (0.22f + wave + shimmer + noise * 1.2f).coerceIn(0f, 1f),
-                    1f
+                    1f,
                 )
                 diffuse.drawPixel(x, y)
                 val r = (0.32f + MathUtils.random(-0.06f, 0.08f)).coerceIn(0.08f, 1f)
@@ -460,7 +646,7 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
     }
 
     private fun createBeachTextureSet(): SurfaceTextureSet {
-        val textureSize = 256
+        val textureSize = scaledSceneTextureSize(256, minimum = 128)
         val diffuse = Pixmap(textureSize, textureSize, Pixmap.Format.RGBA8888)
         val roughness = Pixmap(textureSize, textureSize, Pixmap.Format.RGBA8888)
         for (x in 0 until textureSize) {
@@ -471,7 +657,7 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
                     (0.58f + dune + noise).coerceIn(0f, 1f),
                     (0.5f + dune * 0.7f + noise).coerceIn(0f, 1f),
                     (0.34f + noise * 0.6f).coerceIn(0f, 1f),
-                    1f
+                    1f,
                 )
                 diffuse.drawPixel(x, y)
                 val r = (0.9f + MathUtils.random(-0.04f, 0.05f)).coerceIn(0.1f, 1f)
@@ -483,7 +669,7 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
     }
 
     private fun createParkTextureSet(): SurfaceTextureSet {
-        val textureSize = 256
+        val textureSize = scaledSceneTextureSize(256, minimum = 128)
         val diffuse = Pixmap(textureSize, textureSize, Pixmap.Format.RGBA8888)
         val roughness = Pixmap(textureSize, textureSize, Pixmap.Format.RGBA8888)
         for (x in 0 until textureSize) {
@@ -494,7 +680,7 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
                     (0.06f + strip + noise).coerceIn(0f, 1f),
                     (0.18f + strip + noise).coerceIn(0f, 1f),
                     (0.08f + noise).coerceIn(0f, 1f),
-                    1f
+                    1f,
                 )
                 diffuse.drawPixel(x, y)
                 val r = (0.86f + MathUtils.random(-0.06f, 0.05f)).coerceIn(0.1f, 1f)
@@ -506,7 +692,7 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
     }
 
     private fun createPromenadeTextureSet(): SurfaceTextureSet {
-        val textureSize = 256
+        val textureSize = scaledSceneTextureSize(256, minimum = 128)
         val diffuse = Pixmap(textureSize, textureSize, Pixmap.Format.RGBA8888)
         val roughness = Pixmap(textureSize, textureSize, Pixmap.Format.RGBA8888)
         for (x in 0 until textureSize) {
@@ -517,7 +703,7 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
                     (0.22f + tile + noise).coerceIn(0f, 1f),
                     (0.2f + tile + noise).coerceIn(0f, 1f),
                     (0.18f + tile * 0.7f + noise).coerceIn(0f, 1f),
-                    1f
+                    1f,
                 )
                 diffuse.drawPixel(x, y)
                 val r = (0.72f + MathUtils.random(-0.06f, 0.04f)).coerceIn(0.1f, 1f)
@@ -542,14 +728,19 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
                 0,
                 cropY,
                 source.width,
-                cropHeight
+                cropHeight,
             )
             source.dispose()
             val texture = registerTexture(Texture(cropped))
             cropped.dispose()
             return texture
         }
-        val pixmap = Pixmap(1024, 512, Pixmap.Format.RGBA8888)
+        val pixmap =
+            Pixmap(
+                scaledSceneTextureSize(1024, minimum = 512),
+                scaledSceneTextureSize(512, minimum = 256),
+                Pixmap.Format.RGBA8888,
+            )
         for (x in 0 until pixmap.width) {
             for (y in 0 until pixmap.height) {
                 val v = y / (pixmap.height - 1f)
@@ -562,7 +753,7 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
                     (baseR + noise).coerceIn(0f, 1f),
                     (baseG + noise).coerceIn(0f, 1f),
                     (baseB + noise * 1.4f).coerceIn(0f, 1f),
-                    1f
+                    1f,
                 )
                 pixmap.drawPixel(x, y)
             }
@@ -582,7 +773,12 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
     }
 
     private fun createFogTexture(): Texture {
-        val pixmap = Pixmap(512, 160, Pixmap.Format.RGBA8888)
+        val pixmap =
+            Pixmap(
+                scaledSceneTextureSize(512, minimum = 256),
+                scaledSceneTextureSize(160, minimum = 96),
+                Pixmap.Format.RGBA8888,
+            )
         for (x in 0 until pixmap.width) {
             for (y in 0 until pixmap.height) {
                 val vertical = y / (pixmap.height - 1f)
@@ -594,7 +790,7 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
                     MathUtils.lerp(0.34f, 0.18f, vertical),
                     MathUtils.lerp(0.28f, 0.3f, vertical),
                     MathUtils.lerp(0.18f, 0.42f, vertical),
-                    alpha * MathUtils.lerp(1.08f, 0.86f, warmMix)
+                    alpha * MathUtils.lerp(1.08f, 0.86f, warmMix),
                 )
                 pixmap.drawPixel(x, y)
             }
@@ -605,7 +801,12 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
     }
 
     private fun createGlowTexture(): Texture {
-        val pixmap = Pixmap(512, 220, Pixmap.Format.RGBA8888)
+        val pixmap =
+            Pixmap(
+                scaledSceneTextureSize(512, minimum = 256),
+                scaledSceneTextureSize(220, minimum = 128),
+                Pixmap.Format.RGBA8888,
+            )
         for (x in 0 until pixmap.width) {
             for (y in 0 until pixmap.height) {
                 val vertical = y / (pixmap.height - 1f)
@@ -628,7 +829,12 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
     }
 
     private fun createReflectionTexture(): Texture {
-        val pixmap = Pixmap(768, 256, Pixmap.Format.RGBA8888)
+        val pixmap =
+            Pixmap(
+                scaledSceneTextureSize(768, minimum = 256),
+                scaledSceneTextureSize(256, minimum = 128),
+                Pixmap.Format.RGBA8888,
+            )
         for (x in 0 until pixmap.width) {
             val u = x / (pixmap.width - 1f)
             val streakSeed = kotlin.math.sin(u * 26f) * 0.5f + kotlin.math.sin(u * 63f) * 0.24f
@@ -644,7 +850,7 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
                     (0.08f + warm * 1.1f).coerceIn(0f, 1f),
                     (0.12f + warm * 0.72f + cool * 0.28f).coerceIn(0f, 1f),
                     (0.2f + cool * 0.95f).coerceIn(0f, 1f),
-                    (fade * glow * 0.42f).coerceIn(0f, 0.42f)
+                    (fade * glow * 0.42f).coerceIn(0f, 0.42f),
                 )
                 pixmap.drawPixel(x, y)
             }
@@ -655,7 +861,7 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
     }
 
     private fun createRoadTextureSet(): SurfaceTextureSet {
-        val textureSize = 256
+        val textureSize = scaledSceneTextureSize(256, minimum = 128)
         val diffuse = Pixmap(textureSize, textureSize, Pixmap.Format.RGBA8888)
         val roughness = Pixmap(textureSize, textureSize, Pixmap.Format.RGBA8888)
         for (x in 0 until textureSize) {
@@ -665,7 +871,7 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
                     (0.09f + noise).coerceIn(0f, 1f),
                     (0.09f + noise).coerceIn(0f, 1f),
                     (0.1f + noise).coerceIn(0f, 1f),
-                    1f
+                    1f,
                 )
                 diffuse.drawPixel(x, y)
                 val r = (0.74f + MathUtils.random(-0.08f, 0.06f)).coerceIn(0.1f, 1f)
@@ -683,7 +889,7 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
     }
 
     private fun createMetalTextureSet(base: Color): SurfaceTextureSet {
-        val textureSize = 128
+        val textureSize = scaledSceneTextureSize(128, minimum = 64)
         val diffuse = Pixmap(textureSize, textureSize, Pixmap.Format.RGBA8888)
         val roughness = Pixmap(textureSize, textureSize, Pixmap.Format.RGBA8888)
         for (x in 0 until textureSize) {
@@ -694,7 +900,7 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
                     (base.r + streak + noise).coerceIn(0f, 1f),
                     (base.g + streak + noise).coerceIn(0f, 1f),
                     (base.b + streak + noise).coerceIn(0f, 1f),
-                    1f
+                    1f,
                 )
                 diffuse.drawPixel(x, y)
                 val r = (0.42f + MathUtils.random(-0.1f, 0.08f)).coerceIn(0.08f, 1f)
@@ -706,7 +912,7 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
     }
 
     private fun createConcreteTextureSet(base: Color): SurfaceTextureSet {
-        val textureSize = 128
+        val textureSize = scaledSceneTextureSize(128, minimum = 64)
         val diffuse = Pixmap(textureSize, textureSize, Pixmap.Format.RGBA8888)
         val roughness = Pixmap(textureSize, textureSize, Pixmap.Format.RGBA8888)
         for (x in 0 until textureSize) {
@@ -716,7 +922,7 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
                     (base.r + noise).coerceIn(0f, 1f),
                     (base.g + noise).coerceIn(0f, 1f),
                     (base.b + noise).coerceIn(0f, 1f),
-                    1f
+                    1f,
                 )
                 diffuse.drawPixel(x, y)
                 val r = (0.88f + MathUtils.random(-0.06f, 0.04f)).coerceIn(0.1f, 1f)
@@ -727,10 +933,11 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
         return createTextureSet(diffuse, roughness)
     }
 
-    private fun defaultVertexAttributes(): Long = (
-        VertexAttributes.Usage.Position or
-            VertexAttributes.Usage.Normal or
-            VertexAttributes.Usage.TextureCoordinates
+    private fun defaultVertexAttributes(): Long =
+        (
+            VertexAttributes.Usage.Position or
+                VertexAttributes.Usage.Normal or
+                VertexAttributes.Usage.TextureCoordinates
         ).toLong()
 
     private fun generateTerrainModels() {
@@ -744,122 +951,127 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
         val parkSet = createParkTextureSet()
         val promenadeSet = createPromenadeTextureSet()
         val roadSet = createRoadTextureSet()
-        val asphaltTexture = loadTexture("textures/asphalt_04_diff_4k.jpg", Color(0.12f, 0.12f, 0.13f, 1f)).apply {
-            setWrap(Texture.TextureWrap.Repeat, Texture.TextureWrap.Repeat)
-        }
         battleHorizonTexture = loadTexture("textures/city_backdrop_telaviv.jpg", Color(0.08f, 0.09f, 0.12f, 1f))
-        battleFogTexture = createFogTexture()
-        battleGlowTexture = createGlowTexture()
-        battleReflectionTexture = createReflectionTexture()
+        battleFogTexture = if (qualityProfile.showAtmosphereLayers) createFogTexture() else null
+        battleGlowTexture = if (qualityProfile.showGlowLayer) createGlowTexture() else null
+        battleReflectionTexture = if (qualityProfile.showReflectionLayer) createReflectionTexture() else null
 
         mb.begin()
-        val inlandGround = mb.part(
-            "inland_ground",
-            GL20.GL_TRIANGLES,
-            attr,
-            Material(
-                createTiledAttribute(asphaltTexture, 12f, 12f),
-                TextureAttribute.createSpecular(groundSet.roughness),
-                ColorAttribute.createDiffuse(Color(0.3f, 0.34f, 0.4f, 1f)),
-                ColorAttribute.createSpecular(Color(0.12f, 0.14f, 0.18f, 1f)),
-                FloatAttribute.createShininess(18f)
+        val inlandGround =
+            mb.part(
+                "inland_ground",
+                GL20.GL_TRIANGLES,
+                attr,
+                Material(
+                    createTiledAttribute(groundSet.diffuse, 12f, 12f),
+                    TextureAttribute.createSpecular(groundSet.roughness),
+                    ColorAttribute.createDiffuse(Color(0.3f, 0.34f, 0.4f, 1f)),
+                    ColorAttribute.createSpecular(Color(0.12f, 0.14f, 0.18f, 1f)),
+                    FloatAttribute.createShininess(18f),
+                ),
             )
-        )
         BoxShapeBuilder.build(inlandGround, 9600f, 3f, 9800f, 1180f, -2f, 220f)
-        val sea = mb.part(
-            "sea",
-            GL20.GL_TRIANGLES,
-            attr,
-            Material(
-                TextureAttribute.createDiffuse(seaSet.diffuse),
-                TextureAttribute.createSpecular(seaSet.roughness),
-                ColorAttribute.createDiffuse(Color.WHITE),
-                ColorAttribute.createSpecular(Color(0.44f, 0.66f, 0.84f, 1f)),
-                FloatAttribute.createShininess(56f)
+        val sea =
+            mb.part(
+                "sea",
+                GL20.GL_TRIANGLES,
+                attr,
+                Material(
+                    TextureAttribute.createDiffuse(seaSet.diffuse),
+                    TextureAttribute.createSpecular(seaSet.roughness),
+                    ColorAttribute.createDiffuse(Color.WHITE),
+                    ColorAttribute.createSpecular(Color(0.44f, 0.66f, 0.84f, 1f)),
+                    FloatAttribute.createShininess(56f),
+                ),
             )
-        )
         BoxShapeBuilder.build(sea, 9600f, 2f, 3600f, 1180f, -4f, -4580f)
         BoxShapeBuilder.build(sea, 8200f, 1f, 1280f, 1180f, -4f, -3170f)
-        val beach = mb.part(
-            "beach",
-            GL20.GL_TRIANGLES,
-            attr,
-            Material(
-                TextureAttribute.createDiffuse(beachSet.diffuse),
-                TextureAttribute.createSpecular(beachSet.roughness),
-                ColorAttribute.createDiffuse(Color(1f, 0.98f, 0.92f, 1f)),
-                ColorAttribute.createSpecular(Color(0.2f, 0.18f, 0.12f, 1f)),
-                FloatAttribute.createShininess(8f)
+        val beach =
+            mb.part(
+                "beach",
+                GL20.GL_TRIANGLES,
+                attr,
+                Material(
+                    TextureAttribute.createDiffuse(beachSet.diffuse),
+                    TextureAttribute.createSpecular(beachSet.roughness),
+                    ColorAttribute.createDiffuse(Color(1f, 0.98f, 0.92f, 1f)),
+                    ColorAttribute.createSpecular(Color(0.2f, 0.18f, 0.12f, 1f)),
+                    FloatAttribute.createShininess(8f),
+                ),
             )
-        )
         BoxShapeBuilder.build(beach, 8600f, 4f, 760f, 1180f, -1f, -2550f)
-        val promenade = mb.part(
-            "promenade",
-            GL20.GL_TRIANGLES,
-            attr,
-            Material(
-                createTiledAttribute(asphaltTexture, 18f, 2.6f),
-                TextureAttribute.createSpecular(promenadeSet.roughness),
-                ColorAttribute.createDiffuse(Color(0.6f, 0.62f, 0.66f, 1f)),
-                ColorAttribute.createSpecular(Color(0.22f, 0.24f, 0.28f, 1f)),
-                FloatAttribute.createShininess(28f)
+        val promenade =
+            mb.part(
+                "promenade",
+                GL20.GL_TRIANGLES,
+                attr,
+                Material(
+                    createTiledAttribute(promenadeSet.diffuse, 18f, 2.6f),
+                    TextureAttribute.createSpecular(promenadeSet.roughness),
+                    ColorAttribute.createDiffuse(Color(0.6f, 0.62f, 0.66f, 1f)),
+                    ColorAttribute.createSpecular(Color(0.22f, 0.24f, 0.28f, 1f)),
+                    FloatAttribute.createShininess(28f),
+                ),
             )
-        )
         BoxShapeBuilder.build(promenade, 8400f, 2f, 180f, 1180f, 0f, -2100f)
-        val park = mb.part(
-            "park",
-            GL20.GL_TRIANGLES,
-            attr,
-            Material(
-                TextureAttribute.createDiffuse(parkSet.diffuse),
-                TextureAttribute.createSpecular(parkSet.roughness),
-                ColorAttribute.createDiffuse(Color.WHITE),
-                ColorAttribute.createSpecular(Color(0.12f, 0.18f, 0.1f, 1f)),
-                FloatAttribute.createShininess(6f)
+        val park =
+            mb.part(
+                "park",
+                GL20.GL_TRIANGLES,
+                attr,
+                Material(
+                    TextureAttribute.createDiffuse(parkSet.diffuse),
+                    TextureAttribute.createSpecular(parkSet.roughness),
+                    ColorAttribute.createDiffuse(Color.WHITE),
+                    ColorAttribute.createSpecular(Color(0.12f, 0.18f, 0.1f, 1f)),
+                    FloatAttribute.createShininess(6f),
+                ),
             )
-        )
         BoxShapeBuilder.build(park, 1560f, 2f, 3600f, 880f, -1f, -820f)
-        val road = mb.part(
-            "road",
-            GL20.GL_TRIANGLES,
-            attr,
-            Material(
-                createTiledAttribute(asphaltTexture, 18f, 3.2f),
-                TextureAttribute.createSpecular(roadSet.roughness),
-                ColorAttribute.createDiffuse(Color(0.34f, 0.36f, 0.4f, 1f)),
-                ColorAttribute.createSpecular(Color(0.18f, 0.18f, 0.2f, 1f)),
-                FloatAttribute.createShininess(22f)
+        val road =
+            mb.part(
+                "road",
+                GL20.GL_TRIANGLES,
+                attr,
+                Material(
+                    createTiledAttribute(roadSet.diffuse, 18f, 3.2f),
+                    TextureAttribute.createSpecular(roadSet.roughness),
+                    ColorAttribute.createDiffuse(Color(0.34f, 0.36f, 0.4f, 1f)),
+                    ColorAttribute.createSpecular(Color(0.18f, 0.18f, 0.2f, 1f)),
+                    FloatAttribute.createShininess(22f),
+                ),
             )
-        )
         BoxShapeBuilder.build(road, 8600f, 1f, 120f, 1180f, 0f, -1910f)
         BoxShapeBuilder.build(road, 7600f, 1f, 48f, 1180f, 0f, -640f)
         BoxShapeBuilder.build(road, 6200f, 1f, 42f, 1480f, 0f, 180f)
         BoxShapeBuilder.build(road, 50f, 1f, 4200f, -260f, 0f, -620f)
         BoxShapeBuilder.build(road, 52f, 1f, 4700f, 920f, 0f, -320f)
         BoxShapeBuilder.build(road, 48f, 1f, 4400f, 2140f, 0f, -460f)
-        val glowBand = mb.part(
-            "glow",
-            GL20.GL_TRIANGLES,
-            attr,
-            Material(
-                ColorAttribute.createDiffuse(Color(0.74f, 0.46f, 0.18f, 1f)),
-                BlendingAttribute(0.2f)
+        val glowBand =
+            mb.part(
+                "glow",
+                GL20.GL_TRIANGLES,
+                attr,
+                Material(
+                    ColorAttribute.createDiffuse(Color(0.74f, 0.46f, 0.18f, 1f)),
+                    BlendingAttribute(0.2f),
+                ),
             )
-        )
         BoxShapeBuilder.build(glowBand, 8400f, 0.5f, 260f, 1180f, 5f, -2070f)
         BoxShapeBuilder.build(glowBand, 8200f, 0.5f, 620f, 1180f, 4f, -1820f)
-        val defensePad = mb.part(
-            "defense_pad",
-            GL20.GL_TRIANGLES,
-            attr,
-            Material(
-                createTiledAttribute(asphaltTexture, 4f, 2f),
-                TextureAttribute.createSpecular(groundSet.roughness),
-                ColorAttribute.createDiffuse(Color(0.48f, 0.5f, 0.54f, 1f)),
-                ColorAttribute.createSpecular(Color(0.18f, 0.18f, 0.2f, 1f)),
-                FloatAttribute.createShininess(26f)
+        val defensePad =
+            mb.part(
+                "defense_pad",
+                GL20.GL_TRIANGLES,
+                attr,
+                Material(
+                    createTiledAttribute(groundSet.diffuse, 4f, 2f),
+                    TextureAttribute.createSpecular(groundSet.roughness),
+                    ColorAttribute.createDiffuse(Color(0.48f, 0.5f, 0.54f, 1f)),
+                    ColorAttribute.createSpecular(Color(0.18f, 0.18f, 0.2f, 1f)),
+                    FloatAttribute.createShininess(26f),
+                ),
             )
-        )
         BoxShapeBuilder.build(defensePad, 2520f, 14f, 620f, 520f, 5f, 310f)
         models.put("ground", mb.end())
     }
@@ -873,13 +1085,21 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
         val facadeD = createFacadeTextureSet(192, 384, Color(0.07f, 0.09f, 0.12f, 1f), Color(0.56f, 0.96f, 0.96f, 1f))
         val facadeE = createFacadeTextureSet(192, 384, Color(0.12f, 0.1f, 0.08f, 1f), Color(1f, 0.9f, 0.62f, 1f))
 
-        fun createBuildingModel(name: String, width: Float, height: Float, depth: Float, texture: SurfaceTextureSet, tint: Color) {
-            val glow = Color(
-                (tint.r * 0.13f).coerceIn(0f, 0.22f),
-                (tint.g * 0.13f).coerceIn(0f, 0.22f),
-                (tint.b * 0.16f).coerceIn(0f, 0.28f),
-                1f
-            )
+        fun createBuildingModel(
+            name: String,
+            width: Float,
+            height: Float,
+            depth: Float,
+            texture: SurfaceTextureSet,
+            tint: Color,
+        ) {
+            val glow =
+                Color(
+                    (tint.r * 0.13f).coerceIn(0f, 0.22f),
+                    (tint.g * 0.13f).coerceIn(0f, 0.22f),
+                    (tint.b * 0.16f).coerceIn(0f, 0.28f),
+                    1f,
+                )
             models.put(
                 name,
                 mb.createBox(
@@ -892,10 +1112,10 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
                         ColorAttribute.createDiffuse(tint),
                         ColorAttribute.createEmissive(glow),
                         ColorAttribute.createSpecular(Color(0.12f, 0.14f, 0.18f, 1f)),
-                        FloatAttribute.createShininess(12f)
+                        FloatAttribute.createShininess(12f),
                     ),
-                    attr
-                )
+                    attr,
+                ),
             )
         }
 
@@ -917,13 +1137,14 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
         val mb = ModelBuilder()
         val launcherSet = createMetalTextureSet(Color(0.18f, 0.24f, 0.19f, 1f))
         val radarSet = createMetalTextureSet(Color(0.22f, 0.32f, 0.24f, 1f))
-        val launcherMaterial = Material(
-            TextureAttribute.createDiffuse(launcherSet.diffuse),
-            TextureAttribute.createSpecular(launcherSet.roughness),
-            ColorAttribute.createDiffuse(Color.WHITE),
-            ColorAttribute.createSpecular(Color(0.5f, 0.56f, 0.52f, 1f)),
-            FloatAttribute.createShininess(40f)
-        )
+        val launcherMaterial =
+            Material(
+                TextureAttribute.createDiffuse(launcherSet.diffuse),
+                TextureAttribute.createSpecular(launcherSet.roughness),
+                ColorAttribute.createDiffuse(Color.WHITE),
+                ColorAttribute.createSpecular(Color(0.5f, 0.56f, 0.52f, 1f)),
+                FloatAttribute.createShininess(40f),
+            )
         mb.begin()
         mb.part("chassis", GL20.GL_TRIANGLES, attr, launcherMaterial).apply {
             BoxShapeBuilder.build(this, 48f, 7f, 72f)
@@ -939,13 +1160,14 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
         models.put("launcher", mb.end())
 
         mb.begin()
-        val radarMaterial = Material(
-            TextureAttribute.createDiffuse(radarSet.diffuse),
-            TextureAttribute.createSpecular(radarSet.roughness),
-            ColorAttribute.createDiffuse(Color.WHITE),
-            ColorAttribute.createSpecular(Color(0.55f, 0.64f, 0.6f, 1f)),
-            FloatAttribute.createShininess(44f)
-        )
+        val radarMaterial =
+            Material(
+                TextureAttribute.createDiffuse(radarSet.diffuse),
+                TextureAttribute.createSpecular(radarSet.roughness),
+                ColorAttribute.createDiffuse(Color.WHITE),
+                ColorAttribute.createSpecular(Color(0.55f, 0.64f, 0.6f, 1f)),
+                FloatAttribute.createShininess(44f),
+            )
         mb.part("base", GL20.GL_TRIANGLES, attr, radarMaterial).apply {
             BoxShapeBuilder.build(this, 56f, 10f, 56f)
         }
@@ -966,14 +1188,15 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
         val moonSet = createSolidTextureSet(Color(0.88f, 0.9f, 1f, 1f), 0.65f)
 
         mb.begin()
-        val threatMaterial = Material(
-            TextureAttribute.createDiffuse(threatSet.diffuse),
-            TextureAttribute.createSpecular(threatSet.roughness),
-            ColorAttribute.createDiffuse(Color(1f, 0.78f, 0.42f, 1f)),
-            ColorAttribute.createSpecular(Color(1f, 0.88f, 0.66f, 1f)),
-            ColorAttribute.createEmissive(Color(0.18f, 0.08f, 0.03f, 1f)),
-            FloatAttribute.createShininess(78f)
-        )
+        val threatMaterial =
+            Material(
+                TextureAttribute.createDiffuse(threatSet.diffuse),
+                TextureAttribute.createSpecular(threatSet.roughness),
+                ColorAttribute.createDiffuse(Color(1f, 0.78f, 0.42f, 1f)),
+                ColorAttribute.createSpecular(Color(1f, 0.88f, 0.66f, 1f)),
+                ColorAttribute.createEmissive(Color(0.18f, 0.08f, 0.03f, 1f)),
+                FloatAttribute.createShininess(78f),
+            )
         mb.part("body", GL20.GL_TRIANGLES, attr, threatMaterial).apply {
             CylinderShapeBuilder.build(this, 8f, 34f, 8f, 20)
         }
@@ -994,14 +1217,15 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
         models.put("threat", mb.end())
 
         mb.begin()
-        val interceptorMaterial = Material(
-            TextureAttribute.createDiffuse(interceptorSet.diffuse),
-            TextureAttribute.createSpecular(interceptorSet.roughness),
-            ColorAttribute.createDiffuse(Color(0.82f, 0.96f, 1f, 1f)),
-            ColorAttribute.createSpecular(Color(0.94f, 0.98f, 1f, 1f)),
-            ColorAttribute.createEmissive(Color(0.05f, 0.12f, 0.18f, 1f)),
-            FloatAttribute.createShininess(92f)
-        )
+        val interceptorMaterial =
+            Material(
+                TextureAttribute.createDiffuse(interceptorSet.diffuse),
+                TextureAttribute.createSpecular(interceptorSet.roughness),
+                ColorAttribute.createDiffuse(Color(0.82f, 0.96f, 1f, 1f)),
+                ColorAttribute.createSpecular(Color(0.94f, 0.98f, 1f, 1f)),
+                ColorAttribute.createEmissive(Color(0.05f, 0.12f, 0.18f, 1f)),
+                FloatAttribute.createShininess(92f),
+            )
         mb.part("body", GL20.GL_TRIANGLES, attr, interceptorMaterial).apply {
             CylinderShapeBuilder.build(this, 5.4f, 32f, 5.4f, 20)
         }
@@ -1023,58 +1247,72 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
         models.put(
             "blast",
             mb.createSphere(
-                1f, 1f, 1f, 16, 12,
+                1f,
+                1f,
+                1f,
+                16,
+                12,
                 Material(
                     TextureAttribute.createDiffuse(blastSet.diffuse),
                     TextureAttribute.createSpecular(blastSet.roughness),
                     ColorAttribute.createDiffuse(Color.WHITE),
                     ColorAttribute.createSpecular(Color.WHITE),
                     ColorAttribute.createEmissive(Color(1f, 0.65f, 0.2f, 1f)),
-                    BlendingAttribute(0.92f)
+                    BlendingAttribute(0.92f),
                 ),
-                attr
-            )
+                attr,
+            ),
         )
         models.put(
             "trail",
             mb.createSphere(
-                1f, 1f, 1f, 10, 8,
+                1f,
+                1f,
+                1f,
+                10,
+                8,
                 Material(
                     TextureAttribute.createDiffuse(trailSet.diffuse),
                     TextureAttribute.createSpecular(trailSet.roughness),
                     ColorAttribute.createDiffuse(Color.WHITE),
                     ColorAttribute.createEmissive(Color(0.32f, 0.38f, 0.44f, 1f)),
-                    BlendingAttribute(0.55f)
+                    BlendingAttribute(0.55f),
                 ),
-                attr
-            )
+                attr,
+            ),
         )
         models.put(
             "debris",
             mb.createBox(
-                6f, 6f, 6f,
+                6f,
+                6f,
+                6f,
                 Material(
                     TextureAttribute.createDiffuse(debrisSet.diffuse),
                     TextureAttribute.createSpecular(debrisSet.roughness),
                     ColorAttribute.createDiffuse(Color.WHITE),
                     ColorAttribute.createSpecular(Color(0.18f, 0.18f, 0.2f, 1f)),
-                    FloatAttribute.createShininess(10f)
+                    FloatAttribute.createShininess(10f),
                 ),
-                attr
-            )
+                attr,
+            ),
         )
         models.put(
             "moon",
             mb.createSphere(
-                80f, 80f, 80f, 18, 18,
+                80f,
+                80f,
+                80f,
+                18,
+                18,
                 Material(
                     TextureAttribute.createDiffuse(moonSet.diffuse),
                     TextureAttribute.createSpecular(moonSet.roughness),
                     ColorAttribute.createDiffuse(Color.WHITE),
-                    ColorAttribute.createEmissive(Color(0.18f, 0.2f, 0.24f, 1f))
+                    ColorAttribute.createEmissive(Color(0.18f, 0.2f, 0.24f, 1f)),
                 ),
-                attr
-            )
+                attr,
+            ),
         )
     }
 
@@ -1093,18 +1331,21 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
     }
 
     private fun generateWorldModels() {
-        val attr = (
-            VertexAttributes.Usage.Position or
-                VertexAttributes.Usage.Normal or
-                VertexAttributes.Usage.TextureCoordinates
+        val attr =
+            (
+                VertexAttributes.Usage.Position or
+                    VertexAttributes.Usage.Normal or
+                    VertexAttributes.Usage.TextureCoordinates
             ).toLong()
         val mb = ModelBuilder()
         battleSkyTexture = createSkyTexture()
-        val facadeA = createFacadeTextureSet(256, 512, Color(0.08f, 0.1f, 0.14f, 1f), Color(1f, 0.82f, 0.48f, 1f))
-        val facadeB = createFacadeTextureSet(256, 512, Color(0.05f, 0.07f, 0.11f, 1f), Color(0.7f, 0.88f, 1f, 1f))
-        val facadeC = createFacadeTextureSet(256, 512, Color(0.1f, 0.08f, 0.09f, 1f), Color(1f, 0.62f, 0.3f, 1f))
-        val facadeD = createFacadeTextureSet(256, 512, Color(0.07f, 0.09f, 0.12f, 1f), Color(0.56f, 0.96f, 0.96f, 1f))
-        val facadeE = createFacadeTextureSet(256, 512, Color(0.12f, 0.1f, 0.08f, 1f), Color(1f, 0.9f, 0.62f, 1f))
+        val facadeWidth = scaledFacadeSize(256, minimum = 128)
+        val facadeHeight = scaledFacadeSize(512, minimum = 256)
+        val facadeA = createFacadeTextureSet(facadeWidth, facadeHeight, Color(0.08f, 0.1f, 0.14f, 1f), Color(1f, 0.82f, 0.48f, 1f))
+        val facadeB = createFacadeTextureSet(facadeWidth, facadeHeight, Color(0.05f, 0.07f, 0.11f, 1f), Color(0.7f, 0.88f, 1f, 1f))
+        val facadeC = createFacadeTextureSet(facadeWidth, facadeHeight, Color(0.1f, 0.08f, 0.09f, 1f), Color(1f, 0.62f, 0.3f, 1f))
+        val facadeD = createFacadeTextureSet(facadeWidth, facadeHeight, Color(0.07f, 0.09f, 0.12f, 1f), Color(0.56f, 0.96f, 0.96f, 1f))
+        val facadeE = createFacadeTextureSet(facadeWidth, facadeHeight, Color(0.12f, 0.1f, 0.08f, 1f), Color(1f, 0.9f, 0.62f, 1f))
         val groundSet = createGroundTextureSet()
         val seaSet = createSeaTextureSet()
         val beachSet = createBeachTextureSet()
@@ -1121,102 +1362,116 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
         val moonSet = createSolidTextureSet(Color(0.88f, 0.9f, 1f, 1f), 0.65f)
 
         mb.begin()
-        val inlandGround = mb.part(
-            "inland_ground",
-            GL20.GL_TRIANGLES,
-            attr,
-            Material(
-                TextureAttribute.createDiffuse(groundSet.diffuse),
-                TextureAttribute.createSpecular(groundSet.roughness),
-                ColorAttribute.createDiffuse(Color(0.95f, 0.98f, 1f, 1f)),
-                ColorAttribute.createSpecular(Color(0.18f, 0.2f, 0.24f, 1f)),
-                FloatAttribute.createShininess(12f)
+        val inlandGround =
+            mb.part(
+                "inland_ground",
+                GL20.GL_TRIANGLES,
+                attr,
+                Material(
+                    TextureAttribute.createDiffuse(groundSet.diffuse),
+                    TextureAttribute.createSpecular(groundSet.roughness),
+                    ColorAttribute.createDiffuse(Color(0.95f, 0.98f, 1f, 1f)),
+                    ColorAttribute.createSpecular(Color(0.18f, 0.2f, 0.24f, 1f)),
+                    FloatAttribute.createShininess(12f),
+                ),
             )
-        )
         BoxShapeBuilder.build(inlandGround, 7600f, 3f, 11000f, 1350f, -2f, -300f)
-        val sea = mb.part(
-            "sea",
-            GL20.GL_TRIANGLES,
-            attr,
-            Material(
-                TextureAttribute.createDiffuse(seaSet.diffuse),
-                TextureAttribute.createSpecular(seaSet.roughness),
-                ColorAttribute.createDiffuse(Color.WHITE),
-                ColorAttribute.createSpecular(Color(0.45f, 0.62f, 0.78f, 1f)),
-                FloatAttribute.createShininess(46f)
+        val sea =
+            mb.part(
+                "sea",
+                GL20.GL_TRIANGLES,
+                attr,
+                Material(
+                    TextureAttribute.createDiffuse(seaSet.diffuse),
+                    TextureAttribute.createSpecular(seaSet.roughness),
+                    ColorAttribute.createDiffuse(Color.WHITE),
+                    ColorAttribute.createSpecular(Color(0.45f, 0.62f, 0.78f, 1f)),
+                    FloatAttribute.createShininess(46f),
+                ),
             )
-        )
         BoxShapeBuilder.build(sea, 4200f, 2f, 11000f, -3550f, -3f, -300f)
-        val beach = mb.part(
-            "beach",
-            GL20.GL_TRIANGLES,
-            attr,
-            Material(
-                TextureAttribute.createDiffuse(beachSet.diffuse),
-                TextureAttribute.createSpecular(beachSet.roughness),
-                ColorAttribute.createDiffuse(Color.WHITE),
-                ColorAttribute.createSpecular(Color(0.2f, 0.18f, 0.12f, 1f)),
-                FloatAttribute.createShininess(8f)
+        val beach =
+            mb.part(
+                "beach",
+                GL20.GL_TRIANGLES,
+                attr,
+                Material(
+                    TextureAttribute.createDiffuse(beachSet.diffuse),
+                    TextureAttribute.createSpecular(beachSet.roughness),
+                    ColorAttribute.createDiffuse(Color.WHITE),
+                    ColorAttribute.createSpecular(Color(0.2f, 0.18f, 0.12f, 1f)),
+                    FloatAttribute.createShininess(8f),
+                ),
             )
-        )
         BoxShapeBuilder.build(beach, 900f, 4f, 9800f, -2150f, -1f, -340f)
-        val promenade = mb.part(
-            "promenade",
-            GL20.GL_TRIANGLES,
-            attr,
-            Material(
-                TextureAttribute.createDiffuse(promenadeSet.diffuse),
-                TextureAttribute.createSpecular(promenadeSet.roughness),
-                ColorAttribute.createDiffuse(Color.WHITE),
-                ColorAttribute.createSpecular(Color(0.22f, 0.22f, 0.24f, 1f)),
-                FloatAttribute.createShininess(18f)
+        val promenade =
+            mb.part(
+                "promenade",
+                GL20.GL_TRIANGLES,
+                attr,
+                Material(
+                    TextureAttribute.createDiffuse(promenadeSet.diffuse),
+                    TextureAttribute.createSpecular(promenadeSet.roughness),
+                    ColorAttribute.createDiffuse(Color.WHITE),
+                    ColorAttribute.createSpecular(Color(0.22f, 0.22f, 0.24f, 1f)),
+                    FloatAttribute.createShininess(18f),
+                ),
             )
-        )
         BoxShapeBuilder.build(promenade, 260f, 2f, 9300f, -1500f, 0f, -360f)
-        val park = mb.part(
-            "park",
-            GL20.GL_TRIANGLES,
-            attr,
-            Material(
-                TextureAttribute.createDiffuse(parkSet.diffuse),
-                TextureAttribute.createSpecular(parkSet.roughness),
-                ColorAttribute.createDiffuse(Color.WHITE),
-                ColorAttribute.createSpecular(Color(0.12f, 0.18f, 0.1f, 1f)),
-                FloatAttribute.createShininess(6f)
+        val park =
+            mb.part(
+                "park",
+                GL20.GL_TRIANGLES,
+                attr,
+                Material(
+                    TextureAttribute.createDiffuse(parkSet.diffuse),
+                    TextureAttribute.createSpecular(parkSet.roughness),
+                    ColorAttribute.createDiffuse(Color.WHITE),
+                    ColorAttribute.createSpecular(Color(0.12f, 0.18f, 0.1f, 1f)),
+                    FloatAttribute.createShininess(6f),
+                ),
             )
-        )
         BoxShapeBuilder.build(park, 920f, 2f, 4200f, 980f, -1f, -1120f)
-        val road = mb.part(
-            "road",
-            GL20.GL_TRIANGLES,
-            attr,
-            Material(
-                TextureAttribute.createDiffuse(roadSet.diffuse),
-                TextureAttribute.createSpecular(roadSet.roughness),
-                ColorAttribute.createDiffuse(Color.WHITE),
-                ColorAttribute.createSpecular(Color(0.28f, 0.28f, 0.3f, 1f)),
-                FloatAttribute.createShininess(18f)
+        val road =
+            mb.part(
+                "road",
+                GL20.GL_TRIANGLES,
+                attr,
+                Material(
+                    TextureAttribute.createDiffuse(roadSet.diffuse),
+                    TextureAttribute.createSpecular(roadSet.roughness),
+                    ColorAttribute.createDiffuse(Color.WHITE),
+                    ColorAttribute.createSpecular(Color(0.28f, 0.28f, 0.3f, 1f)),
+                    FloatAttribute.createShininess(18f),
+                ),
             )
-        )
         BoxShapeBuilder.build(road, 7200f, 1f, 42f, 600f, 0f, 210f)
         BoxShapeBuilder.build(road, 5600f, 1f, 38f, 220f, 0f, -1160f)
         BoxShapeBuilder.build(road, 40f, 1f, 8800f, -1160f, 0f, -280f)
         BoxShapeBuilder.build(road, 44f, 1f, 7600f, 840f, 0f, -480f)
         BoxShapeBuilder.build(road, 38f, 1f, 6000f, 1780f, 0f, -580f)
-        val glowBand = mb.part(
-            "glow",
-            GL20.GL_TRIANGLES,
-            attr,
-            Material(
-                ColorAttribute.createDiffuse(Color(0.15f, 0.22f, 0.35f, 1f)),
-                BlendingAttribute(0.18f)
+        val glowBand =
+            mb.part(
+                "glow",
+                GL20.GL_TRIANGLES,
+                attr,
+                Material(
+                    ColorAttribute.createDiffuse(Color(0.15f, 0.22f, 0.35f, 1f)),
+                    BlendingAttribute(0.18f),
+                ),
             )
-        )
         BoxShapeBuilder.build(glowBand, 7200f, 0.5f, 1100f, 760f, 6f, -420f)
         BoxShapeBuilder.build(glowBand, 1800f, 0.5f, 8600f, -1450f, 4f, -320f)
         models.put("ground", mb.end())
 
-        fun createBuildingModel(name: String, width: Float, height: Float, depth: Float, texture: SurfaceTextureSet, tint: Color) {
+        fun createBuildingModel(
+            name: String,
+            width: Float,
+            height: Float,
+            depth: Float,
+            texture: SurfaceTextureSet,
+            tint: Color,
+        ) {
             models.put(
                 name,
                 mb.createBox(
@@ -1228,10 +1483,10 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
                         TextureAttribute.createSpecular(texture.roughness),
                         ColorAttribute.createDiffuse(tint),
                         ColorAttribute.createSpecular(Color(0.12f, 0.14f, 0.18f, 1f)),
-                        FloatAttribute.createShininess(8f)
+                        FloatAttribute.createShininess(8f),
                     ),
-                    attr
-                )
+                    attr,
+                ),
             )
         }
 
@@ -1243,13 +1498,14 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
         createBuildingModel("podium", 180f, 78f, 120f, facadeB, Color(0.9f, 0.94f, 1f, 1f))
         createBuildingModel("hotel", 132f, 118f, 72f, facadeC, Color(1f, 0.96f, 0.9f, 1f))
 
-        val launcherMaterial = Material(
-            TextureAttribute.createDiffuse(launcherSet.diffuse),
-            TextureAttribute.createSpecular(launcherSet.roughness),
-            ColorAttribute.createDiffuse(Color.WHITE),
-            ColorAttribute.createSpecular(Color(0.5f, 0.56f, 0.52f, 1f)),
-            FloatAttribute.createShininess(40f)
-        )
+        val launcherMaterial =
+            Material(
+                TextureAttribute.createDiffuse(launcherSet.diffuse),
+                TextureAttribute.createSpecular(launcherSet.roughness),
+                ColorAttribute.createDiffuse(Color.WHITE),
+                ColorAttribute.createSpecular(Color(0.5f, 0.56f, 0.52f, 1f)),
+                FloatAttribute.createShininess(40f),
+            )
         mb.begin()
         mb.part("chassis", GL20.GL_TRIANGLES, attr, launcherMaterial).apply {
             BoxShapeBuilder.build(this, 34f, 5f, 54f)
@@ -1265,13 +1521,14 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
         models.put("launcher", mb.end())
 
         mb.begin()
-        val radarMaterial = Material(
-            TextureAttribute.createDiffuse(radarSet.diffuse),
-            TextureAttribute.createSpecular(radarSet.roughness),
-            ColorAttribute.createDiffuse(Color.WHITE),
-            ColorAttribute.createSpecular(Color(0.55f, 0.64f, 0.6f, 1f)),
-            FloatAttribute.createShininess(44f)
-        )
+        val radarMaterial =
+            Material(
+                TextureAttribute.createDiffuse(radarSet.diffuse),
+                TextureAttribute.createSpecular(radarSet.roughness),
+                ColorAttribute.createDiffuse(Color.WHITE),
+                ColorAttribute.createSpecular(Color(0.55f, 0.64f, 0.6f, 1f)),
+                FloatAttribute.createShininess(44f),
+            )
         mb.part("base", GL20.GL_TRIANGLES, attr, radarMaterial).apply {
             BoxShapeBuilder.build(this, 42f, 8f, 42f)
         }
@@ -1281,14 +1538,15 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
         models.put("radar", mb.end())
 
         mb.begin()
-        val threatMaterial = Material(
-            TextureAttribute.createDiffuse(threatSet.diffuse),
-            TextureAttribute.createSpecular(threatSet.roughness),
-            ColorAttribute.createDiffuse(Color(1f, 0.78f, 0.42f, 1f)),
-            ColorAttribute.createSpecular(Color(1f, 0.88f, 0.66f, 1f)),
-            ColorAttribute.createEmissive(Color(0.18f, 0.08f, 0.03f, 1f)),
-            FloatAttribute.createShininess(78f)
-        )
+        val threatMaterial =
+            Material(
+                TextureAttribute.createDiffuse(threatSet.diffuse),
+                TextureAttribute.createSpecular(threatSet.roughness),
+                ColorAttribute.createDiffuse(Color(1f, 0.78f, 0.42f, 1f)),
+                ColorAttribute.createSpecular(Color(1f, 0.88f, 0.66f, 1f)),
+                ColorAttribute.createEmissive(Color(0.18f, 0.08f, 0.03f, 1f)),
+                FloatAttribute.createShininess(78f),
+            )
         mb.part("body", GL20.GL_TRIANGLES, attr, threatMaterial).apply {
             CylinderShapeBuilder.build(this, 8f, 34f, 8f, 20)
         }
@@ -1309,14 +1567,15 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
         models.put("threat", mb.end())
 
         mb.begin()
-        val interceptorMaterial = Material(
-            TextureAttribute.createDiffuse(interceptorSet.diffuse),
-            TextureAttribute.createSpecular(interceptorSet.roughness),
-            ColorAttribute.createDiffuse(Color(0.82f, 0.96f, 1f, 1f)),
-            ColorAttribute.createSpecular(Color(0.94f, 0.98f, 1f, 1f)),
-            ColorAttribute.createEmissive(Color(0.05f, 0.12f, 0.18f, 1f)),
-            FloatAttribute.createShininess(92f)
-        )
+        val interceptorMaterial =
+            Material(
+                TextureAttribute.createDiffuse(interceptorSet.diffuse),
+                TextureAttribute.createSpecular(interceptorSet.roughness),
+                ColorAttribute.createDiffuse(Color(0.82f, 0.96f, 1f, 1f)),
+                ColorAttribute.createSpecular(Color(0.94f, 0.98f, 1f, 1f)),
+                ColorAttribute.createEmissive(Color(0.05f, 0.12f, 0.18f, 1f)),
+                FloatAttribute.createShininess(92f),
+            )
         mb.part("body", GL20.GL_TRIANGLES, attr, interceptorMaterial).apply {
             CylinderShapeBuilder.build(this, 5.4f, 32f, 5.4f, 20)
         }
@@ -1350,10 +1609,10 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
                     ColorAttribute.createDiffuse(Color.WHITE),
                     ColorAttribute.createSpecular(Color.WHITE),
                     ColorAttribute.createEmissive(Color(1f, 0.65f, 0.2f, 1f)),
-                    BlendingAttribute(0.92f)
+                    BlendingAttribute(0.92f),
                 ),
-                attr
-            )
+                attr,
+            ),
         )
         models.put(
             "trail",
@@ -1368,10 +1627,10 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
                     TextureAttribute.createSpecular(trailSet.roughness),
                     ColorAttribute.createDiffuse(Color.WHITE),
                     ColorAttribute.createEmissive(Color(0.32f, 0.38f, 0.44f, 1f)),
-                    BlendingAttribute(0.55f)
+                    BlendingAttribute(0.55f),
                 ),
-                attr
-            )
+                attr,
+            ),
         )
         models.put(
             "debris",
@@ -1384,10 +1643,10 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
                     TextureAttribute.createSpecular(debrisSet.roughness),
                     ColorAttribute.createDiffuse(Color.WHITE),
                     ColorAttribute.createSpecular(Color(0.18f, 0.18f, 0.2f, 1f)),
-                    FloatAttribute.createShininess(10f)
+                    FloatAttribute.createShininess(10f),
                 ),
-                attr
-            )
+                attr,
+            ),
         )
         models.put(
             "moon",
@@ -1401,10 +1660,10 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
                     TextureAttribute.createDiffuse(moonSet.diffuse),
                     TextureAttribute.createSpecular(moonSet.roughness),
                     ColorAttribute.createDiffuse(Color.WHITE),
-                    ColorAttribute.createEmissive(Color(0.18f, 0.2f, 0.24f, 1f))
+                    ColorAttribute.createEmissive(Color(0.18f, 0.2f, 0.24f, 1f)),
                 ),
-                attr
-            )
+                attr,
+            ),
         )
 
         val engelHouseFile = Gdx.files.internal("models/engel_house.obj")
@@ -1421,13 +1680,16 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
 
     private fun createWorldInstances() {
         instances.add(ModelInstance(models.get("ground")).apply { transform.setToTranslation(0f, -2f, 0f) })
-        instances.add(ModelInstance(models.get("moon")).apply { transform.setToTranslation(1400f, 1450f, -4200f) })
+        if (qualityProfile.showMoon) {
+            instances.add(ModelInstance(models.get("moon")).apply { transform.setToTranslation(1400f, 1450f, -4200f) })
+        }
 
         val launcherPositions = BattleWorldLayout.launcherPositions()
         launcherPositions.forEach { position ->
-            val launcher = ModelInstance(models.get("launcher")).apply {
-                transform.setToTranslation(position)
-            }
+            val launcher =
+                ModelInstance(models.get("launcher")).apply {
+                    transform.setToTranslation(position)
+                }
             launchers.add(launcher)
             instances.add(launcher)
         }
@@ -1437,30 +1699,38 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
 
         val buildingDefinitions = BattleWorldLayout.buildingDefinitions()
         buildingDefinitions.forEach { definition ->
-            val entity = BuildingEntity(
-                id = definition.id,
-                instance = ModelInstance(models.get(definition.modelName)),
-                modelName = definition.modelName,
-                position = definition.position.cpy(),
-                yaw = definition.yaw,
-                baseHeight = definition.metrics.baseHeight,
-                width = definition.metrics.width,
-                depth = definition.metrics.depth,
-                integrity = 100f
-            )
+            val entity =
+                BuildingEntity(
+                    id = definition.id,
+                    instance = ModelInstance(models.get(definition.modelName)),
+                    modelName = definition.modelName,
+                    position = definition.position.cpy(),
+                    yaw = definition.yaw,
+                    baseHeight = definition.metrics.baseHeight,
+                    width = definition.metrics.width,
+                    depth = definition.metrics.depth,
+                    integrity = 100f,
+                )
             syncBuildingTransform(entity)
             cityBlocks.add(entity)
             cityBlocksById.put(entity.id, entity)
         }
 
-        simulation = BattleSimulation(
-            buildingDefinitions = buildingDefinitions,
-            launcherPositions = launcherPositions,
-            settings = settings,
-            random = game.launchConfig.benchmarkSeed?.let(::SeededRandomSource) ?: DefaultRandomSource
-        )
+        simulation =
+            BattleSimulation(
+                buildingDefinitions = buildingDefinitions,
+                launcherPositions = launcherPositions,
+                settings = settings,
+                random = game.launchConfig.benchmarkSeed?.let(::SeededRandomSource) ?: DefaultRandomSource,
+            )
 
-        fun addImportedLandmark(key: String, x: Float, z: Float, yaw: Float, targetHeight: Float) {
+        fun addImportedLandmark(
+            key: String,
+            x: Float,
+            z: Float,
+            yaw: Float,
+            targetHeight: Float,
+        ) {
             val model = models.get(key) ?: return
             val bounds = BoundingBox()
             val center = Vector3()
@@ -1477,7 +1747,7 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
                     transform.rotate(Vector3.Y, yaw)
                     transform.scale(scale, scale, scale)
                     transform.translate(-center.x, -bounds.min.y, -center.z)
-                }
+                },
             )
         }
 
@@ -1501,15 +1771,16 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
         step.spawnedThreatIds.forEach { id ->
             simulation.findThreat(id)?.let { threat ->
                 val instance = ModelInstance(models.get("threat"))
-                val renderThreat = ThreatEntity(
-                    instance = instance,
-                    position = threat.position.cpy(),
-                    targetPosition = threat.targetPosition.cpy(),
-                    velocity = threat.velocity.cpy(),
-                    id = threat.id,
-                    isTracked = threat.isTracked,
-                    trailCooldown = threat.trailCooldown
-                )
+                val renderThreat =
+                    ThreatEntity(
+                        instance = instance,
+                        position = threat.position.cpy(),
+                        targetPosition = threat.targetPosition.cpy(),
+                        velocity = threat.velocity.cpy(),
+                        id = threat.id,
+                        isTracked = threat.isTracked,
+                        trailCooldown = threat.trailCooldown,
+                    )
                 syncProjectileTransform(renderThreat.instance, renderThreat.position, renderThreat.velocity, THREAT_SCALE)
                 threats.add(renderThreat)
                 threatsById.put(id, renderThreat)
@@ -1519,14 +1790,15 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
         step.launchedInterceptors.forEach { launch ->
             val interceptorState = simulation.findInterceptor(launch.interceptorId) ?: return@forEach
             val instance = ModelInstance(models.get("interceptor"))
-            val renderInterceptor = InterceptorEntity(
-                id = interceptorState.id,
-                instance = instance,
-                position = interceptorState.position.cpy(),
-                velocity = interceptorState.velocity.cpy(),
-                target = interceptorState.targetId?.let { threatsById[it] },
-                trailCooldown = interceptorState.trailCooldown
-            )
+            val renderInterceptor =
+                InterceptorEntity(
+                    id = interceptorState.id,
+                    instance = instance,
+                    position = interceptorState.position.cpy(),
+                    velocity = interceptorState.velocity.cpy(),
+                    target = interceptorState.targetId?.let { threatsById[it] },
+                    trailCooldown = interceptorState.trailCooldown,
+                )
             syncProjectileTransform(renderInterceptor.instance, renderInterceptor.position, renderInterceptor.velocity, INTERCEPTOR_SCALE)
             interceptors.add(renderInterceptor)
             interceptorsById.put(renderInterceptor.id, renderInterceptor)
@@ -1542,7 +1814,9 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
         }
 
         step.trailEvents.forEach { trail ->
-            spawnTrail(trail.position, trail.hostile)
+            if (canSpawnTrail(trail.hostile)) {
+                spawnTrail(trail.position, trail.hostile)
+            }
         }
 
         step.blastEvents.forEach { blast ->
@@ -1613,7 +1887,11 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
         }
     }
 
-    private fun applyBuildingDamageVisual(building: BuildingEntity, newIntegrity: Float, epicenter: Vector3) {
+    private fun applyBuildingDamageVisual(
+        building: BuildingEntity,
+        newIntegrity: Float,
+        epicenter: Vector3,
+    ) {
         if (building.integrity <= 0f && newIntegrity <= 0f) return
         val previousIntegrity = building.integrity
         val damage = (previousIntegrity - newIntegrity).coerceAtLeast(0f)
@@ -1621,11 +1899,12 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
 
         building.integrity = newIntegrity
         building.collapseVelocity += damage * 0.0025f
-        building.leanTarget = MathUtils.clamp(
-            building.leanTarget + (building.position.x - epicenter.x).sign() * damage * 0.05f,
-            -16f,
-            16f
-        )
+        building.leanTarget =
+            MathUtils.clamp(
+                building.leanTarget + (building.position.x - epicenter.x).sign() * damage * 0.05f,
+                -16f,
+                16f,
+            )
 
         val material = building.instance.materials.first()
         val tint = 0.28f + building.integrity / 140f
@@ -1645,80 +1924,129 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
         val uiScale = Gdx.graphics.height / 1080f
         val root = Table().apply { setFillParent(true) }
 
-        val top = Table().apply {
-            background = this@BattleScreen.skin.getDrawable("hud_soft")
-            pad(8f * uiScale)
-        }
+        val top =
+            Table().apply {
+                background = this@BattleScreen.skin.getDrawable("hud_soft")
+                pad(8f * uiScale)
+            }
         val missionBlock = Table().apply { defaults().left() }
         missionBlock.add(Label("BATTLESPACE", skin, "title")).row()
         missionBlock.add(statusLabel).padTop(4f * uiScale).row()
         top.add(missionBlock).expandX().left()
         top.add(creditsLabel).right().padLeft(18f * uiScale)
-        root.add(top).expandX().fillX().top().pad(12f * uiScale).row()
+        root
+            .add(top)
+            .expandX()
+            .fillX()
+            .top()
+            .pad(12f * uiScale)
+            .row()
 
         root.add().expand().row()
 
-        val dock = Table().apply {
-            background = this@BattleScreen.skin.getDrawable("hud_soft")
-            pad(10f * uiScale)
-            defaults().pad(6f * uiScale)
-        }
+        val dock =
+            Table().apply {
+                background = this@BattleScreen.skin.getDrawable("hud_soft")
+                pad(10f * uiScale)
+                defaults().pad(6f * uiScale)
+            }
 
-        val rangeCard = Table().apply {
-            background = this@BattleScreen.skin.getDrawable("hud_soft")
-            pad(12f * uiScale)
-            defaults().left()
-        }
+        val rangeCard =
+            Table().apply {
+                background = this@BattleScreen.skin.getDrawable("hud_soft")
+                pad(12f * uiScale)
+                defaults().left()
+            }
         rangeValueLabel = Label("", skin, "display")
         rangeCard.add(Label("AUTO ENGAGEMENT RANGE", skin, "status")).row()
         rangeCard.add(rangeValueLabel).padTop(8f * uiScale).row()
-        rangeCard.add(Slider(800f, 2800f, 25f, false, skin).apply {
-            value = settings.engagementRange
-            addListener(object : ChangeListener() {
-                override fun changed(event: ChangeEvent?, actor: Actor?) {
-                    settings.engagementRange = value
-                    updateHud()
-                }
-            })
-        }).width(320f * uiScale).fillX().height(48f * uiScale).padTop(10f * uiScale)
+        rangeCard
+            .add(
+                Slider(800f, 2800f, 25f, false, skin).apply {
+                    value = settings.engagementRange
+                    addListener(
+                        object : ChangeListener() {
+                            override fun changed(
+                                event: ChangeEvent?,
+                                actor: Actor?,
+                            ) {
+                                settings.engagementRange = value
+                                updateHud()
+                            }
+                        },
+                    )
+                },
+            ).width(320f * uiScale)
+            .fillX()
+            .height(48f * uiScale)
+            .padTop(10f * uiScale)
 
-        val speedCard = Table().apply {
-            background = this@BattleScreen.skin.getDrawable("hud_soft")
-            pad(12f * uiScale)
-            defaults().left()
-        }
+        val speedCard =
+            Table().apply {
+                background = this@BattleScreen.skin.getDrawable("hud_soft")
+                pad(12f * uiScale)
+                defaults().left()
+            }
         speedValueLabel = Label("", skin, "display")
         speedCard.add(Label("INTERCEPTOR SPEED", skin, "status")).row()
         speedCard.add(speedValueLabel).padTop(8f * uiScale).row()
-        speedCard.add(Slider(320f, 700f, 10f, false, skin).apply {
-            value = settings.interceptorSpeed
-            addListener(object : ChangeListener() {
-                override fun changed(event: ChangeEvent?, actor: Actor?) {
-                    settings.interceptorSpeed = value
-                    updateHud()
-                }
-            })
-        }).width(320f * uiScale).fillX().height(48f * uiScale).padTop(10f * uiScale)
+        speedCard
+            .add(
+                Slider(320f, 700f, 10f, false, skin).apply {
+                    value = settings.interceptorSpeed
+                    addListener(
+                        object : ChangeListener() {
+                            override fun changed(
+                                event: ChangeEvent?,
+                                actor: Actor?,
+                            ) {
+                                settings.interceptorSpeed = value
+                                updateHud()
+                            }
+                        },
+                    )
+                },
+            ).width(320f * uiScale)
+            .fillX()
+            .height(48f * uiScale)
+            .padTop(10f * uiScale)
 
-        val actionCard = Table().apply {
-            background = this@BattleScreen.skin.getDrawable("hud_soft")
-            pad(12f * uiScale)
-            defaults().left()
-        }
+        val actionCard =
+            Table().apply {
+                background = this@BattleScreen.skin.getDrawable("hud_soft")
+                pad(12f * uiScale)
+                defaults().left()
+            }
         actionCard.add(Label("WAVE COMMAND", skin, "status")).row()
-        waveButton = TextButton("START NEXT WAVE", skin).apply {
-            addListener(object : ChangeListener() {
-                override fun changed(event: ChangeEvent?, actor: Actor?) {
-                    if (!waveInProgress && !isGameOver) startNewWave()
-                }
-            })
-        }
-        actionCard.add(waveButton).width(320f * uiScale).height(96f * uiScale).fillX().padTop(12f * uiScale)
+        waveButton =
+            TextButton("START NEXT WAVE", skin).apply {
+                addListener(
+                    object : ChangeListener() {
+                        override fun changed(
+                            event: ChangeEvent?,
+                            actor: Actor?,
+                        ) {
+                            if (!waveInProgress && !isGameOver) startNewWave()
+                        }
+                    },
+                )
+            }
+        actionCard
+            .add(waveButton)
+            .width(320f * uiScale)
+            .height(96f * uiScale)
+            .fillX()
+            .padTop(12f * uiScale)
 
         dock.add(rangeCard).width(342f * uiScale).fillY()
         dock.add(speedCard).width(342f * uiScale).fillY()
         dock.add(actionCard).width(342f * uiScale).fillY()
-        root.add(dock).expandX().fillX().bottom().pad(12f * uiScale)
+        root
+            .add(dock)
+            .expandX()
+            .fillX()
+            .bottom()
+            .pad(12f * uiScale)
 
         stage.addActor(root)
         updateHud()
@@ -1726,7 +2054,10 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
     }
 
     private fun loadAudio() {
-        fun loadSound(key: String, path: String) {
+        fun loadSound(
+            key: String,
+            path: String,
+        ) {
             val file = Gdx.files.internal(path)
             if (file.exists()) {
                 sounds.put(key, Gdx.audio.newSound(file))
@@ -1737,7 +2068,10 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
         loadSound("impact", "sfx/impact.mp3")
     }
 
-    private fun playSfx(name: String, volume: Float) {
+    private fun playSfx(
+        name: String,
+        volume: Float,
+    ) {
         sounds[name]?.play(volume)
     }
 
@@ -1782,7 +2116,7 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
                 0f,
                 Gdx.graphics.height * 0.22f,
                 Gdx.graphics.width.toFloat(),
-                Gdx.graphics.height * 0.11f
+                Gdx.graphics.height * 0.11f,
             )
             batch.setColor(0.78f, 0.62f, 0.4f, 0.16f)
             batch.draw(
@@ -1790,7 +2124,7 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
                 0f,
                 Gdx.graphics.height * 0.205f,
                 Gdx.graphics.width.toFloat(),
-                Gdx.graphics.height * 0.028f
+                Gdx.graphics.height * 0.028f,
             )
             batch.setColor(0.96f, 0.66f, 0.24f, 0.14f)
             batch.draw(
@@ -1798,7 +2132,7 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
                 0f,
                 Gdx.graphics.height * 0.238f,
                 Gdx.graphics.width.toFloat(),
-                Gdx.graphics.height * 0.012f
+                Gdx.graphics.height * 0.012f,
             )
             battleReflectionTexture?.let { reflection ->
                 val drift = kotlin.math.sin(battleLiveTime * 0.36f) * Gdx.graphics.width * 0.015f
@@ -1809,7 +2143,7 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
                     -drift,
                     Gdx.graphics.height * 0.11f,
                     Gdx.graphics.width * 1.05f,
-                    Gdx.graphics.height * 0.14f
+                    Gdx.graphics.height * 0.14f,
                 )
                 batch.setColor(1f, 0.78f, 0.38f, impactFlash * 0.18f)
                 batch.draw(
@@ -1817,7 +2151,7 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
                     0f,
                     Gdx.graphics.height * 0.145f,
                     Gdx.graphics.width.toFloat(),
-                    Gdx.graphics.height * 0.028f
+                    Gdx.graphics.height * 0.028f,
                 )
             }
             battleHorizonTexture?.let { horizon ->
@@ -1827,7 +2161,7 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
                     0f,
                     Gdx.graphics.height * 0.19f,
                     Gdx.graphics.width.toFloat(),
-                    Gdx.graphics.height * 0.24f
+                    Gdx.graphics.height * 0.24f,
                 )
                 battleGlowTexture?.let { glow ->
                     batch.setColor(1f, 1f, 1f, 0.92f)
@@ -1836,7 +2170,7 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
                         0f,
                         Gdx.graphics.height * 0.12f,
                         Gdx.graphics.width.toFloat(),
-                        Gdx.graphics.height * 0.2f
+                        Gdx.graphics.height * 0.2f,
                     )
                 }
                 batch.setColor(0.04f, 0.06f, 0.1f, 0.12f)
@@ -1845,7 +2179,7 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
                     0f,
                     0f,
                     Gdx.graphics.width.toFloat(),
-                    Gdx.graphics.height * 0.12f
+                    Gdx.graphics.height * 0.12f,
                 )
             }
             batch.color = Color.WHITE
@@ -1879,7 +2213,7 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
                 0f,
                 Gdx.graphics.height * 0.2f,
                 Gdx.graphics.width.toFloat(),
-                Gdx.graphics.height * 0.16f
+                Gdx.graphics.height * 0.16f,
             )
             batch.setColor(1f, 1f, 1f, 0.54f)
             batch.draw(
@@ -1887,7 +2221,7 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
                 -Gdx.graphics.width * 0.08f,
                 Gdx.graphics.height * 0.1f,
                 Gdx.graphics.width * 1.16f,
-                Gdx.graphics.height * 0.11f
+                Gdx.graphics.height * 0.11f,
             )
         }
         batch.color = Color.WHITE
@@ -1901,7 +2235,10 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
         val startedAt = System.currentTimeMillis()
         task.action()
         lastInitializationDurationMs = System.currentTimeMillis() - startedAt
-        Gdx.app.log("BattleInit", "${initializationStep + 1}/${initializationTasks.size} ${task.message} took ${lastInitializationDurationMs}ms")
+        Gdx.app.log(
+            "BattleInit",
+            "${initializationStep + 1}/${initializationTasks.size} ${task.message} took ${lastInitializationDurationMs}ms",
+        )
         initializationStep++
     }
 
@@ -1934,7 +2271,7 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
 
     private fun buildDiagnosticsLine(): String {
         val currentStep = (initializationStep + 1).coerceAtMost(initializationTasks.size)
-        return "STEP $currentStep/${initializationTasks.size} // LAST ${lastInitializationDurationMs}ms"
+        return "STEP $currentStep/${initializationTasks.size} // LAST ${lastInitializationDurationMs}ms // ${qualityProfile.label}"
     }
 
     private fun renderGameOver() {
@@ -1991,7 +2328,12 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
             if (tempProject.z in 0f..1f) {
                 batch.color = Color(1f, 0.35f, 0.35f, 0.9f)
                 batch.draw(whiteRegion, tempProject.x - 20f * uiScale, tempProject.y + 24f * uiScale, 34f * uiScale, 2f * uiScale)
-                font.draw(batch, "${threat.id}  ALT ${(threat.position.y * 3.5f).toInt()} m", tempProject.x + 20f * uiScale, tempProject.y + 34f * uiScale)
+                font.draw(
+                    batch,
+                    "${threat.id}  ALT ${(threat.position.y * 3.5f).toInt()} m",
+                    tempProject.x + 20f * uiScale,
+                    tempProject.y + 34f * uiScale,
+                )
             }
         }
 
@@ -2002,7 +2344,12 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
     private fun battleHealthSummary(): String {
         if (battleLiveTime <= 0f) return "LIVE 0s // 0 FPS // T0 I0"
         val averageFps = (renderedBattleFrames / battleLiveTime).toInt()
-        return "LIVE ${battleLiveTime.toInt()}s // ${averageFps} FPS // T${threats.size} I${interceptors.size}"
+        return buildString {
+            append("LIVE ${battleLiveTime.toInt()}s // $averageFps FPS")
+            append(" // Q ${qualityProfile.label}")
+            append(" // FX${effects.size}")
+            append(" // T${threats.size} I${interceptors.size}")
+        }
     }
 
     private fun updateLogic(dt: Float) {
@@ -2032,7 +2379,7 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
             camera.position.set(cameraBase).add(
                 MathUtils.random(-amount, amount),
                 MathUtils.random(-amount, amount),
-                MathUtils.random(-amount, amount)
+                MathUtils.random(-amount, amount),
             )
         } else {
             camera.position.set(cameraBase)
@@ -2047,36 +2394,37 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
 
         val wavePressure = (threats.size + threatsRemainingInWave * 0.3f).coerceAtLeast(0f)
         val cityPulse = 0.86f + kotlin.math.sin(battleLiveTime * 0.45f) * 0.08f + min(0.3f, wavePressure * 0.018f)
-        cityGlowLight.intensity = 3200f * cityPulse
+        cityGlowLight.intensity = 3200f * cityPulse * qualityProfile.lightIntensityScale
         cityGlowLight.position.set(1180f + kotlin.math.sin(battleLiveTime * 0.12f) * 90f, 120f, -1880f)
 
-        launcherLeftLight.intensity = 320f + launcherLeftPulse * 780f
-        launcherRightLight.intensity = 320f + launcherRightPulse * 780f
+        launcherLeftLight.intensity = (320f + launcherLeftPulse * 780f) * qualityProfile.lightIntensityScale
+        launcherRightLight.intensity = (320f + launcherRightPulse * 780f) * qualityProfile.lightIntensityScale
         launcherLeftLight.color.set(
             MathUtils.lerp(0.24f, 0.95f, launcherLeftPulse),
             MathUtils.lerp(0.82f, 0.76f, launcherLeftPulse),
             MathUtils.lerp(1f, 0.54f, launcherLeftPulse),
-            1f
+            1f,
         )
         launcherRightLight.color.set(
             MathUtils.lerp(0.24f, 0.95f, launcherRightPulse),
             MathUtils.lerp(0.82f, 0.76f, launcherRightPulse),
             MathUtils.lerp(1f, 0.54f, launcherRightPulse),
-            1f
+            1f,
         )
     }
 
     private fun spawnThreat() {
         val launch = ThreatFactory.createThreatLaunch(wave, cityBlocks.random().position)
         val instance = ModelInstance(models.get("threat"))
-        val threat = ThreatEntity(
-            instance = instance,
-            position = launch.start,
-            targetPosition = launch.target,
-            velocity = launch.velocity,
-            id = "T-${MathUtils.random(1000, 9999)}",
-            trailCooldown = MathUtils.random(0f, THREAT_TRAIL_INTERVAL)
-        )
+        val threat =
+            ThreatEntity(
+                instance = instance,
+                position = launch.start,
+                targetPosition = launch.target,
+                velocity = launch.velocity,
+                id = "T-${MathUtils.random(1000, 9999)}",
+                trailCooldown = MathUtils.random(0f, THREAT_TRAIL_INTERVAL),
+            )
         syncProjectileTransform(instance, launch.start, launch.velocity, THREAT_SCALE)
         threats.add(threat)
     }
@@ -2099,15 +2447,17 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
                 threat.isTracked = true
             }
 
-            val reachedTarget = threat.position.dst2(threat.targetPosition) <= PhysicsModel.THREAT_IMPACT_RADIUS * PhysicsModel.THREAT_IMPACT_RADIUS
+            val reachedTarget =
+                threat.position.dst2(threat.targetPosition) <= PhysicsModel.THREAT_IMPACT_RADIUS * PhysicsModel.THREAT_IMPACT_RADIUS
             val hitGround = threat.position.y <= 0f
             val leftBattlespace = threat.position.z >= PhysicsModel.THREAT_FAILSAFE_Z
             if ((reachedTarget && threat.position.y <= 90f) || hitGround || leftBattlespace) {
-                val impactPoint = when {
-                    reachedTarget -> threat.targetPosition
-                    hitGround -> Vector3(threat.position.x, 0f, threat.position.z)
-                    else -> Vector3(threat.position.x, threat.position.y.coerceAtLeast(0f), threat.position.z)
-                }
+                val impactPoint =
+                    when {
+                        reachedTarget -> threat.targetPosition
+                        hitGround -> Vector3(threat.position.x, 0f, threat.position.z)
+                        else -> Vector3(threat.position.x, threat.position.y.coerceAtLeast(0f), threat.position.z)
+                    }
                 impactAt(impactPoint, 85f, true)
                 iterator.remove()
             }
@@ -2124,7 +2474,13 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
                 continue
             }
 
-            val aimPoint = InterceptionMath.predictInterceptPoint(interceptor.position, target.position, target.velocity, settings.interceptorSpeed)
+            val aimPoint =
+                InterceptionMath.predictInterceptPoint(
+                    interceptor.position,
+                    target.position,
+                    target.velocity,
+                    settings.interceptorSpeed,
+                )
             tempA.set(aimPoint).sub(interceptor.position)
             if (!tempA.isZero(0.001f)) {
                 tempA.nor().scl(settings.interceptorSpeed)
@@ -2146,7 +2502,7 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
                     targetPos = target.position,
                     targetVel = target.velocity,
                     dt = dt,
-                    fuseRadius = settings.blastRadius
+                    fuseRadius = settings.blastRadius,
                 )
             ) {
                 score += 150
@@ -2193,20 +2549,26 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
         return bestThreat
     }
 
-    private fun isHigherPriorityThreat(candidate: ThreatEntity, incumbent: ThreatEntity): Boolean {
-        return FireControl.hasPriorityOver(candidate.position, incumbent.position)
-    }
+    private fun isHigherPriorityThreat(
+        candidate: ThreatEntity,
+        incumbent: ThreatEntity,
+    ): Boolean = FireControl.hasPriorityOver(candidate.position, incumbent.position)
 
     private fun launchInterceptor(target: ThreatEntity) {
-        val launcher = launchers.minByOrNull { launcher ->
-            launcher.transform.getTranslation(tempA)
-            tempA.dst2(target.position)
-        } ?: return
+        val launcher =
+            launchers.minByOrNull { launcher ->
+                launcher.transform.getTranslation(tempA)
+                tempA.dst2(target.position)
+            } ?: return
 
         launcher.transform.getTranslation(tempA)
         tempA.y += 18f
         val aimPoint = InterceptionMath.predictInterceptPoint(tempA, target.position, target.velocity, settings.interceptorSpeed)
-        tempB.set(aimPoint).sub(tempA).nor().scl(settings.interceptorSpeed)
+        tempB
+            .set(aimPoint)
+            .sub(tempA)
+            .nor()
+            .scl(settings.interceptorSpeed)
         launcher.setRotationToward(tempB)
 
         val instance = ModelInstance(models.get("interceptor"))
@@ -2218,8 +2580,8 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
                 position = tempA.cpy(),
                 velocity = tempB.cpy(),
                 target = target,
-                trailCooldown = 0f
-            )
+                trailCooldown = 0f,
+            ),
         )
         spawnBlast(tempA, 14f)
         if (launchers.size > 1) {
@@ -2231,21 +2593,26 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
         playSfx("launch", 0.35f)
     }
 
-    private fun impactAt(position: Vector3, radius: Float, hostile: Boolean) {
+    private fun impactAt(
+        position: Vector3,
+        radius: Float,
+        hostile: Boolean,
+    ) {
         spawnBlast(position, radius * 1.2f)
         spawnDebris(position, if (hostile) 24 else 12, Color(0.4f, 0.38f, 0.36f, 1f))
         triggerShake(if (hostile) 26f else 12f, 0.55f)
         playSfx("impact", if (hostile) 0.8f else 0.45f)
 
         cityBlocks.forEach { building ->
-            val damage = DamageModel.computeBuildingDamage(
-                buildingPosition = building.position,
-                buildingWidth = building.width,
-                buildingDepth = building.depth,
-                impactPosition = position,
-                blastRadius = radius,
-                hostile = hostile
-            )
+            val damage =
+                DamageModel.computeBuildingDamage(
+                    buildingPosition = building.position,
+                    buildingWidth = building.width,
+                    buildingDepth = building.depth,
+                    impactPosition = position,
+                    blastRadius = radius,
+                    hostile = hostile,
+                )
             if (damage > 0f) {
                 applyBuildingDamage(building, damage.coerceAtLeast(8f), position)
             }
@@ -2256,15 +2623,20 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
         }
     }
 
-    private fun applyBuildingDamage(building: BuildingEntity, damage: Float, epicenter: Vector3) {
+    private fun applyBuildingDamage(
+        building: BuildingEntity,
+        damage: Float,
+        epicenter: Vector3,
+    ) {
         if (building.integrity <= 0f) return
         building.integrity = max(0f, building.integrity - damage)
         building.collapseVelocity += damage * 0.0025f
-        building.leanTarget = MathUtils.clamp(
-            building.leanTarget + (building.position.x - epicenter.x).sign() * damage * 0.05f,
-            -16f,
-            16f
-        )
+        building.leanTarget =
+            MathUtils.clamp(
+                building.leanTarget + (building.position.x - epicenter.x).sign() * damage * 0.05f,
+                -16f,
+                16f,
+            )
 
         val material = building.instance.materials.first()
         val tint = 0.28f + building.integrity / 140f
@@ -2293,7 +2665,12 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
         }
     }
 
-    private fun spawnBlast(position: Vector3, size: Float) {
+    private fun spawnBlast(
+        position: Vector3,
+        size: Float,
+    ) {
+        val sparkCount = adjustedEffectCount(qualityProfile.baseSparkCount, minimum = 2)
+        val smokeCount = adjustedEffectCount(qualityProfile.baseSmokeCount, minimum = 1)
         val core = ModelInstance(models.get("blast"))
         core.transform.setToScaling(0.1f, 0.1f, 0.1f).trn(position)
         core.materials.first().set(ColorAttribute.createDiffuse(Color(1f, 0.96f, 0.86f, 1f)))
@@ -2305,8 +2682,8 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
                 life = 0.7f,
                 initialLife = 0.7f,
                 type = EffectType.BLAST,
-                maxScale = size * 1.18f
-            )
+                maxScale = size * 1.18f,
+            ),
         )
 
         val shockwave = ModelInstance(models.get("blast"))
@@ -2320,11 +2697,11 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
                 life = 0.56f,
                 initialLife = 0.56f,
                 type = EffectType.SHOCKWAVE,
-                maxScale = size * 2.8f
-            )
+                maxScale = size * 2.8f,
+            ),
         )
 
-        repeat(6) {
+        repeat(sparkCount) {
             val sparkLife = MathUtils.random(0.26f, 0.46f)
             val spark = ModelInstance(models.get("trail"))
             spark.transform.setToScaling(0.3f, 0.3f, 0.3f).trn(position)
@@ -2338,16 +2715,17 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
                     initialLife = sparkLife,
                     type = EffectType.SPARK,
                     maxScale = size * MathUtils.random(0.22f, 0.42f),
-                    velocity = Vector3(
-                        MathUtils.random(-160f, 160f),
-                        MathUtils.random(40f, 180f),
-                        MathUtils.random(-160f, 160f)
-                    )
-                )
+                    velocity =
+                        Vector3(
+                            MathUtils.random(-160f, 160f),
+                            MathUtils.random(40f, 180f),
+                            MathUtils.random(-160f, 160f),
+                        ),
+                ),
             )
         }
 
-        repeat(4) {
+        repeat(smokeCount) {
             val smokeLife = MathUtils.random(1.1f, 1.65f)
             val smoke = ModelInstance(models.get("trail"))
             smoke.transform.setToScaling(0.4f, 0.4f, 0.4f).trn(position)
@@ -2361,41 +2739,47 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
                     initialLife = smokeLife,
                     type = EffectType.SMOKE,
                     maxScale = size * MathUtils.random(0.7f, 1.15f),
-                    velocity = Vector3(
-                        MathUtils.random(-28f, 28f),
-                        MathUtils.random(22f, 48f),
-                        MathUtils.random(-20f, 20f)
-                    )
-                )
+                    velocity =
+                        Vector3(
+                            MathUtils.random(-28f, 28f),
+                            MathUtils.random(22f, 48f),
+                            MathUtils.random(-20f, 20f),
+                        ),
+                ),
             )
         }
 
-        impactLight.set(Color(1f, 0.82f, 0.5f, 1f), position, size * 18f)
+        impactLight.set(Color(1f, 0.82f, 0.5f, 1f), position, size * 18f * qualityProfile.lightIntensityScale)
     }
 
-    private fun spawnTrail(position: Vector3, hostile: Boolean) {
+    private fun spawnTrail(
+        position: Vector3,
+        hostile: Boolean,
+    ) {
+        if (effects.size >= qualityProfile.maxTrailEffects + 80) return
         val instance = ModelInstance(models.get("trail"))
         val initialScale = if (hostile) 0.86f else 0.56f
         instance.transform.setToScaling(initialScale, initialScale, initialScale).trn(position)
-        val effect = VisualEffect(
-            instance,
-            position.cpy(),
-            if (hostile) 0.56f else 0.34f,
-            if (hostile) 0.56f else 0.34f,
-            EffectType.TRAIL,
-            if (hostile) 2.25f else 1.45f,
-            Vector3(0f, if (hostile) 8f else 4f, 0f)
-        )
+        val effect =
+            VisualEffect(
+                instance,
+                position.cpy(),
+                if (hostile) 0.56f else 0.34f,
+                if (hostile) 0.56f else 0.34f,
+                EffectType.TRAIL,
+                if (hostile) 2.25f else 1.45f,
+                Vector3(0f, if (hostile) 8f else 4f, 0f),
+            )
         val material = effect.instance.materials.first()
         material.set(
             ColorAttribute.createDiffuse(
-                if (hostile) Color(1f, 0.42f, 0.08f, 1f) else Color(0.46f, 0.9f, 1f, 1f)
-            )
+                if (hostile) Color(1f, 0.42f, 0.08f, 1f) else Color(0.46f, 0.9f, 1f, 1f),
+            ),
         )
         material.set(
             ColorAttribute.createEmissive(
-                if (hostile) Color(0.62f, 0.18f, 0.04f, 1f) else Color(0.12f, 0.38f, 0.48f, 1f)
-            )
+                if (hostile) Color(0.62f, 0.18f, 0.04f, 1f) else Color(0.12f, 0.38f, 0.48f, 1f),
+            ),
         )
         effects.add(effect)
     }
@@ -2413,7 +2797,9 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
             when (effect.type) {
                 EffectType.BLAST -> {
                     val scale = effect.maxScale * (1.25f - progress * progress)
-                    effect.instance.transform.setToScaling(scale, scale, scale).trn(effect.position)
+                    effect.instance.transform
+                        .setToScaling(scale, scale, scale)
+                        .trn(effect.position)
                     blend?.opacity = (progress * progress).coerceIn(0f, 1f)
                     val intensity = effect.maxScale * progress * 20f
                     if (intensity > strongest) {
@@ -2424,7 +2810,9 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
 
                 EffectType.SHOCKWAVE -> {
                     val scale = effect.maxScale * (1.18f - progress)
-                    effect.instance.transform.setToScaling(scale, scale * 0.08f, scale).trn(effect.position)
+                    effect.instance.transform
+                        .setToScaling(scale, scale * 0.08f, scale)
+                        .trn(effect.position)
                     blend?.opacity = (progress * 0.72f).coerceIn(0f, 1f)
                 }
 
@@ -2432,7 +2820,9 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
                     effect.position.mulAdd(effect.velocity, dt)
                     effect.velocity.y += dt * 10f
                     val scale = 0.6f + (1f - progress) * effect.maxScale
-                    effect.instance.transform.setToScaling(scale, scale, scale).trn(effect.position)
+                    effect.instance.transform
+                        .setToScaling(scale, scale, scale)
+                        .trn(effect.position)
                     blend?.opacity = (0.26f * kotlin.math.sqrt(progress)).coerceIn(0f, 0.3f)
                 }
 
@@ -2441,14 +2831,18 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
                     effect.velocity.scl((1f - dt * 1.8f).coerceAtLeast(0.2f))
                     effect.velocity.y -= dt * 140f
                     val scale = 0.18f + progress * effect.maxScale * 0.12f
-                    effect.instance.transform.setToScaling(scale, scale, scale).trn(effect.position)
+                    effect.instance.transform
+                        .setToScaling(scale, scale, scale)
+                        .trn(effect.position)
                     blend?.opacity = (0.72f * progress).coerceIn(0f, 0.85f)
                 }
 
                 EffectType.TRAIL -> {
                     effect.position.mulAdd(effect.velocity, dt)
                     val scale = 0.45f + (1f - progress) * effect.maxScale
-                    effect.instance.transform.setToScaling(scale, scale, scale).trn(effect.position)
+                    effect.instance.transform
+                        .setToScaling(scale, scale, scale)
+                        .trn(effect.position)
                     blend?.opacity = 0.42f * progress
                 }
             }
@@ -2462,13 +2856,19 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
         }
     }
 
-    private fun spawnDebris(position: Vector3, count: Int, color: Color) {
-        repeat(count) {
-            val velocity = Vector3(
-                MathUtils.random(-1f, 1f),
-                MathUtils.random(0.3f, 1.5f),
-                MathUtils.random(-1f, 1f)
-            ).nor().scl(MathUtils.random(40f, 220f))
+    private fun spawnDebris(
+        position: Vector3,
+        count: Int,
+        color: Color,
+    ) {
+        val debrisCount = adjustedEffectCount(min(count, qualityProfile.maxDebrisPieces), minimum = 1)
+        repeat(debrisCount) {
+            val velocity =
+                Vector3(
+                    MathUtils.random(-1f, 1f),
+                    MathUtils.random(0.3f, 1.5f),
+                    MathUtils.random(-1f, 1f),
+                ).nor().scl(MathUtils.random(40f, 220f))
             val instance = ModelInstance(models.get("debris"))
             instance.materials.first().set(ColorAttribute.createDiffuse(color))
             val size = MathUtils.random(0.35f, 1.5f)
@@ -2495,7 +2895,12 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
         }
     }
 
-    private fun syncProjectileTransform(instance: ModelInstance, position: Vector3, velocity: Vector3, scale: Float) {
+    private fun syncProjectileTransform(
+        instance: ModelInstance,
+        position: Vector3,
+        velocity: Vector3,
+        scale: Float,
+    ) {
         instance.transform.setToScaling(scale, scale, scale).trn(position)
         instance.setRotationToward(velocity)
     }
@@ -2511,11 +2916,12 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
     }
 
     private fun updateHud() {
-        val waveState = when {
-            isGameOver -> "STATUS LOST"
-            waveInProgress -> "WAVE $wave LIVE // ${threats.size + threatsRemainingInWave} HOSTILES"
-            else -> "WAVE $wave READY"
-        }
+        val waveState =
+            when {
+                isGameOver -> "STATUS LOST"
+                waveInProgress -> "WAVE $wave LIVE // ${threats.size + threatsRemainingInWave} HOSTILES"
+                else -> "WAVE $wave READY"
+            }
         if (::rangeValueLabel.isInitialized) {
             rangeValueLabel.setText("${settings.engagementRange.toInt()} M")
         }
@@ -2523,7 +2929,7 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
             speedValueLabel.setText("${settings.interceptorSpeed.toInt()} M/S")
         }
         creditsLabel.setText(
-            "SCORE $score   CREDITS $credits   CITY ${(cityIntegrity.coerceAtLeast(0f)).toInt()}%   $waveState"
+            "SCORE $score   CREDITS $credits   CITY ${(cityIntegrity.coerceAtLeast(0f)).toInt()}%   $waveState",
         )
     }
 
@@ -2534,10 +2940,12 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
                 waveButton.setText("DEFENSE FAILED")
                 waveButton.isDisabled = true
             }
+
             waveInProgress -> {
                 waveButton.setText("WAVE $wave ACTIVE")
                 waveButton.isDisabled = true
             }
+
             else -> {
                 waveButton.setText("START NEXT WAVE")
                 waveButton.isDisabled = false
@@ -2545,7 +2953,10 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
         }
     }
 
-    private fun triggerShake(intensity: Float, duration: Float) {
+    private fun triggerShake(
+        intensity: Float,
+        duration: Float,
+    ) {
         shakeIntensity = max(shakeIntensity, intensity)
         shakeTime = max(shakeTime, duration)
     }
@@ -2561,7 +2972,10 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
         transform.set(tempD, tempA, tempB, tempC)
     }
 
-    override fun resize(width: Int, height: Int) {
+    override fun resize(
+        width: Int,
+        height: Int,
+    ) {
         stage.viewport.update(width, height, true)
         camera.viewportWidth = width.toFloat()
         camera.viewportHeight = height.toFloat()
@@ -2579,11 +2993,12 @@ class BattleScreen(private val game: AirDefenseGame) : ScreenAdapter() {
     }
 }
 
-private fun Float.sign(): Float = when {
-    this > 0f -> 1f
-    this < 0f -> -1f
-    else -> 0f
-}
+private fun Float.sign(): Float =
+    when {
+        this > 0f -> 1f
+        this < 0f -> -1f
+        else -> 0f
+    }
 
 enum class EffectType { BLAST, SHOCKWAVE, SMOKE, SPARK, TRAIL }
 
@@ -2600,7 +3015,7 @@ data class BuildingEntity(
     var visibleHeight: Float = baseHeight,
     var lean: Float = 0f,
     var leanTarget: Float = 0f,
-    var collapseVelocity: Float = 0f
+    var collapseVelocity: Float = 0f,
 )
 
 data class ThreatEntity(
@@ -2610,7 +3025,7 @@ data class ThreatEntity(
     val velocity: Vector3,
     val id: String,
     var isTracked: Boolean = false,
-    var trailCooldown: Float = 0f
+    var trailCooldown: Float = 0f,
 )
 
 data class InterceptorEntity(
@@ -2619,7 +3034,7 @@ data class InterceptorEntity(
     val position: Vector3,
     val velocity: Vector3,
     var target: ThreatEntity?,
-    var trailCooldown: Float = 0f
+    var trailCooldown: Float = 0f,
 )
 
 data class VisualEffect(
@@ -2629,7 +3044,7 @@ data class VisualEffect(
     val initialLife: Float,
     val type: EffectType,
     val maxScale: Float,
-    val velocity: Vector3 = Vector3()
+    val velocity: Vector3 = Vector3(),
 )
 
 data class DebrisEntity(
@@ -2638,15 +3053,15 @@ data class DebrisEntity(
     val velocity: Vector3,
     var life: Float,
     val scale: Float,
-    val rotation: Vector3 = Vector3()
+    val rotation: Vector3 = Vector3(),
 )
 
 data class SurfaceTextureSet(
     val diffuse: Texture,
-    val roughness: Texture
+    val roughness: Texture,
 )
 
 data class InitializationTask(
     val message: String,
-    val action: () -> Unit
+    val action: () -> Unit,
 )

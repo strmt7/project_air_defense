@@ -20,13 +20,18 @@ class BattleSkillBenchmarksTest {
 
     @Test
     fun `ballistic threat benchmark reaches the defended zone within the short horizon`() {
-        val launch = ThreatFactory.createThreatLaunch(
-            wave = 1,
-            cityTarget = Vector3(220f, 0f, -260f),
-            random = object : RandomSource {
-                override fun range(min: Float, max: Float): Float = (min + max) * 0.5f
-            }
-        )
+        val launch =
+            ThreatFactory.createThreatLaunch(
+                wave = 1,
+                cityTarget = Vector3(220f, 0f, -260f),
+                random =
+                    object : RandomSource {
+                        override fun range(
+                            min: Float,
+                            max: Float,
+                        ): Float = (min + max) * 0.5f
+                    },
+            )
 
         val position = launch.start.cpy()
         val velocity = launch.velocity.cpy()
@@ -44,14 +49,15 @@ class BattleSkillBenchmarksTest {
 
     @Test
     fun `prox-fuze benchmark fires inside a single control window`() {
-        val detonates = EngagementPhysics.closesWithinFuse(
-            interceptorPos = Vector3(-40f, 0f, 0f),
-            interceptorVel = Vector3(180f, 24f, -12f),
-            targetPos = Vector3(55f, 18f, -8f),
-            targetVel = Vector3(-135f, -8f, 4f),
-            dt = 0.4f,
-            fuseRadius = 34f
-        )
+        val detonates =
+            EngagementPhysics.closesWithinFuse(
+                interceptorPos = Vector3(-40f, 0f, 0f),
+                interceptorVel = Vector3(180f, 24f, -12f),
+                targetPos = Vector3(55f, 18f, -8f),
+                targetVel = Vector3(-135f, -8f, 4f),
+                dt = 0.4f,
+                fuseRadius = 34f,
+            )
 
         assertTrue(detonates)
     }
