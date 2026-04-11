@@ -16,17 +16,18 @@ class BattleFrameTimingBenchmarks {
     val benchmarkRule = MacrobenchmarkRule()
 
     @Test
-    fun activeBattleSteadyState() = benchmarkRule.measureRepeated(
-        packageName = TARGET_PACKAGE,
-        metrics = listOf(FrameTimingMetric()),
-        compilationMode = CompilationMode.None(),
-        startupMode = StartupMode.COLD,
-        iterations = 6,
-        setupBlock = {
-            pressHome()
+    fun activeBattleSteadyState() =
+        benchmarkRule.measureRepeated(
+            packageName = TARGET_PACKAGE,
+            metrics = listOf(FrameTimingMetric()),
+            compilationMode = CompilationMode.None(),
+            startupMode = StartupMode.COLD,
+            iterations = 6,
+            setupBlock = {
+                pressHome()
+            },
+        ) {
+            startActivityAndWait(battleIntent())
+            SystemClock.sleep(BATTLE_MEASURE_DURATION_MS)
         }
-    ) {
-        startActivityAndWait(battleIntent())
-        SystemClock.sleep(BATTLE_MEASURE_DURATION_MS)
-    }
 }

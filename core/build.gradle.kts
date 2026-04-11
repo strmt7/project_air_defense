@@ -18,14 +18,19 @@ tasks.register<JavaExec>("runBattleMonteCarlo") {
     mainClass.set("com.airdefense.game.BattleSimulationCliKt")
     doFirst {
         val reportPath = providers.gradleProperty("reportPath").orNull
-        args = listOfNotNull(
-            providers.gradleProperty("runs").orElse("300").get(),
-            providers.gradleProperty("waves").orElse("1").get(),
-            providers.gradleProperty("seconds").orElse("48").get(),
-            providers.gradleProperty("step").orElse("0.05").get(),
-            providers.gradleProperty("seed").orElse("20260411").get(),
-            reportPath
-        )
+        args =
+            listOfNotNull(
+                providers.gradleProperty("runs").orElse("300").get(),
+                providers.gradleProperty("waves").orElse("1").get(),
+                providers.gradleProperty("seconds").orElse("48").get(),
+                providers.gradleProperty("step").orElse("0.05").get(),
+                providers.gradleProperty("seed").orElse("20260411").get(),
+                reportPath,
+                providers.gradleProperty("engagementRange").orNull,
+                providers.gradleProperty("interceptorSpeed").orNull,
+                providers.gradleProperty("launchCooldown").orNull,
+                providers.gradleProperty("blastRadius").orNull,
+            )
     }
 }
 

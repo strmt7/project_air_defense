@@ -22,7 +22,9 @@ import com.badlogic.gdx.utils.Array
 import com.badlogic.gdx.utils.ScreenUtils
 import com.badlogic.gdx.utils.viewport.ScreenViewport
 
-class StartScreen(private val game: AirDefenseGame) : ScreenAdapter() {
+class StartScreen(
+    private val game: AirDefenseGame,
+) : ScreenAdapter() {
     private val isAndroid = Gdx.app.type == Application.ApplicationType.Android
     private val stage = Stage(ScreenViewport())
     private val textures = Array<Texture>()
@@ -38,14 +40,24 @@ class StartScreen(private val game: AirDefenseGame) : ScreenAdapter() {
         val uiScale = Gdx.graphics.height / 1080f
         val root = Table().apply { setFillParent(true) }
         val body = Table().apply { defaults().top() }
-        val hero = Table().apply {
-            background = this@StartScreen.skin.newDrawable("panel_strong", Color(1f, 1f, 1f, 0.96f))
-            pad(34f * uiScale)
-            defaults().left()
-        }
+        val hero =
+            Table().apply {
+                background = this@StartScreen.skin.newDrawable("panel_strong", Color(1f, 1f, 1f, 0.96f))
+                pad(34f * uiScale)
+                defaults().left()
+            }
         hero.add(Label("PROJECT AIR DEFENSE", skin, "title")).row()
         hero.add(Label("COASTAL SHIELD GRID // LIVE INTERCEPTION COMMAND", skin, "headline")).padTop(14f * uiScale).row()
-        hero.add(Label("Defend the skyline with faster launches, clearer tracking, and a modernized tactical interface built for phone play.", skin, "status")).width(760f * uiScale).padTop(22f * uiScale).row()
+        hero
+            .add(
+                Label(
+                    "Defend the skyline with faster launches, clearer tracking, and a modernized tactical interface built for phone play.",
+                    skin,
+                    "status",
+                ),
+            ).width(760f * uiScale)
+            .padTop(22f * uiScale)
+            .row()
 
         val statRow = Table().apply { defaults().padRight(14f * uiScale).padTop(20f * uiScale) }
         statRow.add(Label("REAL-TIME THREAT TRACKING", skin, "tag"))
@@ -53,54 +65,88 @@ class StartScreen(private val game: AirDefenseGame) : ScreenAdapter() {
         statRow.add(Label("ANDROID SAFE RENDER PATH", skin, "tag"))
         hero.add(statRow).left().row()
 
-        val menu = Table().apply {
-            background = this@StartScreen.skin.newDrawable("panel_soft", Color(1f, 1f, 1f, 0.92f))
-            pad(24f * uiScale)
-            defaults().width(540f * uiScale).height(126f * uiScale).pad(10f * uiScale)
-        }
-        val startButton = TextButton("ENTER AIRSPACE", skin)
-        startButton.addListener(object : ChangeListener() {
-            override fun changed(event: ChangeEvent?, actor: Actor?) {
-                Gdx.app.log("StartScreen", "ENTER AIRSPACE pressed")
-                launchRequested = true
-                startButton.isDisabled = true
+        val menu =
+            Table().apply {
+                background = this@StartScreen.skin.newDrawable("panel_soft", Color(1f, 1f, 1f, 0.92f))
+                pad(24f * uiScale)
+                defaults().width(540f * uiScale).height(126f * uiScale).pad(10f * uiScale)
             }
-        })
+        val startButton = TextButton("ENTER AIRSPACE", skin)
+        startButton.addListener(
+            object : ChangeListener() {
+                override fun changed(
+                    event: ChangeEvent?,
+                    actor: Actor?,
+                ) {
+                    Gdx.app.log("StartScreen", "ENTER AIRSPACE pressed")
+                    launchRequested = true
+                    startButton.isDisabled = true
+                }
+            },
+        )
         menu.add(startButton).row()
         if (!isAndroid) {
             val exitButton = TextButton("EXIT", skin)
-            exitButton.addListener(object : ChangeListener() {
-                override fun changed(event: ChangeEvent?, actor: Actor?) {
-                    Gdx.app.log("StartScreen", "EXIT pressed")
-                    Gdx.app.exit()
-                }
-            })
+            exitButton.addListener(
+                object : ChangeListener() {
+                    override fun changed(
+                        event: ChangeEvent?,
+                        actor: Actor?,
+                    ) {
+                        Gdx.app.log("StartScreen", "EXIT pressed")
+                        Gdx.app.exit()
+                    }
+                },
+            )
             menu.add(exitButton).row()
         }
-        val ops = Table().apply {
-            background = this@StartScreen.skin.newDrawable("panel_soft", Color(1f, 1f, 1f, 0.9f))
-            pad(24f * uiScale)
-            defaults().left().padBottom(12f * uiScale)
-        }
+        val ops =
+            Table().apply {
+                background = this@StartScreen.skin.newDrawable("panel_soft", Color(1f, 1f, 1f, 0.9f))
+                pad(24f * uiScale)
+                defaults().left().padBottom(12f * uiScale)
+            }
         ops.add(Label("DEPLOYMENT OVERVIEW", skin, "headline")).row()
-        ops.add(Label("BALLISTIC THREATS  //  PROXIMITY-FUZE INTERCEPTS  //  TOUCH-FIRST COMMAND UI", skin, "status")).width(540f * uiScale).row()
+        ops
+            .add(
+                Label("BALLISTIC THREATS  //  PROXIMITY-FUZE INTERCEPTS  //  TOUCH-FIRST COMMAND UI", skin, "status"),
+            ).width(540f * uiScale)
+            .row()
         ops.add(menu).padTop(12f * uiScale).row()
         ops.add(Label("PRIMARY DEPLOY CONTROL", skin, "tag")).padTop(4f * uiScale).row()
 
-        body.add(hero).width(860f * uiScale).left().padRight(24f * uiScale)
+        body
+            .add(hero)
+            .width(860f * uiScale)
+            .left()
+            .padRight(24f * uiScale)
         body.add(ops).width(620f * uiScale).top()
-        root.add(body).expand().top().left().padTop(84f * uiScale).padLeft(34f * uiScale).row()
+        root
+            .add(body)
+            .expand()
+            .top()
+            .left()
+            .padTop(84f * uiScale)
+            .padLeft(34f * uiScale)
+            .row()
 
-        val footer = Table().apply {
-            background = this@StartScreen.skin.newDrawable("panel_soft", Color(1f, 1f, 1f, 0.9f))
-        }
-        val footerCopy = if (isAndroid) {
-            "TAP ENTER AIRSPACE TO DEPLOY // USE SYSTEM BACK TO EXIT"
-        } else {
-            "TEL AVIV NIGHT REFERENCE + CC0 SKY PANORAMA INTEGRATED INTO THE SCENE"
-        }
+        val footer =
+            Table().apply {
+                background = this@StartScreen.skin.newDrawable("panel_soft", Color(1f, 1f, 1f, 0.9f))
+            }
+        val footerCopy =
+            if (isAndroid) {
+                "TAP ENTER AIRSPACE TO DEPLOY // USE SYSTEM BACK TO EXIT"
+            } else {
+                "TEL AVIV NIGHT REFERENCE + CC0 SKY PANORAMA INTEGRATED INTO THE SCENE"
+            }
         footer.add(Label(footerCopy, skin, "tag")).pad(10f * uiScale)
-        root.add(footer).expandX().fillX().bottom().pad(18f * uiScale)
+        root
+            .add(footer)
+            .expandX()
+            .fillX()
+            .bottom()
+            .pad(18f * uiScale)
 
         stage.addActor(root)
         Gdx.input.inputProcessor = stage
@@ -130,7 +176,12 @@ class StartScreen(private val game: AirDefenseGame) : ScreenAdapter() {
         s.add("white", TextureRegionDrawable(whiteRegion), Drawable::class.java)
         white.dispose()
 
-        fun addPanel(name: String, fill: Color, stroke: Color, accent: Color) {
+        fun addPanel(
+            name: String,
+            fill: Color,
+            stroke: Color,
+            accent: Color,
+        ) {
             val pixmap = Pixmap(320, 180, Pixmap.Format.RGBA8888)
             pixmap.setColor(fill)
             pixmap.fill()
@@ -145,7 +196,13 @@ class StartScreen(private val game: AirDefenseGame) : ScreenAdapter() {
             pixmap.dispose()
         }
 
-        fun addButton(name: String, top: Color, bottom: Color, border: Color, glow: Color) {
+        fun addButton(
+            name: String,
+            top: Color,
+            bottom: Color,
+            border: Color,
+            glow: Color,
+        ) {
             val pixmap = Pixmap(280, 104, Pixmap.Format.RGBA8888)
             for (y in 0 until pixmap.height) {
                 val t = y / (pixmap.height - 1f)
@@ -153,7 +210,7 @@ class StartScreen(private val game: AirDefenseGame) : ScreenAdapter() {
                     MathUtils.lerp(top.r, bottom.r, t),
                     MathUtils.lerp(top.g, bottom.g, t),
                     MathUtils.lerp(top.b, bottom.b, t),
-                    MathUtils.lerp(top.a, bottom.a, t)
+                    MathUtils.lerp(top.a, bottom.a, t),
                 )
                 pixmap.drawLine(0, y, pixmap.width - 1, y)
             }
@@ -170,26 +227,53 @@ class StartScreen(private val game: AirDefenseGame) : ScreenAdapter() {
             pixmap.dispose()
         }
 
-        addButton("btn_up", Color(0.03f, 0.08f, 0.16f, 0.96f), Color(0.01f, 0.14f, 0.28f, 0.98f), Color(0.36f, 0.88f, 1f, 1f), Color(0.2f, 0.62f, 0.82f, 0.22f))
-        addButton("btn_over", Color(0.07f, 0.18f, 0.3f, 0.98f), Color(0.02f, 0.28f, 0.46f, 0.98f), Color(0.72f, 0.95f, 1f, 1f), Color(0.42f, 0.82f, 1f, 0.32f))
-        addButton("btn_down", Color(0.01f, 0.34f, 0.5f, 0.98f), Color(0.0f, 0.22f, 0.38f, 1f), Color(0.84f, 0.98f, 1f, 1f), Color(0.72f, 0.95f, 1f, 0.22f))
-        addButton("btn_disabled", Color(0.08f, 0.1f, 0.13f, 0.9f), Color(0.05f, 0.07f, 0.1f, 0.92f), Color(0.2f, 0.26f, 0.3f, 1f), Color(0f, 0f, 0f, 0f))
+        addButton(
+            "btn_up",
+            Color(0.03f, 0.08f, 0.16f, 0.96f),
+            Color(0.01f, 0.14f, 0.28f, 0.98f),
+            Color(0.36f, 0.88f, 1f, 1f),
+            Color(0.2f, 0.62f, 0.82f, 0.22f),
+        )
+        addButton(
+            "btn_over",
+            Color(0.07f, 0.18f, 0.3f, 0.98f),
+            Color(0.02f, 0.28f, 0.46f, 0.98f),
+            Color(0.72f, 0.95f, 1f, 1f),
+            Color(0.42f, 0.82f, 1f, 0.32f),
+        )
+        addButton(
+            "btn_down",
+            Color(0.01f, 0.34f, 0.5f, 0.98f),
+            Color(0.0f, 0.22f, 0.38f, 1f),
+            Color(0.84f, 0.98f, 1f, 1f),
+            Color(0.72f, 0.95f, 1f, 0.22f),
+        )
+        addButton(
+            "btn_disabled",
+            Color(0.08f, 0.1f, 0.13f, 0.9f),
+            Color(0.05f, 0.07f, 0.1f, 0.92f),
+            Color(0.2f, 0.26f, 0.3f, 1f),
+            Color(0f, 0f, 0f, 0f),
+        )
         addPanel("panel_strong", Color(0.02f, 0.06f, 0.11f, 0.88f), Color(0.24f, 0.78f, 0.94f, 1f), Color(0.12f, 0.54f, 0.72f, 0.95f))
         addPanel("panel_soft", Color(0.02f, 0.05f, 0.1f, 0.7f), Color(0.16f, 0.36f, 0.46f, 1f), Color(0.0f, 0.16f, 0.24f, 0.92f))
 
-        s.add("default", TextButton.TextButtonStyle().apply {
-            up = s.getDrawable("btn_up")
-            checked = s.getDrawable("btn_down")
-            down = s.getDrawable("btn_down")
-            over = s.getDrawable("btn_over")
-            disabled = s.getDrawable("btn_disabled")
-            this.font = font
-            fontColor = Color.WHITE
-            downFontColor = Color(0.88f, 0.98f, 1f, 1f)
-            overFontColor = Color.WHITE
-            checkedFontColor = Color.WHITE
-            disabledFontColor = Color(0.58f, 0.66f, 0.72f, 1f)
-        })
+        s.add(
+            "default",
+            TextButton.TextButtonStyle().apply {
+                up = s.getDrawable("btn_up")
+                checked = s.getDrawable("btn_down")
+                down = s.getDrawable("btn_down")
+                over = s.getDrawable("btn_over")
+                disabled = s.getDrawable("btn_disabled")
+                this.font = font
+                fontColor = Color.WHITE
+                downFontColor = Color(0.88f, 0.98f, 1f, 1f)
+                overFontColor = Color.WHITE
+                checkedFontColor = Color.WHITE
+                disabledFontColor = Color(0.58f, 0.66f, 0.72f, 1f)
+            },
+        )
         s.add("default", Label.LabelStyle(font, Color.WHITE))
         s.add("status", Label.LabelStyle(statusFont, Color(0.68f, 0.95f, 1f, 1f)))
         s.add("headline", Label.LabelStyle(headlineFont, Color(0.94f, 0.98f, 1f, 1f)))
@@ -198,7 +282,10 @@ class StartScreen(private val game: AirDefenseGame) : ScreenAdapter() {
         return s
     }
 
-    private fun loadTexture(path: String, fallbackColor: Color): Texture {
+    private fun loadTexture(
+        path: String,
+        fallbackColor: Color,
+    ): Texture {
         val file = Gdx.files.internal(path)
         if (file.exists()) {
             return Texture(file).also {
@@ -253,7 +340,10 @@ class StartScreen(private val game: AirDefenseGame) : ScreenAdapter() {
         }
     }
 
-    override fun resize(width: Int, height: Int) {
+    override fun resize(
+        width: Int,
+        height: Int,
+    ) {
         stage.viewport.update(width, height, true)
     }
 

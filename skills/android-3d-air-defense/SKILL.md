@@ -9,6 +9,10 @@ Use this workflow whenever you modify gameplay, visuals, physics, UI, or Android
 
 ## Reference files
 
+- [../../docs/reference/ai-agent-context-routing.md](../../docs/reference/ai-agent-context-routing.md)
+- [../../docs/level-asset-pipeline.md](../../docs/level-asset-pipeline.md)
+- [../../docs/level-asset-source-map.md](../../docs/level-asset-source-map.md)
+- [../../android/assets/ATTRIBUTION.md](../../android/assets/ATTRIBUTION.md)
 - [references/curated-skill-stack.md](references/curated-skill-stack.md)
 - [references/source-map.md](references/source-map.md)
 - [references/awesome-claude-skills-source-map.md](references/awesome-claude-skills-source-map.md)
@@ -18,6 +22,7 @@ Use this workflow whenever you modify gameplay, visuals, physics, UI, or Android
 - Keep the game fully 3D with readable mobile combat.
 - Preserve physically plausible but gameplay-readable ballistic motion (`g = -9.81 m/s^2`).
 - Keep touch controls large, modern, and reliable in landscape mode.
+- Import only explicitly attributed runtime assets.
 - Prefer proof-driven iteration over speculative rewrites.
 
 ## Workflow
@@ -40,14 +45,9 @@ Use this workflow whenever you modify gameplay, visuals, physics, UI, or Android
 6. **Verify with hard proof**
    - Run local tests.
    - Run the headless Monte Carlo simulation.
+   - Run `ktlintCheck`.
    - Build and install on Android.
    - Capture screenshots and logs from the emulator or device.
-
-## Balancing defaults
-- Incoming missile speed: `38..52 + wave * 1.6`.
-- Interceptor speed: `145`.
-- Interceptor blast radius: `9`.
-- Cooldown: `1.2s`.
 
 ## Definition of done
 

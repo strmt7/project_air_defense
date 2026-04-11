@@ -16,8 +16,7 @@ object BattleBalance {
 
     fun spawnIntervalForWave(wave: Int): Float = max(0.9f, 2.4f - wave * 0.08f)
 
-    fun threatSpeedRangeForWave(wave: Int): ClosedFloatingPointRange<Float> =
-        (220f + wave * 8f)..(285f + wave * 10f)
+    fun threatSpeedRangeForWave(wave: Int): ClosedFloatingPointRange<Float> = (220f + wave * 8f)..(285f + wave * 10f)
 }
 
 object InterceptionMath {
@@ -25,23 +24,26 @@ object InterceptionMath {
         interceptorPos: Vector3,
         targetPos: Vector3,
         targetVelocity: Vector3,
-        interceptorSpeed: Float
+        interceptorSpeed: Float,
     ): Vector3 {
         val toTarget = targetPos.cpy().sub(interceptorPos)
         val a = targetVelocity.dot(targetVelocity) - interceptorSpeed * interceptorSpeed
         val b = 2f * toTarget.dot(targetVelocity)
         val c = toTarget.dot(toTarget)
-        val time = if (abs(a) < 0.001f) {
-            if (abs(b) < 0.001f) 0f else (-c / b).coerceAtLeast(0f)
-        } else {
-            val discriminant = b * b - 4f * a * c
-            if (discriminant <= 0f) 0f else {
-                val sqrtDisc = kotlin.math.sqrt(discriminant)
-                val t1 = (-b - sqrtDisc) / (2f * a)
-                val t2 = (-b + sqrtDisc) / (2f * a)
-                listOf(t1, t2).filter { it > 0f }.minOrNull() ?: 0f
-            }
-        }.coerceIn(0f, 8f)
+        val time =
+            if (abs(a) < 0.001f) {
+                if (abs(b) < 0.001f) 0f else (-c / b).coerceAtLeast(0f)
+            } else {
+                val discriminant = b * b - 4f * a * c
+                if (discriminant <= 0f) {
+                    0f
+                } else {
+                    val sqrtDisc = kotlin.math.sqrt(discriminant)
+                    val t1 = (-b - sqrtDisc) / (2f * a)
+                    val t2 = (-b + sqrtDisc) / (2f * a)
+                    listOf(t1, t2).filter { it > 0f }.minOrNull() ?: 0f
+                }
+            }.coerceIn(0f, 8f)
         return targetPos.cpy().mulAdd(targetVelocity, time)
     }
 }
@@ -53,7 +55,7 @@ object DamageModel {
         buildingDepth: Float,
         impactPosition: Vector3,
         blastRadius: Float,
-        hostile: Boolean
+        hostile: Boolean,
     ): Float {
         val impactPoint = Vector3(impactPosition.x, 0f, impactPosition.z)
         val buildingPoint = Vector3(buildingPosition.x, 0f, buildingPosition.z)
@@ -64,7 +66,10 @@ object DamageModel {
         return (((effectiveRadius - distance) / effectiveRadius) * scale).coerceAtLeast(8f)
     }
 
-    fun cityIntegrityLoss(hostile: Boolean, destroyedBuilding: Boolean): Float {
+    fun cityIntegrityLoss(
+        hostile: Boolean,
+        destroyedBuilding: Boolean,
+    ): Float {
         var loss = if (hostile) 12f else 0f
         if (destroyedBuilding) loss += 6f
         return loss
@@ -75,18 +80,20 @@ object ThreatFactory {
     fun createThreatLaunch(
         wave: Int,
         cityTarget: Vector3,
-        random: RandomSource = DefaultRandomSource
+        random: RandomSource = DefaultRandomSource,
     ): ThreatLaunch {
-        val start = Vector3(
-            random.range(-1800f, 1800f),
-            random.range(1500f, 2100f),
-            -4200f
-        )
+        val start =
+            Vector3(
+                random.range(-1800f, 1800f),
+                random.range(1500f, 2100f),
+                -4200f,
+            )
         val target = cityTarget.cpy().add(random.range(-80f, 80f), 0f, random.range(-80f, 80f))
-        val horizontalSpeed = random.range(
-            BattleBalance.threatSpeedRangeForWave(wave).start,
-            BattleBalance.threatSpeedRangeForWave(wave).endInclusive
-        )
+        val horizontalSpeed =
+            random.range(
+                BattleBalance.threatSpeedRangeForWave(wave).start,
+                BattleBalance.threatSpeedRangeForWave(wave).endInclusive,
+            )
         val horizontalDistance = Vector3(target.x - start.x, 0f, target.z - start.z).len().coerceAtLeast(1f)
         val travelTime = (horizontalDistance / horizontalSpeed).coerceIn(7.5f, 13f)
         val displacement = target.cpy().sub(start)
@@ -103,16 +110,17 @@ object EngagementPhysics {
         targetPos: Vector3,
         targetVel: Vector3,
         dt: Float,
-        fuseRadius: Float
+        fuseRadius: Float,
     ): Boolean {
         val relativePos = targetPos.cpy().sub(interceptorPos)
         val relativeVel = targetVel.cpy().sub(interceptorVel)
         val relativeSpeedSquared = relativeVel.len2()
-        val sampleTime = if (relativeSpeedSquared <= 0.0001f) {
-            0f
-        } else {
-            (-relativePos.dot(relativeVel) / relativeSpeedSquared).coerceIn(0f, dt)
-        }
+        val sampleTime =
+            if (relativeSpeedSquared <= 0.0001f) {
+                0f
+            } else {
+                (-relativePos.dot(relativeVel) / relativeSpeedSquared).coerceIn(0f, dt)
+            }
         return relativePos.mulAdd(relativeVel, sampleTime).len2() <= fuseRadius * fuseRadius
     }
 }
@@ -121,11 +129,12 @@ object FireControl {
     fun selectNextThreat(
         threats: List<ThreatSnapshot>,
         engagementRange: Float,
-        assignedThreatIds: Set<String>
+        assignedThreatIds: Set<String>,
     ): String? {
         val engagementRangeSquared = engagementRange * engagementRange
         var bestThreat: ThreatSnapshot? = null
-        threats.asSequence()
+        threats
+            .asSequence()
             .filter { it.id !in assignedThreatIds }
             .filter { it.position.len2() <= engagementRangeSquared }
             .forEach { threat ->
@@ -137,7 +146,10 @@ object FireControl {
         return bestThreat?.id
     }
 
-    fun hasPriorityOver(candidate: Vector3, incumbent: Vector3): Boolean {
+    fun hasPriorityOver(
+        candidate: Vector3,
+        incumbent: Vector3,
+    ): Boolean {
         if (candidate.z != incumbent.z) return candidate.z > incumbent.z
         if (candidate.y != incumbent.y) return candidate.y < incumbent.y
         return abs(candidate.x) < abs(incumbent.x)
@@ -147,18 +159,24 @@ object FireControl {
 data class ThreatLaunch(
     val start: Vector3,
     val target: Vector3,
-    val velocity: Vector3
+    val velocity: Vector3,
 )
 
 data class ThreatSnapshot(
     val id: String,
-    val position: Vector3
+    val position: Vector3,
 )
 
 interface RandomSource {
-    fun range(min: Float, max: Float): Float
+    fun range(
+        min: Float,
+        max: Float,
+    ): Float
 
-    fun int(min: Int, max: Int): Int {
+    fun int(
+        min: Int,
+        max: Int,
+    ): Int {
         if (max <= min) return min
         val sample = range(min.toFloat(), (max + 1).toFloat())
         return sample.toInt().coerceIn(min, max)
@@ -166,20 +184,34 @@ interface RandomSource {
 }
 
 object DefaultRandomSource : RandomSource {
-    override fun range(min: Float, max: Float): Float = MathUtils.random(min, max)
+    override fun range(
+        min: Float,
+        max: Float,
+    ): Float = MathUtils.random(min, max)
 
-    override fun int(min: Int, max: Int): Int = MathUtils.random(min, max)
+    override fun int(
+        min: Int,
+        max: Int,
+    ): Int = MathUtils.random(min, max)
 }
 
-class SeededRandomSource(seed: Long) : RandomSource {
+class SeededRandomSource(
+    seed: Long,
+) : RandomSource {
     private val random = java.util.Random(seed)
 
-    override fun range(min: Float, max: Float): Float {
+    override fun range(
+        min: Float,
+        max: Float,
+    ): Float {
         if (max <= min) return min
         return min + random.nextFloat() * (max - min)
     }
 
-    override fun int(min: Int, max: Int): Int {
+    override fun int(
+        min: Int,
+        max: Int,
+    ): Int {
         if (max <= min) return min
         return min + random.nextInt(max - min + 1)
     }

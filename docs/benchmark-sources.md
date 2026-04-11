@@ -25,6 +25,10 @@ This benchmark suite was shaped from the following sources.
   https://github.com/android/nowinandroid
 - Dependency Analysis Gradle Plugin:
   https://github.com/autonomousapps/dependency-analysis-gradle-plugin
+- KtLint:
+  https://github.com/pinterest/ktlint
+- KtLint Gradle Plugin:
+  https://plugins.gradle.org/plugin/org.jlleitschuh.gradle.ktlint
 - Detekt:
   https://github.com/detekt/detekt
 - Gradle Profiler:
@@ -35,7 +39,7 @@ This benchmark suite was shaped from the following sources.
 - Macrobenchmark patterns, battle launch control, and artifact parsing:
   `benchmarks/` and `scripts/run-benchmark-suite.ps1`
 - Standards audit:
-  root `build.gradle.kts`, `detekt`, `lint`, and dependency-analysis tasks
+  root `build.gradle.kts`, `ktlint`, `detekt`, `lint`, and dependency-analysis tasks
 - Runtime health capture:
   `scripts/run-benchmark-suite.ps1`
 - Headless gameplay balance sweep:

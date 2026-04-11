@@ -1,14 +1,27 @@
 # Project Air Defense (Android 3D)
 
+<!-- BEGIN GENERATED BADGES -->
+[![Android APK](https://img.shields.io/github/actions/workflow/status/strmt7/project_air_defense/android-release-apk.yml?branch=main&label=android-apk)](https://github.com/strmt7/project_air_defense/actions/workflows/android-release-apk.yml)
+[![Quality](https://img.shields.io/github/actions/workflow/status/strmt7/project_air_defense/quality.yml?branch=main&label=quality)](https://github.com/strmt7/project_air_defense/actions/workflows/quality.yml)
+[![Ktlint](https://img.shields.io/github/actions/workflow/status/strmt7/project_air_defense/ktlint.yml?branch=main&label=ktlint)](https://github.com/strmt7/project_air_defense/actions/workflows/ktlint.yml)
+[![Caveman](https://img.shields.io/badge/Caveman-555?logo=github&labelColor=555)](https://github.com/JuliusBrussee/caveman/releases/tag/v1.5.0)
+<!-- END GENERATED BADGES -->
+
 A high-fidelity libGDX + Kotlin Android prototype where you command a Patriot-inspired battery in a living 3D battlespace.
 
 ## AI-Friendly Docs
 - Agent operating guide: `AGENTS.md`
+- Agent routing: `docs/reference/ai-agent-context-routing.md`
+- Agent skills: `docs/reference/ai-agent-skills.md`
+- Agent upstream sources: `docs/reference/ai-agent-upstream-sources.md`
 - Architecture reference: `docs/architecture.md`
 - Release/install behavior: `docs/release-and-install.md`
 - Benchmark suite: `docs/benchmark-suite.md`
 - Benchmark sources: `docs/benchmark-sources.md`
 - Popular 3D Android game workflows: `docs/popular-3d-android-game-workflows.md`
+- Level asset pipeline: `docs/level-asset-pipeline.md`
+- Level asset source map: `docs/level-asset-source-map.md`
+- Runtime asset attribution: `android/assets/ATTRIBUTION.md`
 - Project skill: `skills/android-3d-air-defense/SKILL.md`
 
 ## Major Gameplay Upgrades
@@ -37,10 +50,11 @@ A high-fidelity libGDX + Kotlin Android prototype where you command a Patriot-in
 
 ## Security And Performance
 - **ProGuard/R8 enabled**: minification and obfuscation for production security.
-- **GLES 3.0 + MSAA**: modern hardware-accelerated rendering with anti-aliasing.
+- **Adaptive mobile renderer**: GLES 2.0-safe path with quality-tier control and selective MSAA.
 - **Optimized memory**: minimal allocations in the main loop using math buffers and pooled entities.
 - **Strict repositories**: only Google and Maven Central are used for dependency resolution.
-- **Report-oriented benchmark suite**: build timing, startup, battle entry, frame timing, runtime health capture, simulation sweeps, lint, detekt, dependency health, and APK size snapshots.
+- **Mandatory Kotlin format/lint**: KtLint is the formatting gate; Detekt remains the semantic/code-smell audit.
+- **Report-oriented benchmark suite**: build timing, startup, battle entry, frame timing, runtime health capture, simulation sweeps, KtLint, lint, detekt, dependency health, and APK size snapshots.
 
 ## Toolchain
 - Android Gradle Plugin `8.13.0`
@@ -54,13 +68,16 @@ A high-fidelity libGDX + Kotlin Android prototype where you command a Patriot-in
 1. Open the project in the latest stable Android Studio.
 2. Make sure Java 21 and Android SDK 36 are installed.
 3. Sync Gradle.
-4. Run `.\gradlew.bat :core:test` for gameplay and targeting logic coverage.
-5. Run `.\gradlew.bat :core:runBattleMonteCarlo -Pruns=300 -Pwaves=1 -Pseconds=48 -Pstep=0.05` for headless balance sweeps.
-6. Or use `.\scripts\run-battle-monte-carlo.cmd 300 1 48 0.05 20260411` on Windows without changing PowerShell execution policy.
-7. Run `.\scripts\run-benchmark-suite.cmd` for the report-oriented benchmark suite.
+4. Run `.\gradlew.bat ktlintCheck` for the mandatory Kotlin format/lint gate.
+5. Run `.\gradlew.bat ktlintFormat` to apply repository formatting.
+6. Run `.\gradlew.bat :core:test` for gameplay and targeting logic coverage.
+7. Run `.\gradlew.bat :core:runBattleMonteCarlo -Pruns=300 -Pwaves=1 -Pseconds=48 -Pstep=0.05` for headless balance sweeps.
+8. Or use `.\scripts\run-battle-monte-carlo.cmd 300 1 48 0.05 20260411` on Windows without changing PowerShell execution policy.
+9. Run `.\scripts\run-benchmark-suite.cmd` for the report-oriented benchmark suite.
    It captures build timings, macrobenchmarks, runtime-health artifacts, Monte Carlo balance metrics, and standards reports under `benchmark-results/`.
-8. Run `.\gradlew.bat :android:installDebug` to install the debug package on an emulator or device.
-9. Launch the `android` module and enter a battle from the main menu.
+10. Run `python3 tools/update_readme_badges.py --check` after badge metadata changes.
+11. Run `.\gradlew.bat :android:installDebug` to install the debug package on an emulator or device.
+12. Launch the `android` module and enter a battle from the main menu.
 
 ## Build Outputs
 - Local side-load build:
@@ -88,4 +105,6 @@ Production signing variables can be set in `~/.gradle/gradle.properties`, CI sec
 - This is still a gameplay prototype, not a military simulator.
 - The current renderer targets a high-quality mobile approximation of premium night lighting; it does not use true hardware ray tracing.
 - Waterfront building placement and radar orientation are now validated in tests so the city stays inland and the radar reads top-down toward the horizon.
+- AI-agent routing is intentionally compact and generated/verified in-repo so external agents do not keep rediscovering the same workflow.
+- The repo's concise agent overlay is pinned to [caveman `v1.5.0`](https://github.com/JuliusBrussee/caveman/releases/tag/v1.5.0). Upstream `v1.5.0` adds configurable default mode, `off`, and `/caveman-help`; this repo intentionally keeps only the mandatory instruction-only `lite`-equivalent overlay.
 - Generated `build/`, `.kotlin/`, and copied native-library output are intentionally excluded from git so the repository stays source-clean.
