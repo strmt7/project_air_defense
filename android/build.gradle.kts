@@ -1,11 +1,9 @@
-import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import java.io.File
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 
 plugins {
     id("com.android.application")
-    id("org.jetbrains.kotlin.android")
 }
 
 val releaseStoreFile = providers.gradleProperty("RELEASE_STORE_FILE").orElse(providers.environmentVariable("RELEASE_STORE_FILE"))
@@ -81,7 +79,7 @@ android {
 
     sourceSets {
         getByName("main") {
-            jniLibs.srcDirs("libs")
+            jniLibs.srcDir("libs")
         }
     }
 
@@ -130,12 +128,6 @@ android {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
-    }
-}
-
-kotlin {
-    compilerOptions {
-        jvmTarget.set(JvmTarget.JVM_21)
     }
 }
 

@@ -19,8 +19,8 @@
       "target": "https://github.com/{repo_path}/actions/workflows/ktlint.yml"
     },
     {
-      "alt": "Caveman",
-      "image": "https://img.shields.io/badge/Caveman-555?logo=github&labelColor=555",
+      "alt": "caveman",
+      "image": "https://img.shields.io/badge/caveman-555?logo=github&labelColor=555",
       "target": "https://github.com/JuliusBrussee/caveman/releases/tag/v1.5.0"
     }
   ]

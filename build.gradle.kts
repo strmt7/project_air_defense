@@ -2,18 +2,10 @@ import io.gitlab.arturbosch.detekt.extensions.DetektExtension
 import org.jlleitschuh.gradle.ktlint.KtlintExtension
 import org.jlleitschuh.gradle.ktlint.reporter.ReporterType
 
-buildscript {
-    repositories {
-        google()
-        mavenCentral()
-    }
-    dependencies {
-        classpath("com.android.tools.build:gradle:8.13.0")
-        classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:2.2.21")
-    }
-}
-
 plugins {
+    id("com.android.application") version "9.1.0" apply false
+    id("com.android.test") version "9.1.0" apply false
+    kotlin("jvm") version "2.3.20" apply false
     id("org.jlleitschuh.gradle.ktlint") version "14.2.0"
     id("io.gitlab.arturbosch.detekt") version "1.23.8" apply false
     id("com.autonomousapps.dependency-analysis") version "3.7.0" apply false
@@ -34,7 +26,10 @@ configure<KtlintExtension> {
 }
 
 subprojects {
-    plugins.withId("org.jetbrains.kotlin.android") {
+    plugins.withId("com.android.application") {
+        apply(plugin = "org.jlleitschuh.gradle.ktlint")
+    }
+    plugins.withId("com.android.test") {
         apply(plugin = "org.jlleitschuh.gradle.ktlint")
     }
     plugins.withId("org.jetbrains.kotlin.jvm") {
@@ -59,10 +54,10 @@ subprojects {
 
     apply(plugin = "io.gitlab.arturbosch.detekt")
 
-    plugins.withId("com.android.application") {
+    plugins.withId("com.android.test") {
         apply(plugin = "com.autonomousapps.dependency-analysis")
     }
-    plugins.withId("com.android.test") {
+    plugins.withId("com.android.application") {
         apply(plugin = "com.autonomousapps.dependency-analysis")
     }
     plugins.withId("org.jetbrains.kotlin.jvm") {

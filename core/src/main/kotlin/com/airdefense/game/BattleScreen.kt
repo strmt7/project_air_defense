@@ -51,6 +51,7 @@ import com.badlogic.gdx.utils.Array
 import com.badlogic.gdx.utils.ObjectMap
 import com.badlogic.gdx.utils.ScreenUtils
 import com.badlogic.gdx.utils.viewport.ScreenViewport
+import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
@@ -104,7 +105,6 @@ class BattleScreen(
     private lateinit var rangeValueLabel: Label
     private lateinit var speedValueLabel: Label
 
-    private val gravity = Vector3(0f, PhysicsModel.THREAT_GRAVITY_Y, 0f)
     private val cameraBase = Vector3(280f, 380f, 1760f)
     private val cameraLookAt = Vector3(980f, 120f, -2550f)
     private val tempA = Vector3()
@@ -121,8 +121,6 @@ class BattleScreen(
     private var waveInProgress = false
     private var isGameOver = false
     private var threatsRemainingInWave = 0
-    private var spawnTimer = 0f
-    private var timeSinceLastLaunch = 0f
     private var radarScanProgress = 0f
     private var shakeTime = 0f
     private var shakeIntensity = 0f
@@ -131,11 +129,14 @@ class BattleScreen(
     private var loadingMessage = "Initializing battle systems..."
     private var lastInitializationDurationMs = 0L
     private var battleLiveTime = 0f
-    private var renderedBattleFrames = 0
     private var launcherLeftPulse = 0f
     private var launcherRightPulse = 0f
     private var hostileTrailSamples = 0
     private var interceptorTrailSamples = 0
+    private val frameTimeWindowMs = FloatArray(180)
+    private var frameTimeWindowCursor = 0
+    private var frameTimeWindowSize = 0
+    private var battleFrameLogTimer = 0f
 
     private val initializationTasks by lazy {
         listOf(
@@ -2097,10 +2098,7 @@ class BattleScreen(
 
         updateLogic(min(delta, 1f / 30f))
         battleLiveTime += delta
-        renderedBattleFrames++
-        if (renderedBattleFrames % 180 == 0) {
-            Gdx.app.log("BattleFrame", battleHealthSummary())
-        }
+        recordFrameTelemetry(delta)
 
         ScreenUtils.clear(0.01f, 0.02f, 0.04f, 1f, true)
         battleSkyRegion?.let { sky ->
@@ -2341,15 +2339,66 @@ class BattleScreen(
         batch.end()
     }
 
+    private fun recordFrameTelemetry(delta: Float) {
+        val frameTimeMs = delta.coerceIn(0f, 0.25f) * 1000f
+        frameTimeWindowMs[frameTimeWindowCursor] = frameTimeMs
+        frameTimeWindowCursor = (frameTimeWindowCursor + 1) % frameTimeWindowMs.size
+        frameTimeWindowSize = min(frameTimeWindowSize + 1, frameTimeWindowMs.size)
+        battleFrameLogTimer += delta
+        if (battleFrameLogTimer >= 3f && frameTimeWindowSize > 0) {
+            Gdx.app.log("BattleFrame", battleHealthSummary())
+            battleFrameLogTimer = 0f
+        }
+    }
+
     private fun battleHealthSummary(): String {
-        if (battleLiveTime <= 0f) return "LIVE 0s // 0 FPS // T0 I0"
-        val averageFps = (renderedBattleFrames / battleLiveTime).toInt()
+        if (battleLiveTime <= 0f || frameTimeWindowSize == 0) {
+            return buildString {
+                append("LIVE 0s // FPS 0.0 // FT 0.0/0.0/0.0")
+                append(" // Q ${qualityProfile.label}")
+                append(" // FX${effects.size}")
+                append(" // T${threats.size} I${interceptors.size}")
+            }
+        }
+        val samples = copyFrameTimeWindow()
+        samples.sort()
+        val averageFrameMs = samples.sum() / samples.size
+        val averageFps = if (averageFrameMs > 0f) 1000f / averageFrameMs else 0f
+        val p50 = percentile(samples, 0.5f)
+        val p95 = percentile(samples, 0.95f)
+        val maxFrameMs = samples.last()
         return buildString {
-            append("LIVE ${battleLiveTime.toInt()}s // $averageFps FPS")
+            append("LIVE ${battleLiveTime.toInt()}s // FPS ${"%.1f".format(Locale.US, averageFps)}")
+            append(
+                " // FT ${"%.1f".format(Locale.US, p50)}/${"%.1f".format(Locale.US, p95)}/${"%.1f".format(Locale.US, maxFrameMs)}",
+            )
             append(" // Q ${qualityProfile.label}")
             append(" // FX${effects.size}")
             append(" // T${threats.size} I${interceptors.size}")
         }
+    }
+
+    private fun copyFrameTimeWindow(): FloatArray {
+        val copy = FloatArray(frameTimeWindowSize)
+        val start =
+            if (frameTimeWindowSize == frameTimeWindowMs.size) {
+                frameTimeWindowCursor
+            } else {
+                0
+            }
+        for (index in 0 until frameTimeWindowSize) {
+            copy[index] = frameTimeWindowMs[(start + index) % frameTimeWindowMs.size]
+        }
+        return copy
+    }
+
+    private fun percentile(
+        sortedSamples: FloatArray,
+        percentile: Float,
+    ): Float {
+        if (sortedSamples.isEmpty()) return 0f
+        val index = ((sortedSamples.size - 1) * percentile).toInt().coerceIn(0, sortedSamples.lastIndex)
+        return sortedSamples[index]
     }
 
     private fun updateLogic(dt: Float) {
@@ -2411,245 +2460,6 @@ class BattleScreen(
             MathUtils.lerp(1f, 0.54f, launcherRightPulse),
             1f,
         )
-    }
-
-    private fun spawnThreat() {
-        val launch = ThreatFactory.createThreatLaunch(wave, cityBlocks.random().position)
-        val instance = ModelInstance(models.get("threat"))
-        val threat =
-            ThreatEntity(
-                instance = instance,
-                position = launch.start,
-                targetPosition = launch.target,
-                velocity = launch.velocity,
-                id = "T-${MathUtils.random(1000, 9999)}",
-                trailCooldown = MathUtils.random(0f, THREAT_TRAIL_INTERVAL),
-            )
-        syncProjectileTransform(instance, launch.start, launch.velocity, THREAT_SCALE)
-        threats.add(threat)
-    }
-
-    private fun updateThreats(dt: Float) {
-        val iterator = threats.iterator()
-        while (iterator.hasNext()) {
-            val threat = iterator.next()
-            threat.velocity.mulAdd(gravity, dt)
-            threat.position.mulAdd(threat.velocity, dt)
-            syncProjectileTransform(threat.instance, threat.position, threat.velocity, THREAT_SCALE)
-
-            threat.trailCooldown -= dt
-            if (threat.trailCooldown <= 0f) {
-                spawnTrail(threat.position, true)
-                threat.trailCooldown = THREAT_TRAIL_INTERVAL
-            }
-
-            if (threat.position.dst2(Vector3.Zero) < settings.engagementRange * settings.engagementRange) {
-                threat.isTracked = true
-            }
-
-            val reachedTarget =
-                threat.position.dst2(threat.targetPosition) <= PhysicsModel.THREAT_IMPACT_RADIUS * PhysicsModel.THREAT_IMPACT_RADIUS
-            val hitGround = threat.position.y <= 0f
-            val leftBattlespace = threat.position.z >= PhysicsModel.THREAT_FAILSAFE_Z
-            if ((reachedTarget && threat.position.y <= 90f) || hitGround || leftBattlespace) {
-                val impactPoint =
-                    when {
-                        reachedTarget -> threat.targetPosition
-                        hitGround -> Vector3(threat.position.x, 0f, threat.position.z)
-                        else -> Vector3(threat.position.x, threat.position.y.coerceAtLeast(0f), threat.position.z)
-                    }
-                impactAt(impactPoint, 85f, true)
-                iterator.remove()
-            }
-        }
-    }
-
-    private fun updateInterceptors(dt: Float) {
-        val iterator = interceptors.iterator()
-        while (iterator.hasNext()) {
-            val interceptor = iterator.next()
-            val target = interceptor.target
-            if (target == null || !threats.contains(target, true)) {
-                iterator.remove()
-                continue
-            }
-
-            val aimPoint =
-                InterceptionMath.predictInterceptPoint(
-                    interceptor.position,
-                    target.position,
-                    target.velocity,
-                    settings.interceptorSpeed,
-                )
-            tempA.set(aimPoint).sub(interceptor.position)
-            if (!tempA.isZero(0.001f)) {
-                tempA.nor().scl(settings.interceptorSpeed)
-                interceptor.velocity.lerp(tempA, (dt * 4.2f).coerceAtMost(1f))
-            }
-            interceptor.velocity.nor().scl(settings.interceptorSpeed)
-            interceptor.position.mulAdd(interceptor.velocity, dt)
-            syncProjectileTransform(interceptor.instance, interceptor.position, interceptor.velocity, INTERCEPTOR_SCALE)
-
-            interceptor.trailCooldown -= dt
-            if (interceptor.trailCooldown <= 0f) {
-                spawnTrail(interceptor.position, false)
-                interceptor.trailCooldown = INTERCEPTOR_TRAIL_INTERVAL
-            }
-
-            if (EngagementPhysics.closesWithinFuse(
-                    interceptorPos = interceptor.position,
-                    interceptorVel = interceptor.velocity,
-                    targetPos = target.position,
-                    targetVel = target.velocity,
-                    dt = dt,
-                    fuseRadius = settings.blastRadius,
-                )
-            ) {
-                score += 150
-                credits += 180
-                spawnBlast(interceptor.position, settings.blastRadius * 2.2f)
-                spawnDebris(interceptor.position, 10, Color(0.7f, 0.7f, 0.74f, 1f))
-                triggerShake(10f, 0.3f)
-                playSfx("detonate", 0.5f)
-                threats.removeValue(target, true)
-                iterator.remove()
-                continue
-            }
-
-            if (interceptor.position.y > 4400f || interceptor.position.dst2(Vector3.Zero) > 7000f * 7000f) {
-                iterator.remove()
-            }
-        }
-
-        timeSinceLastLaunch += dt
-        if (timeSinceLastLaunch >= settings.launchCooldown) {
-            val nextTarget = findNextLaunchTarget()
-            if (nextTarget != null) {
-                launchInterceptor(nextTarget)
-                timeSinceLastLaunch = 0f
-            }
-        }
-    }
-
-    private fun findNextLaunchTarget(): ThreatEntity? {
-        val engagementRangeSquared = settings.engagementRange * settings.engagementRange
-        var bestThreat: ThreatEntity? = null
-        threats.forEach { threat ->
-            val inRange = threat.position.dst2(Vector3.Zero) < engagementRangeSquared
-            if (inRange) {
-                threat.isTracked = true
-            }
-            if (!inRange || interceptors.any { it.target == threat }) return@forEach
-
-            val incumbent = bestThreat
-            if (incumbent == null || isHigherPriorityThreat(threat, incumbent)) {
-                bestThreat = threat
-            }
-        }
-        return bestThreat
-    }
-
-    private fun isHigherPriorityThreat(
-        candidate: ThreatEntity,
-        incumbent: ThreatEntity,
-    ): Boolean = FireControl.hasPriorityOver(candidate.position, incumbent.position)
-
-    private fun launchInterceptor(target: ThreatEntity) {
-        val launcher =
-            launchers.minByOrNull { launcher ->
-                launcher.transform.getTranslation(tempA)
-                tempA.dst2(target.position)
-            } ?: return
-
-        launcher.transform.getTranslation(tempA)
-        tempA.y += 18f
-        val aimPoint = InterceptionMath.predictInterceptPoint(tempA, target.position, target.velocity, settings.interceptorSpeed)
-        tempB
-            .set(aimPoint)
-            .sub(tempA)
-            .nor()
-            .scl(settings.interceptorSpeed)
-        launcher.setRotationToward(tempB)
-
-        val instance = ModelInstance(models.get("interceptor"))
-        syncProjectileTransform(instance, tempA, tempB, INTERCEPTOR_SCALE)
-        interceptors.add(
-            InterceptorEntity(
-                id = "LEGACY-I-${MathUtils.random(1000, 9999)}",
-                instance = instance,
-                position = tempA.cpy(),
-                velocity = tempB.cpy(),
-                target = target,
-                trailCooldown = 0f,
-            ),
-        )
-        spawnBlast(tempA, 14f)
-        if (launchers.size > 1) {
-            when (launchers.indexOf(launcher, true)) {
-                0 -> launcherLeftPulse = 1f
-                1 -> launcherRightPulse = 1f
-            }
-        }
-        playSfx("launch", 0.35f)
-    }
-
-    private fun impactAt(
-        position: Vector3,
-        radius: Float,
-        hostile: Boolean,
-    ) {
-        spawnBlast(position, radius * 1.2f)
-        spawnDebris(position, if (hostile) 24 else 12, Color(0.4f, 0.38f, 0.36f, 1f))
-        triggerShake(if (hostile) 26f else 12f, 0.55f)
-        playSfx("impact", if (hostile) 0.8f else 0.45f)
-
-        cityBlocks.forEach { building ->
-            val damage =
-                DamageModel.computeBuildingDamage(
-                    buildingPosition = building.position,
-                    buildingWidth = building.width,
-                    buildingDepth = building.depth,
-                    impactPosition = position,
-                    blastRadius = radius,
-                    hostile = hostile,
-                )
-            if (damage > 0f) {
-                applyBuildingDamage(building, damage.coerceAtLeast(8f), position)
-            }
-        }
-
-        if (hostile) {
-            cityIntegrity = max(0f, cityIntegrity - DamageModel.cityIntegrityLoss(hostile = true, destroyedBuilding = false))
-        }
-    }
-
-    private fun applyBuildingDamage(
-        building: BuildingEntity,
-        damage: Float,
-        epicenter: Vector3,
-    ) {
-        if (building.integrity <= 0f) return
-        building.integrity = max(0f, building.integrity - damage)
-        building.collapseVelocity += damage * 0.0025f
-        building.leanTarget =
-            MathUtils.clamp(
-                building.leanTarget + (building.position.x - epicenter.x).sign() * damage * 0.05f,
-                -16f,
-                16f,
-            )
-
-        val material = building.instance.materials.first()
-        val tint = 0.28f + building.integrity / 140f
-        material.set(ColorAttribute.createDiffuse(Color(tint, tint, tint + 0.06f, 1f)))
-
-        if (building.integrity <= 0f) {
-            building.visibleHeight = building.baseHeight * 0.12f
-            building.collapseVelocity = max(building.collapseVelocity, 60f)
-            spawnDebris(building.position.cpy().add(0f, building.baseHeight * 0.35f, 0f), 28, Color(0.25f, 0.25f, 0.28f, 1f))
-            cityIntegrity = max(0f, cityIntegrity - DamageModel.cityIntegrityLoss(hostile = false, destroyedBuilding = true))
-        } else {
-            spawnDebris(building.position.cpy().add(0f, building.baseHeight * 0.45f, 0f), 6, Color(0.3f, 0.3f, 0.34f, 1f))
-        }
     }
 
     private fun updateBuildings(dt: Float) {
