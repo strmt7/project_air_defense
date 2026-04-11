@@ -30,6 +30,7 @@ tasks.register<JavaExec>("runBattleMonteCarlo") {
                 providers.gradleProperty("interceptorSpeed").orNull,
                 providers.gradleProperty("launchCooldown").orNull,
                 providers.gradleProperty("blastRadius").orNull,
+                providers.gradleProperty("doctrine").orNull,
             )
     }
 }

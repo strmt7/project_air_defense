@@ -10,6 +10,7 @@ Use this workflow whenever you modify gameplay, visuals, physics, UI, or Android
 ## Reference files
 
 - [../../docs/reference/ai-agent-context-routing.md](../../docs/reference/ai-agent-context-routing.md)
+- [../../docs/android-visual-qa.md](../../docs/android-visual-qa.md)
 - [../../docs/level-asset-pipeline.md](../../docs/level-asset-pipeline.md)
 - [../../docs/level-asset-source-map.md](../../docs/level-asset-source-map.md)
 - [../../android/assets/ATTRIBUTION.md](../../android/assets/ATTRIBUTION.md)
@@ -48,6 +49,7 @@ Use this workflow whenever you modify gameplay, visuals, physics, UI, or Android
    - Run `ktlintCheck`.
    - Build and install on Android.
    - Capture screenshots and logs from the emulator or device.
+   - Use the repo-local visual QA toolchain instead of guessing taps on libGDX surfaces.
 
 ## Definition of done
 

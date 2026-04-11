@@ -48,6 +48,42 @@ class BattleSimulationTest {
     }
 
     @Test
+    fun `shield wall doctrine improves intercept performance over disciplined doctrine`() {
+        val disciplined =
+            BattleMonteCarloRunner.run(
+                runs = 48,
+                waves = 1,
+                maxSecondsPerWave = 48f,
+                stepSeconds = 0.05f,
+                baseSeed = 12000L,
+                settings = DefenseSettings(doctrine = DefenseDoctrine.DISCIPLINED),
+            )
+        val shieldWall =
+            BattleMonteCarloRunner.run(
+                runs = 48,
+                waves = 1,
+                maxSecondsPerWave = 48f,
+                stepSeconds = 0.05f,
+                baseSeed = 12000L,
+                settings = DefenseSettings(doctrine = DefenseDoctrine.SHIELD_WALL),
+            )
+
+        val disciplinedInterceptRate = disciplined.map { it.interceptRate }.average()
+        val shieldWallInterceptRate = shieldWall.map { it.interceptRate }.average()
+        val disciplinedIntegrity = disciplined.map { it.cityIntegrity }.average()
+        val shieldWallIntegrity = shieldWall.map { it.cityIntegrity }.average()
+
+        assertTrue(
+            shieldWallInterceptRate > disciplinedInterceptRate,
+            "shield wall should raise intercept rate: disciplined=$disciplinedInterceptRate shieldWall=$shieldWallInterceptRate",
+        )
+        assertTrue(
+            shieldWallIntegrity >= disciplinedIntegrity,
+            "shield wall should not reduce average city integrity: disciplined=$disciplinedIntegrity shieldWall=$shieldWallIntegrity",
+        )
+    }
+
+    @Test
     fun `headless simulation targets real building coordinates`() {
         val simulation =
             BattleSimulation(
