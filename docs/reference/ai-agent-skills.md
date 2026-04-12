@@ -16,6 +16,11 @@ These repo-local skills are mandatory guidance surfaces for external agents.
 | `caveman` | any normal progress update or summary | token use stays low without losing proof |
 | `caveman-help` | an agent or user needs the current caveman mode map | one-shot help without changing active mode |
 | `verification-loop` | after non-trivial changes | verification is explicit and bounded |
+| `web-discovery` | current public-web research spans multiple sites or source types | discovery stays bounded, source-first, and date-aware |
+| `site-extract` | a known public page needs structured extraction | evidence stays compact, citation-ready, and reproducible |
+| `browser-fallback` | a page is JS-heavy or stateful and simple fetch is not enough | browser work stays deterministic and limited |
+| `source-audit` | a web-backed claim or recommendation needs trust weighting | confirmed facts, inference, and gaps stay separate |
+| `compliance-and-rate-limit` | repeated requests or larger-scope collection could create policy or load risk | collection stays cache-aware, paced, and non-evasive |
 | `android-visual-qa` | emulator navigation, screenshots, OCR, or template-driven tapping on libGDX surfaces | screen verification stops depending on guessed taps |
 | `level-asset-curation` | importing city, structure, terrain, or texture assets | asset sourcing stays legal, documented, and mobile-safe |
 | `android-3d-air-defense` | modifying gameplay, graphics, UI, Android behavior, or benchmarks | repo-specific game workflow is reused instead of re-derived |
