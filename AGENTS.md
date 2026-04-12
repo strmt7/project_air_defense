@@ -7,8 +7,7 @@ Keep this file small. Route outward instead of duplicating detail.
 2. `docs/reference/ai-agent-context-routing.md`
 3. `docs/reference/ai-agent-skills.md`
 4. `docs/index.md` when the routing doc alone is not enough
-5. one nearest domain doc
-6. one nearest code file and one nearest test
+5. one nearest domain doc, one nearest code file, and one nearest test
 
 Do not broad-read the repo on first pass.
 
