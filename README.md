@@ -18,6 +18,7 @@ A high-fidelity libGDX + Kotlin Android prototype where you command a Patriot-in
 - Release/install behavior: `docs/release-and-install.md`
 - Benchmark suite: `docs/benchmark-suite.md`
 - Benchmark sources: `docs/benchmark-sources.md`
+- Core detekt priorities: `docs/core-detekt-priorities.md`
 - Android visual QA: `docs/android-visual-qa.md`
 - Android visual QA sources: `docs/reference/android-visual-qa-sources.md`
 - Popular 3D Android game workflows: `docs/popular-3d-android-game-workflows.md`
