@@ -1,6 +1,7 @@
 package com.airdefense.game
 
 import com.badlogic.gdx.graphics.Camera
+import com.badlogic.gdx.graphics.Color
 import com.badlogic.gdx.graphics.GL20
 import com.badlogic.gdx.graphics.Pixmap
 import com.badlogic.gdx.graphics.Texture
@@ -17,13 +18,79 @@ import com.badlogic.gdx.graphics.g3d.utils.RenderContext
 import com.badlogic.gdx.graphics.glutils.ShaderProgram
 import com.badlogic.gdx.math.Matrix3
 
+private data class ShaderVector3(
+    val x: Float,
+    val y: Float,
+    val z: Float,
+)
+
+private fun shaderVec(
+    x: Float,
+    y: Float,
+    z: Float,
+): ShaderVector3 =
+    ShaderVector3(
+        x = x,
+        y = y,
+        z = z,
+    )
+
+private fun shaderColor(
+    red: Float,
+    green: Float,
+    blue: Float,
+    alpha: Float,
+): Color = Color(red, green, blue, alpha)
+
+private fun ShaderProgram.setUniformVec3(
+    name: String,
+    value: ShaderVector3,
+) {
+    setUniformf(name, value.x, value.y, value.z)
+}
+
+private object NightShaderDefaults {
+    const val WHITE_DIFFUSE_VALUE = 255
+    const val MID_ROUGHNESS_VALUE = 180
+    const val SOLID_TEXTURE_SIZE = 1
+    const val FULL_COLOR_CHANNEL = 255f
+    const val DEFAULT_ALPHA = 1f
+    const val DEFAULT_SHININESS = 24f
+    const val MINIMUM_SHININESS = 8f
+    const val ROUGHNESS_BIAS_NUMERATOR = 96f
+    const val MINIMUM_ROUGHNESS_BIAS = 0.35f
+    const val MAXIMUM_ROUGHNESS_BIAS = 1.6f
+    const val MINIMUM_POINT_LIGHT_RADIUS = 0f
+    const val FULL_OPACITY = 1f
+
+    val AMBIENT_COLOR = shaderVec(x = 0.16f, y = 0.19f, z = 0.24f)
+    val PRIMARY_LIGHT_DIRECTION = shaderVec(x = -0.35f, y = -1f, z = -0.18f)
+    val PRIMARY_LIGHT_COLOR = shaderVec(x = 0.56f, y = 0.62f, z = 0.72f)
+    val SECONDARY_LIGHT_DIRECTION = shaderVec(x = 0.35f, y = -0.24f, z = 0.42f)
+    val SECONDARY_LIGHT_COLOR = shaderVec(x = 0.18f, y = 0.16f, z = 0.22f)
+    val FOG_COLOR = shaderVec(x = 0.03f, y = 0.05f, z = 0.08f)
+    val FALLBACK_SPECULAR_COLOR =
+        shaderColor(
+            red = 0.24f,
+            green = 0.28f,
+            blue = 0.34f,
+            alpha = 1f,
+        )
+}
+
 class NightShaderProvider(
     private val impactLight: PointLight,
 ) : BaseShaderProvider() {
-    private val whiteDiffuse = createSolidTexture(255)
-    private val midRoughness = createSolidTexture(180)
+    private val whiteDiffuse = createSolidTexture(NightShaderDefaults.WHITE_DIFFUSE_VALUE)
+    private val midRoughness = createSolidTexture(NightShaderDefaults.MID_ROUGHNESS_VALUE)
 
-    override fun createShader(renderable: Renderable): Shader = NightSceneShader(renderable, impactLight, whiteDiffuse, midRoughness)
+    override fun createShader(renderable: Renderable): Shader =
+        NightSceneShader(
+            renderable = renderable,
+            impactLight = impactLight,
+            fallbackDiffuse = whiteDiffuse,
+            fallbackRoughness = midRoughness,
+        )
 
     override fun dispose() {
         super.dispose()
@@ -32,8 +99,19 @@ class NightShaderProvider(
     }
 
     private fun createSolidTexture(value: Int): Texture {
-        val pixmap = Pixmap(1, 1, Pixmap.Format.RGBA8888)
-        pixmap.setColor(value / 255f, value / 255f, value / 255f, 1f)
+        val pixmap =
+            Pixmap(
+                NightShaderDefaults.SOLID_TEXTURE_SIZE,
+                NightShaderDefaults.SOLID_TEXTURE_SIZE,
+                Pixmap.Format.RGBA8888,
+            )
+        val normalizedValue = value / NightShaderDefaults.FULL_COLOR_CHANNEL
+        pixmap.setColor(
+            normalizedValue,
+            normalizedValue,
+            normalizedValue,
+            NightShaderDefaults.DEFAULT_ALPHA,
+        )
         pixmap.fill()
         val texture = Texture(pixmap)
         texture.setFilter(Texture.TextureFilter.Linear, Texture.TextureFilter.Linear)
@@ -72,12 +150,12 @@ private class NightSceneShader(
         context.setDepthMask(true)
         program.setUniformMatrix("u_projViewTrans", camera.combined)
         program.setUniformf("u_cameraPos", camera.position)
-        program.setUniformf("u_ambientColor", 0.16f, 0.19f, 0.24f)
-        program.setUniformf("u_dirLightDir0", -0.35f, -1f, -0.18f)
-        program.setUniformf("u_dirLightColor0", 0.56f, 0.62f, 0.72f)
-        program.setUniformf("u_dirLightDir1", 0.35f, -0.24f, 0.42f)
-        program.setUniformf("u_dirLightColor1", 0.18f, 0.16f, 0.22f)
-        program.setUniformf("u_fogColor", 0.03f, 0.05f, 0.08f)
+        program.setUniformVec3("u_ambientColor", NightShaderDefaults.AMBIENT_COLOR)
+        program.setUniformVec3("u_dirLightDir0", NightShaderDefaults.PRIMARY_LIGHT_DIRECTION)
+        program.setUniformVec3("u_dirLightColor0", NightShaderDefaults.PRIMARY_LIGHT_COLOR)
+        program.setUniformVec3("u_dirLightDir1", NightShaderDefaults.SECONDARY_LIGHT_DIRECTION)
+        program.setUniformVec3("u_dirLightColor1", NightShaderDefaults.SECONDARY_LIGHT_COLOR)
+        program.setUniformVec3("u_fogColor", NightShaderDefaults.FOG_COLOR)
     }
 
     override fun render(renderable: Renderable) {
@@ -91,7 +169,9 @@ private class NightSceneShader(
         val diffuseColor = (material.get(ColorAttribute.Diffuse) as? ColorAttribute)?.color
         val specularColor = (material.get(ColorAttribute.Specular) as? ColorAttribute)?.color
         val emissiveColor = (material.get(ColorAttribute.Emissive) as? ColorAttribute)?.color
-        val shininess = (material.get(FloatAttribute.Shininess) as? FloatAttribute)?.value ?: 24f
+        val shininess =
+            (material.get(FloatAttribute.Shininess) as? FloatAttribute)?.value
+                ?: NightShaderDefaults.DEFAULT_SHININESS
         val cullFace = (material.get(IntAttribute.CullFace) as? IntAttribute)?.value ?: GL20.GL_BACK
 
         val diffuseTexture = diffuseAttribute?.textureDescription?.texture ?: fallbackDiffuse
@@ -104,18 +184,26 @@ private class NightSceneShader(
         program.setUniformMatrix("u_normalMatrix", normalMatrix)
         program.setUniformi("u_diffuseTex", 0)
         program.setUniformi("u_roughnessTex", 1)
-        program.setUniformf("u_diffuseColor", diffuseColor ?: com.badlogic.gdx.graphics.Color.WHITE)
+        program.setUniformf("u_diffuseColor", diffuseColor ?: Color.WHITE)
+        program.setUniformf("u_specularColor", specularColor ?: NightShaderDefaults.FALLBACK_SPECULAR_COLOR)
+        program.setUniformf("u_emissiveColor", emissiveColor ?: Color.CLEAR)
         program.setUniformf(
-            "u_specularColor",
-            specularColor ?: com.badlogic.gdx.graphics
-                .Color(0.24f, 0.28f, 0.34f, 1f),
+            "u_roughnessBias",
+            (
+                NightShaderDefaults.ROUGHNESS_BIAS_NUMERATOR /
+                    shininess.coerceAtLeast(NightShaderDefaults.MINIMUM_SHININESS)
+            ).coerceIn(
+                NightShaderDefaults.MINIMUM_ROUGHNESS_BIAS,
+                NightShaderDefaults.MAXIMUM_ROUGHNESS_BIAS,
+            ),
         )
-        program.setUniformf("u_emissiveColor", emissiveColor ?: com.badlogic.gdx.graphics.Color.CLEAR)
-        program.setUniformf("u_roughnessBias", (96f / shininess.coerceAtLeast(8f)).coerceIn(0.35f, 1.6f))
         program.setUniformf("u_pointLightPos", impactLight.position)
         program.setUniformf("u_pointLightColor", impactLight.color)
-        program.setUniformf("u_pointLightRadius", impactLight.intensity.coerceAtLeast(0f))
-        program.setUniformf("u_opacity", blend?.opacity ?: 1f)
+        program.setUniformf(
+            "u_pointLightRadius",
+            impactLight.intensity.coerceAtLeast(NightShaderDefaults.MINIMUM_POINT_LIGHT_RADIUS),
+        )
+        program.setUniformf("u_opacity", blend?.opacity ?: NightShaderDefaults.FULL_OPACITY)
         context.setCullFace(cullFace)
         context.setBlending(blend != null, GL20.GL_SRC_ALPHA, GL20.GL_ONE_MINUS_SRC_ALPHA)
 

@@ -51,10 +51,16 @@ class BattleSkillBenchmarksTest {
     fun `prox-fuze benchmark fires inside a single control window`() {
         val detonates =
             EngagementPhysics.closesWithinFuse(
-                interceptorPos = Vector3(-40f, 0f, 0f),
-                interceptorVel = Vector3(180f, 24f, -12f),
-                targetPos = Vector3(55f, 18f, -8f),
-                targetVel = Vector3(-135f, -8f, 4f),
+                interceptor =
+                    MotionSample(
+                        position = Vector3(-40f, 0f, 0f),
+                        velocity = Vector3(180f, 24f, -12f),
+                    ),
+                target =
+                    MotionSample(
+                        position = Vector3(55f, 18f, -8f),
+                        velocity = Vector3(-135f, -8f, 4f),
+                    ),
                 dt = 0.4f,
                 fuseRadius = 34f,
             )

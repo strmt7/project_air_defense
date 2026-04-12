@@ -31,21 +31,33 @@ class BattleSystemsTest {
 
         val hostileDamage =
             DamageModel.computeBuildingDamage(
-                buildingPosition = building,
-                buildingWidth = 60f,
-                buildingDepth = 60f,
-                impactPosition = impact,
-                blastRadius = 80f,
-                hostile = true,
+                building =
+                    BuildingFootprint(
+                        position = building,
+                        width = 60f,
+                        depth = 60f,
+                    ),
+                impact =
+                    BlastImpact(
+                        position = impact,
+                        radius = 80f,
+                        hostile = true,
+                    ),
             )
         val defensiveDamage =
             DamageModel.computeBuildingDamage(
-                buildingPosition = building,
-                buildingWidth = 60f,
-                buildingDepth = 60f,
-                impactPosition = impact,
-                blastRadius = 80f,
-                hostile = false,
+                building =
+                    BuildingFootprint(
+                        position = building,
+                        width = 60f,
+                        depth = 60f,
+                    ),
+                impact =
+                    BlastImpact(
+                        position = impact,
+                        radius = 80f,
+                        hostile = false,
+                    ),
             )
 
         assertTrue(hostileDamage > defensiveDamage)

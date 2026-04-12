@@ -6,7 +6,9 @@
 - `StartScreen`
   Draws the textured menu scene and transitions into `BattleScreen`.
 - `BattleScreen`
-  Owns renderables, HUD, audio, effects, and destruction presentation.
+  Owns battle orchestration, live entity state, audio/effects hooks, and delegates frame composition to `BattleSceneRenderer`.
+- `BattleSceneRenderer`
+  Owns backdrop composition, atmosphere passes, loading/game-over screens, and radar/threat overlay rendering.
 - `BattleSimulation`
   Owns the live battle math used by both the GUI and the headless runner.
 - `BattleWorldLayout`
@@ -35,6 +37,8 @@
   facade/window maps, ground/road maps, metal maps, concrete maps.
 - Imported textures:
   sky panorama and skyline backdrop.
+- Frame composition:
+  `BattleSceneRenderer` draws backdrop bands, reflection/horizon layers, atmosphere fog, radar contacts, and tracked-threat labels after the 3D world pass.
 - Shader:
   `NightShader` combines diffuse textures, roughness textures, emissive glow, directional moon/fill light, impact point light, specular response, fresnel rim, and fog.
 
@@ -63,5 +67,7 @@
   `scripts/run-battle-monte-carlo.cmd`
 - Rendering:
   emulator-verified for menu flow, battle entry, HUD state, and projectile readability.
+- Visual QA tooling:
+  `tools/android_visual_qa/visual_qa.py` drives OCR-backed launch, tap, capture, and screen-text verification on the emulator.
 - Android packaging:
   debug install verified on emulator; production channel still requires a stable release keystore for update-safe release builds.

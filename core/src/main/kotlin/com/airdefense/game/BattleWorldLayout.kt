@@ -22,130 +22,187 @@ data class RadarPlotPoint(
     val y: Float,
 )
 
+private data class LayoutPlacement(
+    val modelName: String,
+    val x: Float,
+    val z: Float,
+    val yaw: Float = 0f,
+)
+
+private const val BUILDING_ID_PADDING = 3
+private const val GROUND_LEVEL_Y = 0f
+private const val RADAR_HORIZONTAL_PADDING_RATIO = 0.08f
+private const val RADAR_VERTICAL_PADDING_RATIO = 0.08f
+private const val RADAR_MARKER_X_RATIO = 0.5f
+private const val RADAR_MARKER_Y_RATIO = 0.1f
+private const val RADAR_SWEEP_START_RATIO = 0.08f
+private const val RADAR_SWEEP_SPAN_RATIO = 0.84f
+private const val RADAR_NORMALIZED_CENTER = 0.5f
+private const val RADAR_NORMALIZED_MIN = 0f
+private const val RADAR_NORMALIZED_MAX = 1f
+
+private fun worldPoint(
+    x: Float,
+    y: Float,
+    z: Float,
+): Vector3 = Vector3(x, y, z)
+
+private fun metrics(
+    baseHeight: Float,
+    width: Float,
+    depth: Float,
+): BuildingMetrics =
+    BuildingMetrics(
+        baseHeight = baseHeight,
+        width = width,
+        depth = depth,
+    )
+
+private fun placement(
+    modelName: String,
+    x: Float,
+    z: Float,
+    yaw: Float = 0f,
+): LayoutPlacement =
+    LayoutPlacement(
+        modelName = modelName,
+        x = x,
+        z = z,
+        yaw = yaw,
+    )
+
+private val launcherPads =
+    listOf(
+        worldPoint(x = -160f, y = 5f, z = 260f),
+        worldPoint(x = 210f, y = 5f, z = 220f),
+    )
+
+private val defenseOriginPoint = worldPoint(x = 25f, y = 0f, z = 240f)
+private val radarOriginPoint = worldPoint(x = 24f, y = 5f, z = 120f)
+
+private val defaultBuildingMetrics =
+    metrics(
+        baseHeight = 140f,
+        width = 100f,
+        depth = 80f,
+    )
+
+private val buildingMetricsByModel =
+    mapOf(
+        "tower_a" to metrics(baseHeight = 280f, width = 58f, depth = 58f),
+        "tower_b" to metrics(baseHeight = 210f, width = 84f, depth = 84f),
+        "tower_c" to metrics(baseHeight = 130f, width = 120f, depth = 90f),
+        "tower_d" to metrics(baseHeight = 360f, width = 96f, depth = 74f),
+        "tower_e" to metrics(baseHeight = 178f, width = 146f, depth = 112f),
+        "podium" to metrics(baseHeight = 78f, width = 180f, depth = 120f),
+        "hotel" to metrics(baseHeight = 118f, width = 132f, depth = 72f),
+        "coastal_slab" to metrics(baseHeight = 96f, width = 228f, depth = 56f),
+        "office_slab" to metrics(baseHeight = 152f, width = 168f, depth = 92f),
+        "needle_tower" to metrics(baseHeight = 420f, width = 44f, depth = 44f),
+        "setback_tower" to metrics(baseHeight = 304f, width = 118f, depth = 92f),
+    )
+
+private val waterfrontPlacements =
+    listOf(
+        placement(modelName = "coastal_slab", x = -1420f, z = -1450f, yaw = 4f),
+        placement(modelName = "hotel", x = -980f, z = -1490f, yaw = -4f),
+        placement(modelName = "coastal_slab", x = -360f, z = -1430f, yaw = 4f),
+        placement(modelName = "hotel", x = 220f, z = -1480f, yaw = -4f),
+        placement(modelName = "coastal_slab", x = 860f, z = -1420f, yaw = 4f),
+        placement(modelName = "hotel", x = 1500f, z = -1490f, yaw = -4f),
+        placement(modelName = "coastal_slab", x = 2180f, z = -1440f, yaw = 4f),
+        placement(modelName = "hotel", x = 2860f, z = -1490f, yaw = -4f),
+        placement(modelName = "coastal_slab", x = 3520f, z = -1430f, yaw = 4f),
+    )
+
+private val skylinePlacements =
+    listOf(
+        placement(modelName = "setback_tower", x = -540f, z = -1040f, yaw = 8f),
+        placement(modelName = "tower_d", x = -40f, z = -960f, yaw = -7f),
+        placement(modelName = "needle_tower", x = 360f, z = -900f, yaw = -7f),
+        placement(modelName = "tower_a", x = 760f, z = -980f, yaw = 8f),
+        placement(modelName = "tower_e", x = 1180f, z = -840f, yaw = -7f),
+        placement(modelName = "setback_tower", x = 1660f, z = -940f, yaw = -7f),
+        placement(modelName = "tower_d", x = 2140f, z = -780f, yaw = 8f),
+        placement(modelName = "needle_tower", x = 2520f, z = -960f, yaw = -7f),
+        placement(modelName = "tower_a", x = 2920f, z = -840f, yaw = -7f),
+        placement(modelName = "setback_tower", x = 3400f, z = -930f, yaw = 8f),
+    )
+
+private val innerCityPlacements =
+    listOf(
+        placement(modelName = "office_slab", x = -1020f, z = -620f, yaw = -9f),
+        placement(modelName = "tower_b", x = -440f, z = -480f, yaw = 7f),
+        placement(modelName = "tower_c", x = 100f, z = -320f, yaw = -9f),
+        placement(modelName = "office_slab", x = 760f, z = -220f, yaw = 7f),
+        placement(modelName = "tower_b", x = 1420f, z = -120f, yaw = -9f),
+        placement(modelName = "tower_c", x = 2040f, z = -60f, yaw = 7f),
+        placement(modelName = "office_slab", x = 2700f, z = -180f, yaw = -9f),
+        placement(modelName = "tower_b", x = 3340f, z = -240f, yaw = 7f),
+        placement(modelName = "tower_c", x = 480f, z = 220f, yaw = -9f),
+        placement(modelName = "tower_b", x = 1220f, z = 320f, yaw = 7f),
+        placement(modelName = "tower_e", x = 1960f, z = 240f, yaw = -9f),
+        placement(modelName = "office_slab", x = 2680f, z = 120f, yaw = 7f),
+    )
+
+private val promenadePlacements =
+    listOf(
+        placement(modelName = "podium", x = -1040f, z = 420f, yaw = -5f),
+        placement(modelName = "hotel", x = -1380f, z = 580f, yaw = 5f),
+        placement(modelName = "podium", x = 3440f, z = 360f, yaw = -5f),
+        placement(modelName = "hotel", x = 3900f, z = 560f, yaw = 5f),
+    )
+
+private val inlandPlacements =
+    listOf(
+        placement(modelName = "tower_c", x = -180f, z = 820f, yaw = 5f),
+        placement(modelName = "tower_b", x = 620f, z = 980f, yaw = -7f),
+        placement(modelName = "podium", x = 1380f, z = 860f, yaw = 5f),
+        placement(modelName = "tower_c", x = 2120f, z = 760f, yaw = -7f),
+        placement(modelName = "tower_b", x = 2880f, z = 820f, yaw = 5f),
+        placement(modelName = "tower_c", x = 3620f, z = 720f, yaw = -7f),
+    )
+
+private val layoutPlacements =
+    waterfrontPlacements +
+        skylinePlacements +
+        innerCityPlacements +
+        promenadePlacements +
+        inlandPlacements
+
 object BattleWorldLayout {
     const val WATERFRONT_SAFE_Z = -1480f
     const val RADAR_HALF_WIDTH = 4500f
     const val RADAR_NEAR_Z = 720f
     const val RADAR_FAR_Z = -4500f
 
-    private val launcherPads =
-        listOf(
-            Vector3(-160f, 5f, 260f),
-            Vector3(210f, 5f, 220f),
+    fun launcherPositions(): List<Vector3> = launcherPads.map(Vector3::cpy)
+
+    fun defenseOrigin(): Vector3 = defenseOriginPoint.cpy()
+
+    fun radarPosition(): Vector3 = radarOriginPoint.cpy()
+
+    fun buildingMetrics(modelName: String) = buildingMetricsByModel[modelName] ?: defaultBuildingMetrics
+
+    fun buildingDefinitions(): List<BattleBuildingDefinition> =
+        layoutPlacements
+            .mapIndexed { index, placement ->
+                placement.toDefinition(index + 1)
+            }
+
+    private fun LayoutPlacement.toDefinition(order: Int): BattleBuildingDefinition {
+        val metrics = buildingMetrics(modelName)
+        val correctedZ = maxOf(z, WATERFRONT_SAFE_Z)
+        return BattleBuildingDefinition(
+            id = buildingId(order),
+            modelName = modelName,
+            position = worldPoint(x = x, y = GROUND_LEVEL_Y, z = correctedZ),
+            yaw = yaw,
+            metrics = metrics,
         )
-
-    val defenseOrigin: Vector3 = Vector3(25f, 0f, 240f)
-
-    fun launcherPositions(): List<Vector3> = launcherPads.map { it.cpy() }
-
-    fun radarPosition(): Vector3 = Vector3(24f, 5f, 120f)
-
-    fun buildingMetrics(modelName: String): BuildingMetrics =
-        when (modelName) {
-            "tower_a" -> BuildingMetrics(280f, 58f, 58f)
-            "tower_b" -> BuildingMetrics(210f, 84f, 84f)
-            "tower_c" -> BuildingMetrics(130f, 120f, 90f)
-            "tower_d" -> BuildingMetrics(360f, 96f, 74f)
-            "tower_e" -> BuildingMetrics(178f, 146f, 112f)
-            "podium" -> BuildingMetrics(78f, 180f, 120f)
-            "hotel" -> BuildingMetrics(118f, 132f, 72f)
-            "coastal_slab" -> BuildingMetrics(96f, 228f, 56f)
-            "office_slab" -> BuildingMetrics(152f, 168f, 92f)
-            "needle_tower" -> BuildingMetrics(420f, 44f, 44f)
-            "setback_tower" -> BuildingMetrics(304f, 118f, 92f)
-            else -> BuildingMetrics(140f, 100f, 80f)
-        }
-
-    fun buildingDefinitions(): List<BattleBuildingDefinition> {
-        val definitions = mutableListOf<BattleBuildingDefinition>()
-        var nextId = 1
-
-        fun addBuilding(
-            modelName: String,
-            x: Float,
-            z: Float,
-            yaw: Float = 0f,
-        ) {
-            val metrics = buildingMetrics(modelName)
-            val correctedZ = maxOf(z, WATERFRONT_SAFE_Z)
-            definitions +=
-                BattleBuildingDefinition(
-                    id = "B-${nextId++.toString().padStart(3, '0')}",
-                    modelName = modelName,
-                    position = Vector3(x, 0f, correctedZ),
-                    yaw = yaw,
-                    metrics = metrics,
-                )
-        }
-
-        listOf(
-            Triple("coastal_slab", -1420f, -1450f),
-            Triple("hotel", -980f, -1490f),
-            Triple("coastal_slab", -360f, -1430f),
-            Triple("hotel", 220f, -1480f),
-            Triple("coastal_slab", 860f, -1420f),
-            Triple("hotel", 1500f, -1490f),
-            Triple("coastal_slab", 2180f, -1440f),
-            Triple("hotel", 2860f, -1490f),
-            Triple("coastal_slab", 3520f, -1430f),
-        ).forEachIndexed { index, (model, x, z) ->
-            addBuilding(model, x, z, yaw = if (index % 2 == 0) 4f else -4f)
-        }
-
-        listOf(
-            Triple("setback_tower", -540f, -1040f),
-            Triple("tower_d", -40f, -960f),
-            Triple("needle_tower", 360f, -900f),
-            Triple("tower_a", 760f, -980f),
-            Triple("tower_e", 1180f, -840f),
-            Triple("setback_tower", 1660f, -940f),
-            Triple("tower_d", 2140f, -780f),
-            Triple("needle_tower", 2520f, -960f),
-            Triple("tower_a", 2920f, -840f),
-            Triple("setback_tower", 3400f, -930f),
-        ).forEachIndexed { index, (model, x, z) ->
-            addBuilding(model, x, z, yaw = if (index % 3 == 0) 8f else -7f)
-        }
-
-        listOf(
-            Triple("office_slab", -1020f, -620f),
-            Triple("tower_b", -440f, -480f),
-            Triple("tower_c", 100f, -320f),
-            Triple("office_slab", 760f, -220f),
-            Triple("tower_b", 1420f, -120f),
-            Triple("tower_c", 2040f, -60f),
-            Triple("office_slab", 2700f, -180f),
-            Triple("tower_b", 3340f, -240f),
-            Triple("tower_c", 480f, 220f),
-            Triple("tower_b", 1220f, 320f),
-            Triple("tower_e", 1960f, 240f),
-            Triple("office_slab", 2680f, 120f),
-        ).forEachIndexed { index, (model, x, z) ->
-            addBuilding(model, x, z, yaw = if (index % 2 == 0) -9f else 7f)
-        }
-
-        listOf(
-            Triple("podium", -1040f, 420f),
-            Triple("hotel", -1380f, 580f),
-            Triple("podium", 3440f, 360f),
-            Triple("hotel", 3900f, 560f),
-        ).forEachIndexed { index, (model, x, z) ->
-            addBuilding(model, x, z, yaw = if (index % 2 == 0) -5f else 5f)
-        }
-
-        listOf(
-            Triple("tower_c", -180f, 820f),
-            Triple("tower_b", 620f, 980f),
-            Triple("podium", 1380f, 860f),
-            Triple("tower_c", 2120f, 760f),
-            Triple("tower_b", 2880f, 820f),
-            Triple("tower_c", 3620f, 720f),
-        ).forEachIndexed { index, (model, x, z) ->
-            addBuilding(model, x, z, yaw = if (index % 2 == 0) 5f else -7f)
-        }
-
-        return definitions
     }
+
+    private fun buildingId(order: Int): String = "B-${order.toString().padStart(BUILDING_ID_PADDING, '0')}"
 }
 
 object RadarProjection {
@@ -156,14 +213,24 @@ object RadarProjection {
         radarWidth: Float,
         radarHeight: Float,
     ): RadarPlotPoint {
-        val horizontalPadding = radarWidth * 0.08f
-        val verticalPadding = radarHeight * 0.08f
-        val normalizedX = ((position.x / BattleWorldLayout.RADAR_HALF_WIDTH) * 0.5f + 0.5f).coerceIn(0f, 1f)
+        val horizontalPadding = radarWidth * RADAR_HORIZONTAL_PADDING_RATIO
+        val verticalPadding = radarHeight * RADAR_VERTICAL_PADDING_RATIO
+        val normalizedX =
+            (
+                (position.x / BattleWorldLayout.RADAR_HALF_WIDTH) * RADAR_NORMALIZED_CENTER +
+                    RADAR_NORMALIZED_CENTER
+            ).coerceIn(
+                RADAR_NORMALIZED_MIN,
+                RADAR_NORMALIZED_MAX,
+            )
         val normalizedDepth =
             (
                 (BattleWorldLayout.RADAR_NEAR_Z - position.z) /
                     (BattleWorldLayout.RADAR_NEAR_Z - BattleWorldLayout.RADAR_FAR_Z)
-            ).coerceIn(0f, 1f)
+            ).coerceIn(
+                RADAR_NORMALIZED_MIN,
+                RADAR_NORMALIZED_MAX,
+            )
 
         return RadarPlotPoint(
             x = radarX + horizontalPadding + normalizedX * (radarWidth - horizontalPadding * 2f),
@@ -177,8 +244,9 @@ object RadarProjection {
         radarWidth: Float,
         radarHeight: Float,
     ): Vector2 {
-        val markerY = radarY + radarHeight * 0.1f
-        return Vector2(radarX + radarWidth * 0.5f, markerY)
+        val markerX = radarX + radarWidth * RADAR_MARKER_X_RATIO
+        val markerY = radarY + radarHeight * RADAR_MARKER_Y_RATIO
+        return Vector2(markerX, markerY)
     }
 
     fun sweepY(
@@ -187,6 +255,6 @@ object RadarProjection {
         phase: Float,
     ): Float {
         val clampedPhase = phase.coerceIn(0f, 1f)
-        return radarY + radarHeight * 0.08f + clampedPhase * radarHeight * 0.84f
+        return radarY + radarHeight * RADAR_SWEEP_START_RATIO + clampedPhase * radarHeight * RADAR_SWEEP_SPAN_RATIO
     }
 }

@@ -11,7 +11,6 @@ import com.badlogic.gdx.graphics.PerspectiveCamera
 import com.badlogic.gdx.graphics.Pixmap
 import com.badlogic.gdx.graphics.Texture
 import com.badlogic.gdx.graphics.VertexAttributes
-import com.badlogic.gdx.graphics.g2d.GlyphLayout
 import com.badlogic.gdx.graphics.g2d.TextureRegion
 import com.badlogic.gdx.graphics.g3d.Environment
 import com.badlogic.gdx.graphics.g3d.Material
@@ -46,7 +45,6 @@ import com.badlogic.gdx.scenes.scene2d.ui.TextButton
 import com.badlogic.gdx.scenes.scene2d.utils.ChangeListener
 import com.badlogic.gdx.utils.Array
 import com.badlogic.gdx.utils.ObjectMap
-import com.badlogic.gdx.utils.ScreenUtils
 import com.badlogic.gdx.utils.viewport.ScreenViewport
 import java.util.Locale
 import kotlin.math.abs
@@ -75,6 +73,7 @@ class BattleScreen(
     private val textures = Array<Texture>()
     private val skin = TacticalUiSkin.create(textures, TacticalUiDensity.BATTLE)
     private val whiteRegion by lazy { skin.get("white_region", com.badlogic.gdx.graphics.g2d.TextureRegion::class.java) }
+    private val sceneRenderer by lazy { BattleSceneRenderer(stage, skin, whiteRegion) }
     private var battleSkyTexture: Texture? = null
     private var battleSkyRegion: TextureRegion? = null
     private var battleHorizonTexture: Texture? = null
@@ -111,7 +110,6 @@ class BattleScreen(
     private val tempB = Vector3()
     private val tempC = Vector3()
     private val tempD = Vector3()
-    private val tempProject = Vector3()
     private val tmpMatrix = Matrix4()
 
     private var credits = 10000
@@ -173,8 +171,6 @@ class BattleScreen(
 
     private companion object {
         private const val WORLD_RADIUS = 9000f
-        private const val THREAT_TRAIL_INTERVAL = 0.14f
-        private const val INTERCEPTOR_TRAIL_INTERVAL = 0.05f
         private const val THREAT_SCALE = 3.2f
         private const val INTERCEPTOR_SCALE = 3.4f
     }
@@ -409,8 +405,7 @@ class BattleScreen(
                             },
                         )
                     },
-                )
-                    .width(340f * uiScale)
+                ).width(340f * uiScale)
                     .fillX()
                     .height(56f * uiScale)
                     .padTop(10f * uiScale)
@@ -512,11 +507,6 @@ class BattleScreen(
         base: Int,
         minimum: Int = 64,
     ): Int = max(minimum, (base * qualityProfile.sceneTextureScale).toInt())
-
-    private fun scaledFacadeSize(
-        base: Int,
-        minimum: Int,
-    ): Int = max(minimum, (base * qualityProfile.facadeTextureScale).toInt())
 
     private fun currentEffectBudgetScale(): Float {
         val scenePressure = threats.size + interceptors.size * 0.75f + effects.size / 18f
@@ -1199,6 +1189,13 @@ class BattleScreen(
             )
         BoxShapeBuilder.build(defensePad, 2520f, 14f, 620f, 520f, 5f, 310f)
         models.put("ground", mb.end())
+        sceneRenderer.updateBackdropTextures(
+            skyRegion = battleSkyRegion,
+            horizonTexture = battleHorizonTexture,
+            glowTexture = battleGlowTexture,
+            reflectionTexture = battleReflectionTexture,
+            fogTexture = battleFogTexture,
+        )
     }
 
     private fun generateBuildingModels() {
@@ -1645,102 +1642,28 @@ class BattleScreen(
     override fun render(delta: Float) {
         if (!initialized) {
             runInitializationStep()
-            renderLoading()
+            sceneRenderer.renderLoading(loadingMessage, buildDiagnosticsLine(), initializationProgress())
             return
         }
 
         if (isGameOver) {
-            renderGameOver()
+            sceneRenderer.renderGameOver(score)
             return
         }
 
         updateLogic(min(delta, 1f / 30f))
         battleLiveTime += delta
         recordFrameTelemetry(delta)
+        sceneRenderer.renderBackdrop(battleLiveTime = battleLiveTime, impactLightIntensity = impactLight.intensity)
+        renderWorldModels()
+        sceneRenderer.renderAtmosphere()
 
-        ScreenUtils.clear(0.01f, 0.02f, 0.04f, 1f, true)
-        battleSkyRegion?.let { sky ->
-            val batch = stage.batch
-            stage.viewport.apply()
-            batch.projectionMatrix = stage.camera.combined
-            batch.begin()
-            batch.color = Color.WHITE
-            batch.draw(sky, 0f, 0f, Gdx.graphics.width.toFloat(), Gdx.graphics.height.toFloat())
-            batch.setColor(0.02f, 0.07f, 0.14f, 0.44f)
-            batch.draw(
-                whiteRegion,
-                0f,
-                Gdx.graphics.height * 0.22f,
-                Gdx.graphics.width.toFloat(),
-                Gdx.graphics.height * 0.11f,
-            )
-            batch.setColor(0.78f, 0.62f, 0.4f, 0.16f)
-            batch.draw(
-                whiteRegion,
-                0f,
-                Gdx.graphics.height * 0.205f,
-                Gdx.graphics.width.toFloat(),
-                Gdx.graphics.height * 0.028f,
-            )
-            batch.setColor(0.96f, 0.66f, 0.24f, 0.14f)
-            batch.draw(
-                whiteRegion,
-                0f,
-                Gdx.graphics.height * 0.238f,
-                Gdx.graphics.width.toFloat(),
-                Gdx.graphics.height * 0.012f,
-            )
-            battleReflectionTexture?.let { reflection ->
-                val drift = kotlin.math.sin(battleLiveTime * 0.36f) * Gdx.graphics.width * 0.015f
-                val impactFlash = (impactLight.intensity / 1200f).coerceIn(0f, 1f)
-                batch.setColor(1f, 1f, 1f, 0.3f + impactFlash * 0.14f)
-                batch.draw(
-                    reflection,
-                    -drift,
-                    Gdx.graphics.height * 0.11f,
-                    Gdx.graphics.width * 1.05f,
-                    Gdx.graphics.height * 0.14f,
-                )
-                batch.setColor(1f, 0.78f, 0.38f, impactFlash * 0.18f)
-                batch.draw(
-                    whiteRegion,
-                    0f,
-                    Gdx.graphics.height * 0.145f,
-                    Gdx.graphics.width.toFloat(),
-                    Gdx.graphics.height * 0.028f,
-                )
-            }
-            battleHorizonTexture?.let { horizon ->
-                batch.setColor(1f, 1f, 1f, 0.82f)
-                batch.draw(
-                    horizon,
-                    0f,
-                    Gdx.graphics.height * 0.19f,
-                    Gdx.graphics.width.toFloat(),
-                    Gdx.graphics.height * 0.24f,
-                )
-                battleGlowTexture?.let { glow ->
-                    batch.setColor(1f, 1f, 1f, 0.92f)
-                    batch.draw(
-                        glow,
-                        0f,
-                        Gdx.graphics.height * 0.12f,
-                        Gdx.graphics.width.toFloat(),
-                        Gdx.graphics.height * 0.2f,
-                    )
-                }
-                batch.setColor(0.04f, 0.06f, 0.1f, 0.12f)
-                batch.draw(
-                    whiteRegion,
-                    0f,
-                    0f,
-                    Gdx.graphics.width.toFloat(),
-                    Gdx.graphics.height * 0.12f,
-                )
-            }
-            batch.color = Color.WHITE
-            batch.end()
-        }
+        stage.act(delta)
+        stage.draw()
+        sceneRenderer.renderOverlay(threats, interceptors, camera, radarScanProgress)
+    }
+
+    private fun renderWorldModels() {
         modelBatch.begin(camera)
         instances.forEach { modelBatch.render(it, environment) }
         cityBlocks.forEach { if (it.visibleHeight > 1f) modelBatch.render(it.instance, environment) }
@@ -1749,39 +1672,6 @@ class BattleScreen(
         debris.forEach { modelBatch.render(it.instance, environment) }
         effects.forEach { modelBatch.render(it.instance, environment) }
         modelBatch.end()
-
-        renderAtmosphere()
-
-        stage.act(delta)
-        stage.draw()
-        renderOverlay()
-    }
-
-    private fun renderAtmosphere() {
-        val batch = stage.batch
-        stage.viewport.apply()
-        batch.projectionMatrix = stage.camera.combined
-        batch.begin()
-        battleFogTexture?.let { fog ->
-            batch.setColor(1f, 1f, 1f, 0.78f)
-            batch.draw(
-                fog,
-                0f,
-                Gdx.graphics.height * 0.2f,
-                Gdx.graphics.width.toFloat(),
-                Gdx.graphics.height * 0.16f,
-            )
-            batch.setColor(1f, 1f, 1f, 0.54f)
-            batch.draw(
-                fog,
-                -Gdx.graphics.width * 0.08f,
-                Gdx.graphics.height * 0.1f,
-                Gdx.graphics.width * 1.16f,
-                Gdx.graphics.height * 0.11f,
-            )
-        }
-        batch.color = Color.WHITE
-        batch.end()
     }
 
     private fun runInitializationStep() {
@@ -1798,104 +1688,12 @@ class BattleScreen(
         initializationStep++
     }
 
-    private fun renderLoading() {
-        ScreenUtils.clear(0.01f, 0.02f, 0.04f, 1f, true)
-        val batch = stage.batch
-        val font = skin.getFont("default")
-        val titleFont = skin.getFont("title-font")
-        val titleLayout = GlyphLayout(titleFont, "INITIALIZING BATTLESPACE")
-        val statusLayout = GlyphLayout(font, loadingMessage)
-        val diagnosticsLayout = GlyphLayout(font, buildDiagnosticsLine())
-        val progress = initializationStep.toFloat() / initializationTasks.size.coerceAtLeast(1)
-        val barWidth = Gdx.graphics.width * 0.34f
-        val barHeight = 16f
-        val barX = (Gdx.graphics.width - barWidth) * 0.5f
-        val barY = Gdx.graphics.height * 0.42f
-
-        batch.begin()
-        batch.color = Color.WHITE
-        titleFont.draw(batch, titleLayout, (Gdx.graphics.width - titleLayout.width) * 0.5f, Gdx.graphics.height * 0.58f)
-        font.draw(batch, statusLayout, (Gdx.graphics.width - statusLayout.width) * 0.5f, Gdx.graphics.height * 0.5f)
-        font.draw(batch, diagnosticsLayout, (Gdx.graphics.width - diagnosticsLayout.width) * 0.5f, Gdx.graphics.height * 0.46f)
-        batch.color = Color(0.04f, 0.1f, 0.16f, 0.95f)
-        batch.draw(whiteRegion, barX, barY, barWidth, barHeight)
-        batch.color = Color(0.2f, 0.84f, 1f, 1f)
-        batch.draw(whiteRegion, barX, barY, barWidth * progress, barHeight)
-        batch.color = Color.WHITE
-        batch.end()
-    }
-
     private fun buildDiagnosticsLine(): String {
         val currentStep = (initializationStep + 1).coerceAtMost(initializationTasks.size)
         return "STEP $currentStep/${initializationTasks.size} // LAST ${lastInitializationDurationMs}ms // ${qualityProfile.label}"
     }
 
-    private fun renderGameOver() {
-        ScreenUtils.clear(0.01f, 0.02f, 0.04f, 1f, true)
-        val batch = stage.batch
-        batch.begin()
-        val titleFont = skin.getFont("title-font")
-        val normalFont = skin.getFont("default")
-        val titleLayout = GlyphLayout(titleFont, "CITY LOST")
-        val scoreLayout = GlyphLayout(normalFont, "FINAL SCORE: $score    TAP TO RETURN")
-        titleFont.draw(batch, titleLayout, (Gdx.graphics.width - titleLayout.width) * 0.5f, Gdx.graphics.height * 0.58f)
-        normalFont.draw(batch, scoreLayout, (Gdx.graphics.width - scoreLayout.width) * 0.5f, Gdx.graphics.height * 0.48f)
-        batch.end()
-    }
-
-    private fun renderOverlay() {
-        val batch = stage.batch
-        val uiScale = Gdx.graphics.height / 1080f
-        val font = skin.getFont("default")
-        batch.begin()
-
-        val radarSize = 182f * uiScale
-        val radarX = Gdx.graphics.width - radarSize - 20f * uiScale
-        val radarY = 20f * uiScale
-        batch.color = Color(0.02f, 0.07f, 0.12f, 0.6f)
-        batch.draw(whiteRegion, radarX, radarY, radarSize, radarSize)
-        val sweepY = RadarProjection.sweepY(radarY, radarSize, radarScanProgress)
-        val launcherMarker = RadarProjection.launcherMarker(radarX, radarY, radarSize, radarSize)
-        batch.color = Color(0.08f, 0.36f, 0.48f, 0.28f)
-        batch.draw(whiteRegion, radarX + radarSize * 0.08f, radarY + radarSize * 0.08f, radarSize * 0.84f, 1.5f * uiScale)
-        batch.draw(whiteRegion, radarX + radarSize * 0.08f, radarY + radarSize * 0.5f, radarSize * 0.84f, 1.5f * uiScale)
-        batch.draw(whiteRegion, radarX + radarSize * 0.08f, radarY + radarSize * 0.92f, radarSize * 0.84f, 1.5f * uiScale)
-        batch.color = Color(0.14f, 0.8f, 1f, 0.18f)
-        batch.draw(whiteRegion, radarX + radarSize * 0.08f, sweepY, radarSize * 0.84f, 3.2f * uiScale)
-        batch.color = Color(0.28f, 0.92f, 1f, 0.9f)
-        batch.draw(whiteRegion, launcherMarker.x - 5f * uiScale, launcherMarker.y - 5f * uiScale, 10f * uiScale, 10f * uiScale)
-
-        threats.forEach { threat ->
-            val plot = RadarProjection.project(threat.position, radarX, radarY, radarSize, radarSize)
-            batch.color = if (threat.isTracked) Color.RED else Color.YELLOW
-            batch.draw(whiteRegion, plot.x - 2.4f * uiScale, plot.y - 2.4f * uiScale, 4.8f * uiScale, 4.8f * uiScale)
-        }
-
-        interceptors.forEach { interceptor ->
-            val plot = RadarProjection.project(interceptor.position, radarX, radarY, radarSize, radarSize)
-            batch.color = Color(0.48f, 0.92f, 1f, 0.92f)
-            batch.draw(whiteRegion, plot.x - 1.8f * uiScale, plot.y - 1.8f * uiScale, 3.6f * uiScale, 3.6f * uiScale)
-        }
-
-        threats.forEach { threat ->
-            if (!threat.isTracked) return@forEach
-            tempProject.set(threat.position)
-            camera.project(tempProject)
-            if (tempProject.z in 0f..1f) {
-                batch.color = Color(1f, 0.35f, 0.35f, 0.9f)
-                batch.draw(whiteRegion, tempProject.x - 20f * uiScale, tempProject.y + 24f * uiScale, 34f * uiScale, 2f * uiScale)
-                font.draw(
-                    batch,
-                    "${threat.id}  ALT ${(threat.position.y * 3.5f).toInt()} m",
-                    tempProject.x + 20f * uiScale,
-                    tempProject.y + 34f * uiScale,
-                )
-            }
-        }
-
-        batch.color = Color.WHITE
-        batch.end()
-    }
+    private fun initializationProgress(): Float = initializationStep.toFloat() / initializationTasks.size.coerceAtLeast(1)
 
     private fun recordFrameTelemetry(delta: Float) {
         val frameTimeMs = delta.coerceIn(0f, 0.25f) * 1000f
@@ -2213,9 +2011,15 @@ class BattleScreen(
     ): Float {
         effect.life -= dt
         val progress = (effect.life / effect.initialLife).coerceIn(0f, 1f)
-        val blend = effect.instance.materials.first().get(BlendingAttribute.Type) as? BlendingAttribute
+        val blend =
+            effect.instance.materials
+                .first()
+                .get(BlendingAttribute.Type) as? BlendingAttribute
         return when (effect.type) {
-            EffectType.BLAST -> updateBlastEffect(effect, progress, blend, strongest, strongestPos)
+            EffectType.BLAST -> {
+                updateBlastEffect(effect, progress, blend, strongest, strongestPos)
+            }
+
             EffectType.SHOCKWAVE -> {
                 updateShockwaveEffect(effect, progress, blend)
                 strongest
