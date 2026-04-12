@@ -107,11 +107,284 @@ class BattleSimulation(
     private companion object {
         const val THREAT_TRAIL_INTERVAL = 0.14f
         const val INTERCEPTOR_TRAIL_INTERVAL = 0.05f
+        const val STARTING_CREDITS = 10000
+        const val STARTING_CITY_INTEGRITY = 100f
+        const val WAVE_START_DELAY = 0.4f
+        const val WAVE_CLEAR_CREDIT_BONUS = 1800
+        const val THREAT_TERMINAL_ALTITUDE = 90f
+        const val TRACKING_EPSILON = 0.001f
+        const val INTERCEPT_SCORE_BONUS = 150
+        const val INTERCEPT_CREDIT_BONUS = 180
+        const val INTERCEPT_BLAST_SCALE = 2.2f
+        const val INTERCEPTOR_MAX_ALTITUDE = 4400f
+        const val INTERCEPTOR_MAX_RANGE = 7000f
+        const val ENTITY_ID_PADDING = 4
+        const val LAUNCHER_MUZZLE_HEIGHT = 18f
+        const val BLAST_VISUAL_RADIUS_SCALE = 1.2f
+        const val MIN_BUILDING_DAMAGE = 8f
+    }
+
+    private class StepAccumulator {
+        val spawnedThreatIds = mutableListOf<String>()
+        val removedThreatIds = mutableListOf<String>()
+        val launchedInterceptors = mutableListOf<InterceptorLaunchEvent>()
+        val removedInterceptorIds = mutableListOf<String>()
+        val trailEvents = mutableListOf<TrailEvent>()
+        val blastEvents = mutableListOf<BlastEvent>()
+        val buildingDamageEvents = mutableListOf<BuildingDamageEvent>()
+        var waveCleared = false
+        var gameOverTriggered = false
+
+        fun toEvents(): BattleStepEvents =
+            BattleStepEvents(
+                spawnedThreatIds = spawnedThreatIds,
+                removedThreatIds = removedThreatIds.distinct(),
+                launchedInterceptors = launchedInterceptors,
+                removedInterceptorIds = removedInterceptorIds.distinct(),
+                trailEvents = trailEvents,
+                blastEvents = blastEvents,
+                buildingDamageEvents = buildingDamageEvents,
+                waveCleared = waveCleared,
+                gameOver = gameOverTriggered,
+            )
+    }
+
+    private data class InterceptorStepContext(
+        val dt: Float,
+        val effectiveBlastRadius: Float,
+        val events: StepAccumulator,
+    )
+
+    private inner class StepFlowController {
+        fun updateWaveState(
+            dt: Float,
+            events: StepAccumulator,
+        ) {
+            if (!waveInProgress) return
+
+            spawnTimer -= dt
+            if (spawnTimer <= 0f && threatsRemainingInWave > 0) {
+                val threat = spawnThreat()
+                events.spawnedThreatIds += threat.id
+                threatsRemainingInWave--
+                spawnTimer = BattleBalance.spawnIntervalForWave(wave)
+            }
+            if (threatsRemainingInWave == 0 && threats.isEmpty()) {
+                waveInProgress = false
+                wave++
+                credits += WAVE_CLEAR_CREDIT_BONUS
+                events.waveCleared = true
+            }
+        }
+
+        fun updateLauncherReloads(dt: Float) {
+            launcherReadyIn.indices.forEach { index ->
+                launcherReadyIn[index] = max(0f, launcherReadyIn[index] - dt)
+            }
+        }
+
+        fun launchInterceptorIfReady(
+            dt: Float,
+            events: StepAccumulator,
+        ) {
+            timeSinceLastLaunch += dt
+            if (timeSinceLastLaunch >= DefenseTuning.launchCooldown(settings)) {
+                val nextTarget = selectNextThreat()
+                if (nextTarget != null) {
+                    val launch = launchInterceptor(nextTarget)
+                    if (launch != null) {
+                        events.launchedInterceptors += launch
+                        timeSinceLastLaunch = 0f
+                    }
+                }
+            }
+        }
+    }
+
+    private inner class ThreatStepper {
+        fun update(
+            dt: Float,
+            events: StepAccumulator,
+        ) {
+            val engagementRangeSquared = DefenseTuning.engagementRange(settings).let { it * it }
+            val threatsIterator = threats.iterator()
+            while (threatsIterator.hasNext()) {
+                val threat = threatsIterator.next()
+                advance(threat, dt)
+                emitTrailIfReady(threat, dt, events)
+                threat.isTracked = isTracked(threat, engagementRangeSquared)
+
+                val impactPoint = impactPointFor(threat) ?: continue
+                resolveImpact(
+                    position = impactPoint,
+                    radius = PhysicsModel.THREAT_IMPACT_RADIUS,
+                    hostile = true,
+                    blastEvents = events.blastEvents,
+                    buildingDamageEvents = events.buildingDamageEvents,
+                )
+                totalHostileImpacts++
+                events.removedThreatIds += threat.id
+                threatsIterator.remove()
+            }
+        }
+
+        private fun advance(
+            threat: SimulationThreat,
+            dt: Float,
+        ) {
+            threat.velocity.mulAdd(gravity, dt)
+            threat.position.mulAdd(threat.velocity, dt)
+        }
+
+        private fun emitTrailIfReady(
+            threat: SimulationThreat,
+            dt: Float,
+            events: StepAccumulator,
+        ) {
+            threat.trailCooldown -= dt
+            if (threat.trailCooldown > 0f) return
+            events.trailEvents += TrailEvent(threat.position.cpy(), hostile = true)
+            threat.trailCooldown = THREAT_TRAIL_INTERVAL
+        }
+
+        private fun isTracked(
+            threat: SimulationThreat,
+            engagementRangeSquared: Float,
+        ): Boolean = threat.position.dst2(defenseOrigin) < engagementRangeSquared
+
+        private fun impactPointFor(threat: SimulationThreat): Vector3? {
+            val reachedTarget =
+                threat.position.dst2(threat.targetPosition) <=
+                    PhysicsModel.THREAT_IMPACT_RADIUS * PhysicsModel.THREAT_IMPACT_RADIUS
+            return when {
+                reachedTarget && threat.position.y <= THREAT_TERMINAL_ALTITUDE -> threat.targetPosition.cpy()
+                threat.position.y <= 0f -> Vector3(threat.position.x, 0f, threat.position.z)
+                threat.position.z >= PhysicsModel.THREAT_FAILSAFE_Z ->
+                    Vector3(threat.position.x, threat.position.y.coerceAtLeast(0f), threat.position.z)
+                else -> null
+            }
+        }
+    }
+
+    private inner class InterceptorStepper {
+        fun update(
+            dt: Float,
+            effectiveBlastRadius: Float,
+            events: StepAccumulator,
+        ) {
+            val context = InterceptorStepContext(dt, effectiveBlastRadius, events)
+            val interceptorIterator = interceptors.iterator()
+            while (interceptorIterator.hasNext()) {
+                val interceptor = interceptorIterator.next()
+                val target = interceptor.targetId?.let(::findThreat)
+
+                when {
+                    target == null -> remove(interceptorIterator, interceptor.id, context.events)
+                    else -> processTrackedInterceptor(interceptorIterator, interceptor, target, context)
+                }
+            }
+        }
+
+        private fun processTrackedInterceptor(
+            interceptorIterator: MutableIterator<SimulationInterceptor>,
+            interceptor: SimulationInterceptor,
+            target: SimulationThreat,
+            context: InterceptorStepContext,
+        ) {
+            advance(interceptor, target, context.dt)
+            emitTrailIfReady(interceptor, context.dt, context.events)
+
+            val intercepted = tryResolveIntercept(interceptorIterator, interceptor, target, context)
+            if (!intercepted && isOutOfBounds(interceptor)) {
+                remove(interceptorIterator, interceptor.id, context.events)
+            }
+        }
+
+        private fun advance(
+            interceptor: SimulationInterceptor,
+            target: SimulationThreat,
+            dt: Float,
+        ) {
+            val aimPoint =
+                InterceptionMath.predictInterceptPoint(
+                    interceptorPos = interceptor.position,
+                    targetPos = target.position,
+                    targetVelocity = target.velocity,
+                    interceptorSpeed = settings.interceptorSpeed,
+                )
+            val desiredVelocity = aimPoint.cpy().sub(interceptor.position)
+            if (!desiredVelocity.isZero(TRACKING_EPSILON)) {
+                desiredVelocity.nor().scl(settings.interceptorSpeed)
+                interceptor.velocity.lerp(desiredVelocity, (dt * DefenseTuning.turnRate(settings)).coerceAtMost(1f))
+            }
+            interceptor.velocity.nor().scl(settings.interceptorSpeed)
+            interceptor.position.mulAdd(interceptor.velocity, dt)
+        }
+
+        private fun emitTrailIfReady(
+            interceptor: SimulationInterceptor,
+            dt: Float,
+            events: StepAccumulator,
+        ) {
+            interceptor.trailCooldown -= dt
+            if (interceptor.trailCooldown > 0f) return
+            events.trailEvents += TrailEvent(interceptor.position.cpy(), hostile = false)
+            interceptor.trailCooldown = INTERCEPTOR_TRAIL_INTERVAL
+        }
+
+        private fun tryResolveIntercept(
+            interceptorIterator: MutableIterator<SimulationInterceptor>,
+            interceptor: SimulationInterceptor,
+            target: SimulationThreat,
+            context: InterceptorStepContext,
+        ): Boolean {
+            val closesWithinFuse =
+                EngagementPhysics.closesWithinFuse(
+                    interceptorPos = interceptor.position,
+                    interceptorVel = interceptor.velocity,
+                    targetPos = target.position,
+                    targetVel = target.velocity,
+                    dt = context.dt,
+                    fuseRadius = context.effectiveBlastRadius,
+                )
+            if (!closesWithinFuse) return false
+
+            score += INTERCEPT_SCORE_BONUS
+            credits += INTERCEPT_CREDIT_BONUS
+            totalThreatsIntercepted++
+            context.events.blastEvents +=
+                BlastEvent(
+                    interceptor.position.cpy(),
+                    context.effectiveBlastRadius * INTERCEPT_BLAST_SCALE,
+                    BlastKind.INTERCEPT,
+                )
+            context.events.removedThreatIds += target.id
+            context.events.removedInterceptorIds += interceptor.id
+            threats.remove(target)
+            interceptorIterator.remove()
+            return true
+        }
+
+        private fun isOutOfBounds(interceptor: SimulationInterceptor): Boolean =
+            interceptor.position.y > INTERCEPTOR_MAX_ALTITUDE ||
+                interceptor.position.dst2(defenseOrigin) > INTERCEPTOR_MAX_RANGE * INTERCEPTOR_MAX_RANGE
+
+        private fun remove(
+            interceptorIterator: MutableIterator<SimulationInterceptor>,
+            interceptorId: String,
+            events: StepAccumulator,
+        ) {
+            events.removedInterceptorIds += interceptorId
+            interceptorIterator.remove()
+        }
     }
 
     private val gravity = Vector3(0f, PhysicsModel.THREAT_GRAVITY_Y, 0f)
     private val launcherPads = launcherPositions.map { it.cpy() }
     private val launcherReadyIn = MutableList(launcherPads.size.coerceAtLeast(1)) { 0f }
+    private val stepFlowController = StepFlowController()
+    private val threatStepper = ThreatStepper()
+    private val interceptorStepper = InterceptorStepper()
     private val defenseOrigin =
         if (launcherPads.isEmpty()) {
             BattleWorldLayout.defenseOrigin.cpy()
@@ -139,13 +412,13 @@ class BattleSimulation(
     val threats = mutableListOf<SimulationThreat>()
     val interceptors = mutableListOf<SimulationInterceptor>()
 
-    var credits = 10000
+    var credits = STARTING_CREDITS
         private set
     var wave = 1
         private set
     var score = 0
         private set
-    var cityIntegrity = 100f
+    var cityIntegrity = STARTING_CITY_INTEGRITY
         private set
     var waveInProgress = false
         private set
@@ -174,7 +447,7 @@ class BattleSimulation(
         if (waveInProgress || isGameOver) return false
         waveInProgress = true
         threatsRemainingInWave = BattleBalance.threatsForWave(wave)
-        spawnTimer = 0.4f
+        spawnTimer = WAVE_START_DELAY
         timeSinceLastLaunch = DefenseTuning.launchCooldown(settings)
         return true
     }
@@ -182,169 +455,26 @@ class BattleSimulation(
     fun step(dt: Float): BattleStepEvents {
         if (isGameOver) return BattleStepEvents(gameOver = true)
 
-        val spawnedThreatIds = mutableListOf<String>()
-        val removedThreatIds = mutableListOf<String>()
-        val launchedInterceptors = mutableListOf<InterceptorLaunchEvent>()
-        val removedInterceptorIds = mutableListOf<String>()
-        val trailEvents = mutableListOf<TrailEvent>()
-        val blastEvents = mutableListOf<BlastEvent>()
-        val buildingDamageEvents = mutableListOf<BuildingDamageEvent>()
-        var waveCleared = false
-        var gameOverTriggered = false
+        val events = StepAccumulator()
         val effectiveBlastRadius = DefenseTuning.blastRadius(settings)
 
-        if (waveInProgress) {
-            spawnTimer -= dt
-            if (spawnTimer <= 0f && threatsRemainingInWave > 0) {
-                val threat = spawnThreat()
-                spawnedThreatIds += threat.id
-                threatsRemainingInWave--
-                spawnTimer = BattleBalance.spawnIntervalForWave(wave)
-            }
-            if (threatsRemainingInWave == 0 && threats.isEmpty()) {
-                waveInProgress = false
-                wave++
-                credits += 1800
-                waveCleared = true
-            }
-        }
-
-        launcherReadyIn.indices.forEach { index ->
-            launcherReadyIn[index] = max(0f, launcherReadyIn[index] - dt)
-        }
-
-        val threatsIterator = threats.iterator()
-        while (threatsIterator.hasNext()) {
-            val threat = threatsIterator.next()
-            threat.velocity.mulAdd(gravity, dt)
-            threat.position.mulAdd(threat.velocity, dt)
-
-            threat.trailCooldown -= dt
-            if (threat.trailCooldown <= 0f) {
-                trailEvents += TrailEvent(threat.position.cpy(), hostile = true)
-                threat.trailCooldown = THREAT_TRAIL_INTERVAL
-            }
-
-            threat.isTracked =
-                threat.position.dst2(defenseOrigin) < DefenseTuning.engagementRange(settings) * DefenseTuning.engagementRange(settings)
-
-            val reachedTarget =
-                threat.position.dst2(threat.targetPosition) <= PhysicsModel.THREAT_IMPACT_RADIUS * PhysicsModel.THREAT_IMPACT_RADIUS
-            val hitGround = threat.position.y <= 0f
-            val leftBattlespace = threat.position.z >= PhysicsModel.THREAT_FAILSAFE_Z
-            if ((reachedTarget && threat.position.y <= 90f) || hitGround || leftBattlespace) {
-                val impactPoint =
-                    when {
-                        reachedTarget -> threat.targetPosition.cpy()
-                        hitGround -> Vector3(threat.position.x, 0f, threat.position.z)
-                        else -> Vector3(threat.position.x, threat.position.y.coerceAtLeast(0f), threat.position.z)
-                    }
-                resolveImpact(
-                    position = impactPoint,
-                    radius = 85f,
-                    hostile = true,
-                    blastEvents = blastEvents,
-                    buildingDamageEvents = buildingDamageEvents,
-                )
-                totalHostileImpacts++
-                removedThreatIds += threat.id
-                threatsIterator.remove()
-            }
-        }
-
-        val interceptorIterator = interceptors.iterator()
-        while (interceptorIterator.hasNext()) {
-            val interceptor = interceptorIterator.next()
-            val target = interceptor.targetId?.let(::findThreat)
-            if (target == null) {
-                removedInterceptorIds += interceptor.id
-                interceptorIterator.remove()
-                continue
-            }
-
-            val aimPoint =
-                InterceptionMath.predictInterceptPoint(
-                    interceptorPos = interceptor.position,
-                    targetPos = target.position,
-                    targetVelocity = target.velocity,
-                    interceptorSpeed = settings.interceptorSpeed,
-                )
-            val desiredVelocity = aimPoint.cpy().sub(interceptor.position)
-            if (!desiredVelocity.isZero(0.001f)) {
-                desiredVelocity.nor().scl(settings.interceptorSpeed)
-                interceptor.velocity.lerp(desiredVelocity, (dt * DefenseTuning.turnRate(settings)).coerceAtMost(1f))
-            }
-            interceptor.velocity.nor().scl(settings.interceptorSpeed)
-            interceptor.position.mulAdd(interceptor.velocity, dt)
-
-            interceptor.trailCooldown -= dt
-            if (interceptor.trailCooldown <= 0f) {
-                trailEvents += TrailEvent(interceptor.position.cpy(), hostile = false)
-                interceptor.trailCooldown = INTERCEPTOR_TRAIL_INTERVAL
-            }
-
-            if (
-                EngagementPhysics.closesWithinFuse(
-                    interceptorPos = interceptor.position,
-                    interceptorVel = interceptor.velocity,
-                    targetPos = target.position,
-                    targetVel = target.velocity,
-                    dt = dt,
-                    fuseRadius = effectiveBlastRadius,
-                )
-            ) {
-                score += 150
-                credits += 180
-                totalThreatsIntercepted++
-                blastEvents += BlastEvent(interceptor.position.cpy(), effectiveBlastRadius * 2.2f, BlastKind.INTERCEPT)
-                removedThreatIds += target.id
-                removedInterceptorIds += interceptor.id
-                threats.remove(target)
-                interceptorIterator.remove()
-                continue
-            }
-
-            if (interceptor.position.y > 4400f || interceptor.position.dst2(defenseOrigin) > 7000f * 7000f) {
-                removedInterceptorIds += interceptor.id
-                interceptorIterator.remove()
-            }
-        }
-
-        timeSinceLastLaunch += dt
-        if (timeSinceLastLaunch >= DefenseTuning.launchCooldown(settings)) {
-            val nextTarget = selectNextThreat()
-            if (nextTarget != null) {
-                val launch = launchInterceptor(nextTarget)
-                if (launch != null) {
-                    launchedInterceptors += launch
-                    timeSinceLastLaunch = 0f
-                }
-            }
-        }
+        stepFlowController.updateWaveState(dt, events)
+        stepFlowController.updateLauncherReloads(dt)
+        threatStepper.update(dt, events)
+        interceptorStepper.update(dt, effectiveBlastRadius, events)
+        stepFlowController.launchInterceptorIfReady(dt, events)
 
         if (cityIntegrity <= 0f) {
             isGameOver = true
-            gameOverTriggered = true
+            events.gameOverTriggered = true
         }
 
-        return BattleStepEvents(
-            spawnedThreatIds = spawnedThreatIds,
-            removedThreatIds = removedThreatIds.distinct(),
-            launchedInterceptors = launchedInterceptors,
-            removedInterceptorIds = removedInterceptorIds.distinct(),
-            trailEvents = trailEvents,
-            blastEvents = blastEvents,
-            buildingDamageEvents = buildingDamageEvents,
-            waveCleared = waveCleared,
-            gameOver = gameOverTriggered,
-        )
+        return events.toEvents()
     }
 
     fun findThreat(id: String): SimulationThreat? = threats.firstOrNull { it.id == id }
 
     fun findInterceptor(id: String): SimulationInterceptor? = interceptors.firstOrNull { it.id == id }
-
-    fun findBuilding(id: String): SimulationBuilding? = buildings.firstOrNull { it.id == id }
 
     fun snapshot(
         runIndex: Int,
@@ -370,7 +500,7 @@ class BattleSimulation(
         val launch = ThreatFactory.createThreatLaunch(wave, targetBuilding.position, random)
         val threat =
             SimulationThreat(
-                id = "T-${nextThreatOrdinal++.toString().padStart(4, '0')}",
+                id = "T-${nextThreatOrdinal++.toString().padStart(ENTITY_ID_PADDING, '0')}",
                 position = launch.start.cpy(),
                 targetPosition = launch.target.cpy(),
                 velocity = launch.velocity.cpy(),
@@ -412,7 +542,7 @@ class BattleSimulation(
             availableLaunchers.minByOrNull { index ->
                 launcherPads[index].dst2(target.position)
             } ?: 0
-        val launchPosition = launcherPads[launcherIndex].cpy().add(0f, 18f, 0f)
+        val launchPosition = launcherPads[launcherIndex].cpy().add(0f, LAUNCHER_MUZZLE_HEIGHT, 0f)
         val aimPoint =
             InterceptionMath.predictInterceptPoint(
                 interceptorPos = launchPosition,
@@ -423,7 +553,7 @@ class BattleSimulation(
         val velocity = aimPoint.sub(launchPosition.cpy()).nor().scl(settings.interceptorSpeed)
         val interceptor =
             SimulationInterceptor(
-                id = "I-${nextInterceptorOrdinal++.toString().padStart(4, '0')}",
+                id = "I-${nextInterceptorOrdinal++.toString().padStart(ENTITY_ID_PADDING, '0')}",
                 position = launchPosition.cpy(),
                 velocity = velocity.cpy(),
                 targetId = target.id,
@@ -447,7 +577,12 @@ class BattleSimulation(
         blastEvents: MutableList<BlastEvent>,
         buildingDamageEvents: MutableList<BuildingDamageEvent>,
     ) {
-        blastEvents += BlastEvent(position.cpy(), radius * 1.2f, if (hostile) BlastKind.HOSTILE_IMPACT else BlastKind.INTERCEPT)
+        blastEvents +=
+            BlastEvent(
+                position.cpy(),
+                radius * BLAST_VISUAL_RADIUS_SCALE,
+                if (hostile) BlastKind.HOSTILE_IMPACT else BlastKind.INTERCEPT,
+            )
 
         buildings.forEach { building ->
             val damage =
@@ -459,21 +594,37 @@ class BattleSimulation(
                     blastRadius = radius,
                     hostile = hostile,
                 )
-            if (damage > 0f) {
-                val before = building.integrity
-                building.integrity = max(0f, building.integrity - damage.coerceAtLeast(8f))
-                if (building.integrity != before) {
-                    buildingDamageEvents += BuildingDamageEvent(building.id, building.integrity, position.cpy())
-                    if (before > 0f && building.integrity <= 0f) {
-                        totalDestroyedBuildings++
-                        cityIntegrity = max(0f, cityIntegrity - DamageModel.cityIntegrityLoss(hostile = false, destroyedBuilding = true))
-                    }
-                }
-            }
+            if (damage <= 0f) return@forEach
+            applyBuildingImpact(building, damage, position, buildingDamageEvents)
         }
 
         if (hostile) {
-            cityIntegrity = max(0f, cityIntegrity - DamageModel.cityIntegrityLoss(hostile = true, destroyedBuilding = false))
+            cityIntegrity =
+                max(
+                    0f,
+                    cityIntegrity - DamageModel.cityIntegrityLoss(hostile = true, destroyedBuilding = false),
+                )
+        }
+    }
+
+    private fun applyBuildingImpact(
+        building: SimulationBuilding,
+        damage: Float,
+        impactPosition: Vector3,
+        buildingDamageEvents: MutableList<BuildingDamageEvent>,
+    ) {
+        val before = building.integrity
+        building.integrity = max(0f, building.integrity - damage.coerceAtLeast(MIN_BUILDING_DAMAGE))
+        if (building.integrity == before) return
+
+        buildingDamageEvents += BuildingDamageEvent(building.id, building.integrity, impactPosition.cpy())
+        if (before > 0f && building.integrity <= 0f) {
+            totalDestroyedBuildings++
+            cityIntegrity =
+                max(
+                    0f,
+                    cityIntegrity - DamageModel.cityIntegrityLoss(hostile = false, destroyedBuilding = true),
+                )
         }
     }
 }
