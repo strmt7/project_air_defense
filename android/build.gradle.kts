@@ -79,7 +79,7 @@ android {
 
     sourceSets {
         getByName("main") {
-            jniLibs.srcDir("libs")
+            jniLibs.directories.add("libs")
         }
     }
 
@@ -129,6 +129,10 @@ android {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
     }
+
+    lint {
+        disable += "LockedOrientationActivity"
+    }
 }
 
 val natives by configurations.creating
@@ -140,6 +144,8 @@ dependencies {
     implementation("com.badlogicgames.gdx:gdx-backend-android:$gdxVersion")
     implementation("com.badlogicgames.gdx:gdx:$gdxVersion")
     runtimeOnly("androidx.profileinstaller:profileinstaller:1.4.1")
+    testImplementation(kotlin("test"))
+    testImplementation("junit:junit:4.13.2")
 
     natives("com.badlogicgames.gdx:gdx-platform:$gdxVersion:natives-armeabi-v7a")
     natives("com.badlogicgames.gdx:gdx-platform:$gdxVersion:natives-arm64-v8a")

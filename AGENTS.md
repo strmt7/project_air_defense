@@ -39,9 +39,9 @@ Do not broad-read the repo on first pass.
 - Prefer explicit CC0 or MIT assets for shipped runtime content, treat open city datasets as reference/layout inputs until shipping rights are verified, and record every imported model, texture, or reference image in `android/assets/ATTRIBUTION.md`.
 
 ## Verification minimum
-- `./gradlew ktlintCheck`, `./gradlew :core:test`, `./gradlew :core:runBattleMonteCarlo -Pruns=300 -Pwaves=1 -Pseconds=48 -Pstep=0.05`, `./gradlew :android:installDebug`, `python3 tools/update_readme_badges.py --check`
+- `./gradlew ktlintCheck`, `./gradlew :android:testDebugUnitTest`, `./gradlew :core:test`, `./gradlew :core:runBattleMonteCarlo -Pruns=300 -Pwaves=1 -Pseconds=48 -Pstep=0.05`, `./gradlew :android:installDebug`, `python3 tools/update_readme_badges.py --check`
 - Android screen-flow proof requires one menu screenshot + OCR, one tap-proof JSON, one post-tap screenshot + OCR, plus logcat and crash buffer.
-- The trusted emulator lane is documented in `docs/android-visual-qa.md`: Android 15 / Pixel 9 Pro, `adb devices` must show `device`, and `adb shell getprop sys.boot_completed` must return `1`.
+- The trusted emulator lane is documented in `docs/android-visual-qa.md`: Android 15 / Pixel 9 Pro, landscape only, `adb devices` must show `device`, and `adb shell getprop sys.boot_completed` must return `1`.
 
 ## Done means
 - exact files changed are known

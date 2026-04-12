@@ -3,6 +3,7 @@ package com.airdefense.game
 import android.app.ActivityManager
 import android.os.Build
 import android.os.Bundle
+import android.util.Log
 import com.badlogic.gdx.backends.android.AndroidApplication
 import com.badlogic.gdx.backends.android.AndroidApplicationConfiguration
 
@@ -17,6 +18,7 @@ class AndroidLauncher : AndroidApplication() {
         private const val DEFAULT_HEAP_CLASS_MB = 192
         private const val MID_HEAP_CLASS_MB = 256
         private const val HIGH_HEAP_CLASS_MB = 384
+        private const val DEVICE_PROFILE_TAG = "DeviceProfile"
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -63,13 +65,20 @@ class AndroidLauncher : AndroidApplication() {
 
     private fun detectDevicePerformanceClass(): DevicePerformanceClass {
         val activityManager = getSystemService(ACTIVITY_SERVICE) as? ActivityManager
-        return when {
-            isProbablyEmulator() -> DevicePerformanceClass.EMULATOR
-            activityManager?.isLowRamDevice == true -> DevicePerformanceClass.LOW
-            resolveHeapClassMb(activityManager) >= HIGH_HEAP_CLASS_MB -> DevicePerformanceClass.HIGH
-            resolveHeapClassMb(activityManager) >= MID_HEAP_CLASS_MB -> DevicePerformanceClass.MID
-            else -> DevicePerformanceClass.LOW
-        }
+        val heapClassMb = resolveHeapClassMb(activityManager)
+        val isLowRamDevice = activityManager?.isLowRamDevice == true
+        val resolved =
+            resolveDevicePerformanceClass(
+                isLowRamDevice = isLowRamDevice,
+                heapClassMb = heapClassMb,
+                highHeapClassMb = HIGH_HEAP_CLASS_MB,
+                midHeapClassMb = MID_HEAP_CLASS_MB,
+            )
+        Log.i(
+            DEVICE_PROFILE_TAG,
+            "emulator=${isProbablyEmulator()} lowRam=$isLowRamDevice heapClassMb=$heapClassMb resolved=$resolved",
+        )
+        return resolved
     }
 
     private fun resolveHeapClassMb(activityManager: ActivityManager?): Int =
@@ -83,3 +92,16 @@ class AndroidLauncher : AndroidApplication() {
             Build.MANUFACTURER.contains("Genymotion", ignoreCase = true) ||
             Build.PRODUCT.contains("sdk", ignoreCase = true)
 }
+
+internal fun resolveDevicePerformanceClass(
+    isLowRamDevice: Boolean,
+    heapClassMb: Int,
+    highHeapClassMb: Int,
+    midHeapClassMb: Int,
+): DevicePerformanceClass =
+    when {
+        isLowRamDevice -> DevicePerformanceClass.LOW
+        heapClassMb >= highHeapClassMb -> DevicePerformanceClass.HIGH
+        heapClassMb >= midHeapClassMb -> DevicePerformanceClass.MID
+        else -> DevicePerformanceClass.LOW
+    }

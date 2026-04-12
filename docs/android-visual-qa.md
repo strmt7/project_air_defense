@@ -93,10 +93,11 @@ py -3 .\tools\android_visual_qa\visual_qa.py match-template --device emulator-55
 1. `py -3 .\tools\android_visual_qa\test_visual_qa.py`
 2. `py -3 .\tools\android_visual_qa\visual_qa.py selftest`
 3. verify emulator health with `adb devices` and `adb shell getprop sys.boot_completed`
-4. capture the pre-tap menu state with screenshot + OCR
-5. tap through with `tap-text` or `tap-template`
-6. capture the post-tap battle state with screenshot + OCR
-7. keep screenshot, OCR/template JSON, logcat, and crash buffer together when reporting a navigation result
+4. keep the Android 15 lane in wide orientation; this game is intentionally landscape-only
+5. capture the pre-tap menu state with screenshot + OCR
+6. tap through with `tap-text` or `tap-template`
+7. capture the post-tap battle state with screenshot + OCR
+8. keep screenshot, OCR/template JSON, logcat, and crash buffer together when reporting a navigation result
 
 ## Rules that prevent false positives
 

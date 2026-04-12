@@ -25,7 +25,7 @@ If any one of those changes, in-place update fails.
   run `.\gradlew.bat :android:assembleLocal`
   this produces the `.local` package, not the production package
 - Debug QA on emulator or device:
-  run `.\gradlew.bat :core:test :android:installDebug`
+  run `.\gradlew.bat :android:testDebugUnitTest :core:test :android:installDebug`
   then launch `com.airdefense.game.debug`
 - Headless balance QA:
   run `.\gradlew.bat :core:runBattleMonteCarlo -Pruns=300 -Pwaves=1 -Pseconds=48 -Pstep=0.05`
