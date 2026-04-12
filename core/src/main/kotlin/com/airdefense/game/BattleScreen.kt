@@ -28,7 +28,6 @@ import com.badlogic.gdx.scenes.scene2d.ui.Skin
 import com.badlogic.gdx.utils.Array
 import com.badlogic.gdx.utils.ObjectMap
 import com.badlogic.gdx.utils.viewport.ScreenViewport
-import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
@@ -156,13 +155,9 @@ class BattleScreen(
     private var initialized = false
     private var loadingMessage = "Initializing battle systems..."
     private var lastInitializationDurationMs = 0L
-    private var battleLiveTime = 0f
     private var launcherLeftPulse = 0f
     private var launcherRightPulse = 0f
-    private val frameTimeWindowMs = FloatArray(180)
-    private var frameTimeWindowCursor = 0
-    private var frameTimeWindowSize = 0
-    private var battleFrameLogTimer = 0f
+    private val frameTelemetry = BattleFrameTelemetry()
 
     private val initializationTasks by lazy {
         listOf(
@@ -534,9 +529,13 @@ class BattleScreen(
         }
 
         updateLogic(min(delta, 1f / 30f))
-        battleLiveTime += delta
-        recordFrameTelemetry(delta)
-        sceneRenderer.renderBackdrop(battleLiveTime = battleLiveTime, impactLightIntensity = impactLight.intensity)
+        frameTelemetry.onFrame(delta, currentFrameSummaryInput())?.let { summary ->
+            Gdx.app.log("BattleFrame", summary)
+        }
+        sceneRenderer.renderBackdrop(
+            battleLiveTime = frameTelemetry.liveTimeSeconds,
+            impactLightIntensity = impactLight.intensity,
+        )
         renderWorldModels()
         sceneRenderer.renderAtmosphere()
 
@@ -577,68 +576,6 @@ class BattleScreen(
 
     private fun initializationProgress(): Float = initializationStep.toFloat() / initializationTasks.size.coerceAtLeast(1)
 
-    private fun recordFrameTelemetry(delta: Float) {
-        val frameTimeMs = delta.coerceIn(0f, 0.25f) * 1000f
-        frameTimeWindowMs[frameTimeWindowCursor] = frameTimeMs
-        frameTimeWindowCursor = (frameTimeWindowCursor + 1) % frameTimeWindowMs.size
-        frameTimeWindowSize = min(frameTimeWindowSize + 1, frameTimeWindowMs.size)
-        battleFrameLogTimer += delta
-        if (battleFrameLogTimer >= 3f && frameTimeWindowSize > 0) {
-            Gdx.app.log("BattleFrame", battleHealthSummary())
-            battleFrameLogTimer = 0f
-        }
-    }
-
-    private fun battleHealthSummary(): String {
-        if (battleLiveTime <= 0f || frameTimeWindowSize == 0) {
-            return buildString {
-                append("LIVE 0s // FPS 0.0 // FT 0.0/0.0/0.0")
-                append(" // Q ${qualityProfile.label}")
-                append(" // FX${effectsController.effects.size}")
-                append(" // T${threats.size} I${interceptors.size}")
-            }
-        }
-        val samples = copyFrameTimeWindow()
-        samples.sort()
-        val averageFrameMs = samples.sum() / samples.size
-        val averageFps = if (averageFrameMs > 0f) 1000f / averageFrameMs else 0f
-        val p50 = percentile(samples, 0.5f)
-        val p95 = percentile(samples, 0.95f)
-        val maxFrameMs = samples.last()
-        return buildString {
-            append("LIVE ${battleLiveTime.toInt()}s // FPS ${"%.1f".format(Locale.US, averageFps)}")
-            append(
-                " // FT ${"%.1f".format(Locale.US, p50)}/${"%.1f".format(Locale.US, p95)}/${"%.1f".format(Locale.US, maxFrameMs)}",
-            )
-            append(" // Q ${qualityProfile.label}")
-            append(" // FX${effectsController.effects.size}")
-            append(" // T${threats.size} I${interceptors.size}")
-        }
-    }
-
-    private fun copyFrameTimeWindow(): FloatArray {
-        val copy = FloatArray(frameTimeWindowSize)
-        val start =
-            if (frameTimeWindowSize == frameTimeWindowMs.size) {
-                frameTimeWindowCursor
-            } else {
-                0
-            }
-        for (index in 0 until frameTimeWindowSize) {
-            copy[index] = frameTimeWindowMs[(start + index) % frameTimeWindowMs.size]
-        }
-        return copy
-    }
-
-    private fun percentile(
-        sortedSamples: FloatArray,
-        percentile: Float,
-    ): Float {
-        if (sortedSamples.isEmpty()) return 0f
-        val index = ((sortedSamples.size - 1) * percentile).toInt().coerceIn(0, sortedSamples.lastIndex)
-        return sortedSamples[index]
-    }
-
     private fun updateLogic(dt: Float) {
         radarScanProgress = (radarScanProgress + dt * 0.42f) % 1f
         updateCameraShake(dt)
@@ -678,9 +615,16 @@ class BattleScreen(
         launcherRightPulse = max(0f, launcherRightPulse - dt * 2.3f)
 
         val wavePressure = (threats.size + threatsRemainingInWave * 0.3f).coerceAtLeast(0f)
-        val cityPulse = 0.86f + kotlin.math.sin(battleLiveTime * 0.45f) * 0.08f + min(0.3f, wavePressure * 0.018f)
+        val cityPulse =
+            0.86f +
+                kotlin.math.sin(frameTelemetry.liveTimeSeconds * 0.45f) * 0.08f +
+                min(0.3f, wavePressure * 0.018f)
         cityGlowLight.intensity = 3200f * cityPulse * qualityProfile.lightIntensityScale
-        cityGlowLight.position.set(1180f + kotlin.math.sin(battleLiveTime * 0.12f) * 90f, 120f, -1880f)
+        cityGlowLight.position.set(
+            1180f + kotlin.math.sin(frameTelemetry.liveTimeSeconds * 0.12f) * 90f,
+            120f,
+            -1880f,
+        )
 
         launcherLeftLight.intensity = (320f + launcherLeftPulse * 780f) * qualityProfile.lightIntensityScale
         launcherRightLight.intensity = (320f + launcherRightPulse * 780f) * qualityProfile.lightIntensityScale
@@ -745,6 +689,14 @@ class BattleScreen(
             effectiveFuseMeters = DefenseTuning.blastRadius(settings),
             doctrineLabel = settings.doctrine.label,
             doctrineSummary = settings.doctrine.summary,
+        )
+
+    private fun currentFrameSummaryInput(): BattleFrameSummaryInput =
+        BattleFrameSummaryInput(
+            qualityLabel = qualityProfile.label,
+            effectCount = effectsController.effects.size,
+            threatCount = threats.size,
+            interceptorCount = interceptors.size,
         )
 
     private fun syncHud() {
