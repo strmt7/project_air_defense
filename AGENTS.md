@@ -6,8 +6,9 @@ Keep this file small. Route outward instead of duplicating detail.
 1. `AGENTS.md`
 2. `docs/reference/ai-agent-context-routing.md`
 3. `docs/reference/ai-agent-skills.md`
-4. one nearest domain doc
-5. one nearest code file and one nearest test
+4. `docs/index.md` when the routing doc alone is not enough
+5. one nearest domain doc
+6. one nearest code file and one nearest test
 
 Do not broad-read the repo on first pass.
 
@@ -36,7 +37,7 @@ Do not broad-read the repo on first pass.
 - `android/src/main/java/com/airdefense/game/AndroidLauncher.kt`: Android launch, compatibility, quality mode
 - `scripts/run-battle-monte-carlo.*`: headless balance sweeps using the same simulation as the GUI
 - `scripts/run-benchmark-suite.*`: report-oriented benchmark runner
-- `docs/`: architecture, benchmarks, release, AI workflow, and asset-source docs
+- `docs/`: indexed architecture, benchmark, release, AI workflow, and asset-source docs
 - `.agents/skills/`: repo-local agent overlays
 
 ## External-asset rules

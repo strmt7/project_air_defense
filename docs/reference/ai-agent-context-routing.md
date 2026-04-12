@@ -12,9 +12,10 @@ Load the smallest correct slice first.
 1. `AGENTS.md`
 2. this file
 3. `docs/reference/ai-agent-skills.md`
-4. one domain doc
-5. one code file
-6. one nearest test
+4. `docs/index.md` when the first three files are not enough
+5. one domain doc
+6. one code file
+7. one nearest test
 
 ## Task map
 | Task | Load first |
@@ -24,7 +25,7 @@ Load the smallest correct slice first.
 | UI, controls, touch ergonomics | `StartScreen.kt`, `BattleScreen.kt`, `docs/popular-3d-android-game-workflows.md` |
 | Android launch/build/compatibility | `android/build.gradle.kts`, `AndroidLauncher.kt`, `docs/release-and-install.md` |
 | Benchmarks and standards | `scripts/run-benchmark-suite.ps1`, `docs/benchmark-suite.md`, `docs/benchmark-sources.md` |
-| Agent docs, badges, workflows, skills | `docs/reference/ai-agent-skills.md`, `docs/reference/ai-agent-upstream-sources.md`, `.agents/skills/` |
+| Agent docs, badges, workflows, skills | `docs/index.md`, `docs/reference/ai-agent-skills.md`, `docs/reference/ai-agent-integrations.md`, `docs/reference/ai-agent-upstream-sources.md`, `.agents/skills/` |
 
 ## Stop conditions
 - You know the exact file to edit.
