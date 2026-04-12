@@ -64,7 +64,7 @@ A high-fidelity libGDX + Kotlin Android prototype where you command a Patriot-in
 
 ## Toolchain
 - Android Gradle Plugin `9.1.0`
-- Gradle `9.3.1`
+- Gradle `9.4.1`
 - Kotlin JVM plugin `2.3.20`
 - libGDX `1.14.0`
 - Java `21`
@@ -76,18 +76,20 @@ A high-fidelity libGDX + Kotlin Android prototype where you command a Patriot-in
 3. Sync Gradle.
 4. Run `.\gradlew.bat ktlintCheck` for the mandatory Kotlin format/lint gate.
 5. Run `.\gradlew.bat ktlintFormat` to apply repository formatting.
-6. Run `.\gradlew.bat :core:test` for gameplay and targeting logic coverage.
-7. Run `.\gradlew.bat :core:runBattleMonteCarlo -Pruns=300 -Pwaves=1 -Pseconds=48 -Pstep=0.05` for headless balance sweeps.
-8. Or use `.\scripts\run-battle-monte-carlo.cmd 300 1 48 0.05 20260411` on Windows without changing PowerShell execution policy.
-9. Run `.\scripts\run-benchmark-suite.cmd` for the report-oriented benchmark suite.
+6. Run `.\gradlew.bat :android:testDebugUnitTest` for Android launch-policy and compatibility unit coverage.
+7. Run `.\gradlew.bat :core:test` for gameplay and targeting logic coverage.
+8. Run `.\gradlew.bat :core:runBattleMonteCarlo -Pruns=300 -Pwaves=1 -Pseconds=48 -Pstep=0.05` for headless balance sweeps.
+9. Or use `.\scripts\run-battle-monte-carlo.cmd 300 1 48 0.05 20260411` on Windows without changing PowerShell execution policy.
+10. Run `.\scripts\run-benchmark-suite.cmd` for the report-oriented benchmark suite.
    It captures build timings, startup macrobenchmarks, runtime frame telemetry, runtime-health artifacts, Monte Carlo balance metrics, and standards reports under `benchmark-results/`.
-10. Use a current Android 15 / API 35 Google APIs emulator. The verified repo lane is Pixel 9 Pro (`airdefense_android15_pixel9pro`).
-11. Run `powershell -ExecutionPolicy Bypass -File .\tools\android_visual_qa\bootstrap.ps1` once on a Windows workstation that will do emulator QA.
-12. Run `py -3 .\tools\android_visual_qa\visual_qa.py probe` before screen-driven emulator checks.
-13. Run `python3 tools/update_readme_badges.py --check` after badge metadata changes.
-14. Run `.\gradlew.bat :android:installDebug` to install the debug package on an emulator or device.
-15. Clear any first-boot Android full-screen education overlay before OCR-based menu checks.
-16. Verify navigation with screenshot + OCR before tap, tap-proof JSON, and screenshot + OCR after tap; do not treat a live PID or logcat alone as proof of a usable battle scene.
+11. Use a current Android 15 / API 35 Google APIs emulator. The verified repo lane is Pixel 9 Pro (`airdefense_android15_pixel9pro`).
+12. Run `powershell -ExecutionPolicy Bypass -File .\tools\android_visual_qa\bootstrap.ps1` once on a Windows workstation that will do emulator QA.
+13. Run `py -3 .\tools\android_visual_qa\visual_qa.py probe` before screen-driven emulator checks.
+14. Run `python3 tools/update_readme_badges.py --check` after badge metadata changes.
+15. Run `.\gradlew.bat :android:installDebug` to install the debug package on an emulator or device.
+16. Clear any first-boot Android full-screen education overlay before OCR-based menu checks.
+17. Keep emulator proof in landscape; this game does not support portrait.
+18. Verify navigation with screenshot + OCR before tap, tap-proof JSON, and screenshot + OCR after tap; do not treat a live PID or logcat alone as proof of a usable battle scene.
 
 ## Build Outputs
 - Local side-load build:
@@ -115,6 +117,8 @@ Production signing variables can be set in `~/.gradle/gradle.properties`, CI sec
 - This is still a gameplay prototype, not a military simulator.
 - The current renderer targets a high-quality mobile approximation of premium night lighting; it does not use true hardware ray tracing.
 - Waterfront building placement and radar orientation are now validated in tests so the city stays inland and the radar reads top-down toward the horizon.
+- Android is intentionally wide-only. `AndroidLauncher` stays on `sensorLandscape`, and the manifest carries a targeted `DiscouragedApi` lint suppression on that activity because the game is not intended to support portrait operation.
+- Android quality selection is now capability-based. High-capacity Android 15 emulator lanes can resolve above `PERFORMANCE`, while genuinely low-memory devices still fall back safely.
 - AI-agent routing is intentionally compact and generated/verified in-repo so external agents do not keep rediscovering the same workflow.
 - The repo's concise agent overlay is pinned to [caveman `v1.5.0`](https://github.com/JuliusBrussee/caveman/releases/tag/v1.5.0). Upstream `v1.5.0` adds configurable default mode, `off`, and `/caveman-help`; this repo intentionally keeps only the mandatory instruction-only `lite`-equivalent overlay.
 - Generated `build/`, `.kotlin/`, and copied native-library output are intentionally excluded from git so the repository stays source-clean.

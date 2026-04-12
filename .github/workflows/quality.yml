@@ -43,5 +43,6 @@ jobs:
 
       - name: Run repo quality lane
         run: |
+          ./gradlew --no-daemon :android:testDebugUnitTest
           ./gradlew --no-daemon :core:test
           ./gradlew --no-daemon :core:runBattleMonteCarlo -Pruns=60 -Pwaves=1 -Pseconds=48 -Pstep=0.05 -Pseed=20260411

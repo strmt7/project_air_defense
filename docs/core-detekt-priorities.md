@@ -36,7 +36,7 @@ Root-cause ownership moved out of [BattleScreen.kt](C:\codex_3dgame_android\proj
 
 ## Verification On This Tree
 
-- `.\gradlew.bat ktlintCheck :core:test :core:detekt --no-daemon --console=plain`
+- `.\gradlew.bat ktlintCheck :android:testDebugUnitTest :core:test :core:detekt --no-daemon --console=plain`
 - `.\gradlew.bat :core:runBattleMonteCarlo :android:installDebug --no-daemon --console=plain "-Pruns=1" "-Pwaves=1" "-Pseconds=48" "-Pstep=0.05" "-Pseed=4242"`
 
 Deterministic guardrail stayed exact:
@@ -49,24 +49,24 @@ Deterministic guardrail stayed exact:
 
 ## Android 15 Proof Lane
 
-Live emulator proof on `com.airdefense.game.debug` used the trusted Android 15 / Pixel 9 Pro lane:
+Live emulator proof on `com.airdefense.game.debug` used the trusted Android 15 / Pixel 9 Pro lane in wide orientation:
 
 - OCR found `ENTER AIRSPACE` and the tap landed on that text.
 - OCR then found battle-only text: `BATTLESPACE`, `CONTROL`, `CITY 100%`, and live `WAVE 1` state.
-- logcat confirmed `StartScreen: ENTER AIRSPACE pressed`, `Switching to BattleScreen`, full `BattleInit`, and live `BattleFrame` telemetry.
+- logcat confirmed `DeviceProfile: emulator=true lowRam=false heapClassMb=576 resolved=HIGH`, `BattleQuality: requested=AUTO effective=BALANCED deviceClass=HIGH`, `StartScreen: ENTER AIRSPACE pressed`, full `BattleInit`, and live `BattleFrame` telemetry.
 - PID and crash-buffer checks were retained as secondary evidence, not primary evidence.
 - The legacy `airdefense_api36` AVD is excluded from proof after it stalled at the Android logo with `adb offline`.
 
 Artifacts:
 
-- [menu screenshot](C:\codex_3dgame_android\project_air_defense\benchmark-results\visual-qa\android15-menu-clear.png)
-- [menu OCR](C:\codex_3dgame_android\project_air_defense\benchmark-results\visual-qa\android15-menu-clear-ocr.json)
-- [tap proof](C:\codex_3dgame_android\project_air_defense\benchmark-results\visual-qa\android15-enterairspace-tap.json)
-- [battle screenshot](C:\codex_3dgame_android\project_air_defense\benchmark-results\visual-qa\android15-battle-clear.png)
-- [battle OCR](C:\codex_3dgame_android\project_air_defense\benchmark-results\visual-qa\android15-battle-clear-ocr.json)
-- [process proof](C:\codex_3dgame_android\project_air_defense\benchmark-results\visual-qa\android15-process-clear.txt)
-- [crash buffer](C:\codex_3dgame_android\project_air_defense\benchmark-results\visual-qa\android15-crash-clear.txt)
-- [logcat](C:\codex_3dgame_android\project_air_defense\benchmark-results\visual-qa\android15-logcat-clear.txt)
+- [menu screenshot](C:\codex_3dgame_android\project_air_defense\benchmark-results\visual-qa\wide-policy-menu.png)
+- [menu OCR](C:\codex_3dgame_android\project_air_defense\benchmark-results\visual-qa\wide-policy-menu-ocr.json)
+- [tap proof](C:\codex_3dgame_android\project_air_defense\benchmark-results\visual-qa\wide-policy-tap.json)
+- [battle screenshot](C:\codex_3dgame_android\project_air_defense\benchmark-results\visual-qa\wide-policy-battle.png)
+- [battle OCR](C:\codex_3dgame_android\project_air_defense\benchmark-results\visual-qa\wide-policy-battle-ocr.json)
+- [process proof](C:\codex_3dgame_android\project_air_defense\benchmark-results\visual-qa\wide-policy-process.txt)
+- [crash buffer](C:\codex_3dgame_android\project_air_defense\benchmark-results\visual-qa\wide-policy-crash.txt)
+- [logcat](C:\codex_3dgame_android\project_air_defense\benchmark-results\visual-qa\wide-policy-logcat.txt)
 
 ## Process Rules Learned From Earlier Failures
 
@@ -80,6 +80,6 @@ Artifacts:
 
 | Priority | Surface | Why it matters now | Measurable target | Verification |
 | --- | --- | --- | --- | --- |
-| P1 | battle startup and frame pacing | detekt debt is closed, so the next user-visible cost is startup latency and frame stability | improve cold battle startup and runtime FPS in the benchmark suite without regressing gameplay | `run-benchmark-suite`, Android 15 visual QA |
-| P2 | battle visuals and readability | the current graphics stack still needs stronger readability and production value | improve scene quality without breaking mobile-safe rendering | Android 15 visual QA, benchmark runtime telemetry |
-| P3 | gameplay balance | the shared simulation is now clean enough to tune more aggressively | raise intercept quality without making outcomes deterministic or trivial | seeded Monte Carlo, targeted gameplay tests |
+| P1 | battle visuals and readability | detekt debt is closed, so the next visible problem is scene richness versus frame safety on the Android 15 wide-only lane | raise Android 15 quality selection and keep startup/runtime metrics green | `run-benchmark-suite`, wide-only Android 15 visual QA, logcat `BattleQuality` / `DeviceProfile` |
+| P2 | gameplay balance | the shared simulation is now clean enough to tune more aggressively | raise intercept quality without making outcomes deterministic or trivial | seeded Monte Carlo, targeted gameplay tests |
+| P3 | production asset quality | the renderer is still limited more by placeholder assets than by code structure | replace procedural placeholders with stronger licensed city assets without breaking mobile safety | Android 15 visual QA, benchmark runtime telemetry |

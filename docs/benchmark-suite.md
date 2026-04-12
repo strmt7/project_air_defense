@@ -54,9 +54,11 @@ The suite writes artifacts under `benchmark-results/<timestamp>/`:
 ## Notes
 
 - The Android benchmark target uses the `benchmark` app build type: `com.airdefense.game.benchmark`.
+- The app smoke lane uses `com.airdefense.game.debug`; keep benchmark and smoke package evidence separate.
 - Battle frame benchmarks launch directly into battle with a fixed seed so measurements are repeatable.
 - The standards audit now includes `ktlintCheck`, so formatting drift is part of the benchmarked engineering-health surface.
 - Macrobenchmark execution on the emulator is intentionally allowed for comparative local work, but final performance decisions should still be re-checked on a physical device.
+- The Android lint gate keeps a targeted manifest-level suppression for the Android 16 `DiscouragedApi` warning on `screenOrientation`, because this game is a deliberate landscape-only product.
 - For libGDX / SurfaceView rendering, `dumpsys gfxinfo` is supplementary only. Use the runtime `BattleFrame` telemetry windows as the primary frame-health signal.
 - Baseline Profile generation is intentionally not enabled in this repo-level suite because the standard Android plugin flow creates internal release-like variants that conflict with this project's signing-safety rules.
 - This suite is report-oriented. It is intended to show the current state of performance and engineering health, not only binary pass or fail.
