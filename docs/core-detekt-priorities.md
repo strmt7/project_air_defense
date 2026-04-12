@@ -4,19 +4,26 @@ Measured from [core detekt XML](C:\codex_3dgame_android\project_air_defense\core
 
 ## Current Verified State
 
-- Core detekt findings: `914`
+- Core detekt findings: `344`
 - Findings by rule:
-  - `MagicNumber`: `889`
-  - `MaxLineLength`: `20`
-  - `LongMethod`: `2`
-  - `TooManyFunctions`: `2`
+  - `MagicNumber`: `305`
+  - `MaxLineLength`: `34`
+  - `TooManyFunctions`: `4`
   - `LargeClass`: `1`
 - Findings by file:
-  - [BattleScreen.kt](C:\codex_3dgame_android\project_air_defense\core\src\main\kotlin\com\airdefense\game\BattleScreen.kt): `904`
+  - [BattleScreen.kt](C:\codex_3dgame_android\project_air_defense\core\src\main\kotlin\com\airdefense\game\BattleScreen.kt): `317`
   - [BattleSceneRenderer.kt](C:\codex_3dgame_android\project_air_defense\core\src\main\kotlin\com\airdefense\game\BattleSceneRenderer.kt): `10`
+  - [BattleTerrainAssetFactory.kt](C:\codex_3dgame_android\project_air_defense\core\src\main\kotlin\com\airdefense\game\BattleTerrainAssetFactory.kt): `5`
+  - [BattleSurfaceTextureFactory.kt](C:\codex_3dgame_android\project_air_defense\core\src\main\kotlin\com\airdefense\game\BattleSurfaceTextureFactory.kt): `4`
+  - [BattleBackdropTextureFactory.kt](C:\codex_3dgame_android\project_air_defense\core\src\main\kotlin\com\airdefense\game\BattleBackdropTextureFactory.kt): `3`
+  - [BattleBuildingAssetFactory.kt](C:\codex_3dgame_android\project_air_defense\core\src\main\kotlin\com\airdefense\game\BattleBuildingAssetFactory.kt): `3`
+  - [BattleProjectileAssetFactory.kt](C:\codex_3dgame_android\project_air_defense\core\src\main\kotlin\com\airdefense\game\BattleProjectileAssetFactory.kt): `2`
 - Measured reduction from the last verified branch baseline:
-  - core detekt: `1051 -> 914` (`-137`)
-  - [BattleScreen.kt](C:\codex_3dgame_android\project_air_defense\core\src\main\kotlin\com\airdefense\game\BattleScreen.kt): `1050 -> 904` (`-146`)
+  - core detekt: `450 -> 344` (`-106`)
+  - [BattleScreen.kt](C:\codex_3dgame_android\project_air_defense\core\src\main\kotlin\com\airdefense\game\BattleScreen.kt): `316 -> 317` (`+1`)
+- Measured reduction from the original baseline:
+  - core detekt: `1929 -> 344` (`-1585`)
+  - [BattleScreen.kt](C:\codex_3dgame_android\project_air_defense\core\src\main\kotlin\com\airdefense\game\BattleScreen.kt): `1362 -> 317` (`-1045`)
 
 ## Baseline
 
@@ -318,24 +325,120 @@ Verification after the render-path extraction:
 - deterministic guardrail remained exact at `88.000%` city integrity, `88.889%` intercept rate, `1200` score, `1.00` hostile impacts, `0.00` destroyed buildings
 - menu OCR found `ENTER AIRSPACE`, tapped it, then OCR found `BATTLESPACE`, `CITY 100%`, `CONTROL`, and live `WAVE 1` text
 - emulator process stayed alive
+
+## P2 asset-pipeline extraction
+
+Status: complete on `2026-04-12`.
+
+Measured result after moving terrain, texture, projectile, building, and defense model generation out of [BattleScreen.kt](C:\codex_3dgame_android\project_air_defense\core\src\main\kotlin\com\airdefense\game\BattleScreen.kt):
+
+- core detekt findings: `914 -> 450` (`-464`)
+- [BattleScreen.kt](C:\codex_3dgame_android\project_air_defense\core\src\main\kotlin\com\airdefense\game\BattleScreen.kt): `904 -> 316` (`-588`)
+
+New ownership split:
+
+- [BattleTextureFactory.kt](C:\codex_3dgame_android\project_air_defense\core\src\main\kotlin\com\airdefense\game\BattleTextureFactory.kt)
+  shared generated texture pipeline for terrain, facades, metals, concrete, sky, fog, glow, and reflections
+- [BattleTerrainAssetFactory.kt](C:\codex_3dgame_android\project_air_defense\core\src\main\kotlin\com\airdefense\game\BattleTerrainAssetFactory.kt)
+  terrain/backdrop model bundle and atmosphere texture selection
+- [BattleProjectileAssetFactory.kt](C:\codex_3dgame_android\project_air_defense\core\src\main\kotlin\com\airdefense\game\BattleProjectileAssetFactory.kt)
+  threat/interceptor/blast/trail/debris/moon model generation
+- [BattleBuildingAssetFactory.kt](C:\codex_3dgame_android\project_air_defense\core\src\main\kotlin\com\airdefense\game\BattleBuildingAssetFactory.kt)
+  skyline building archetype generation
+- [BattleDefenseAssetFactory.kt](C:\codex_3dgame_android\project_air_defense\core\src\main\kotlin\com\airdefense\game\BattleDefenseAssetFactory.kt)
+  launcher/radar model generation
+
+Verification after the asset extraction:
+
+- `ktlintCheck` succeeded
+- `:core:test` succeeded with `39` tests passing and `0` failures
+- `:core:detekt` succeeded
+- `:android:installDebug` succeeded
+- seeded Monte Carlo guardrail remained unchanged at `88%` city integrity, `89%` intercept rate, `1200` score, `1.00` hostile impacts, `0.00` destroyed buildings
+- menu OCR confirmed `ENTER AIRSPACE`
+- battle OCR confirmed `BATTLESPACE`, `CITY 100%`, `CONTROL`, and live `WAVE 1` state
+- crash buffer was empty
+- emulator process stayed alive
+
+Artifacts:
+
+- [menu capture](C:\codex_3dgame_android\project_air_defense\benchmark-results\visual-qa\asset-pass2-menu.png)
+- [battle capture](C:\codex_3dgame_android\project_air_defense\benchmark-results\visual-qa\asset-pass2-battle.png)
+- [post-tap logcat](C:\codex_3dgame_android\project_air_defense\benchmark-results\visual-qa\asset-pass2-logcat.txt)
+- [crash buffer](C:\codex_3dgame_android\project_air_defense\benchmark-results\visual-qa\asset-pass2-crash.txt)
+- [seeded Monte Carlo output](C:\codex_3dgame_android\project_air_defense\benchmark-results\visual-qa\asset-pass2-montecarlo.txt)
+
+## P2 texture-domain split
+
+Status: complete on `2026-04-12`.
+
+Measured result after splitting the texture and terrain asset pipeline by domain:
+
+- core detekt findings: `450 -> 344` (`-106`)
+- [BattleTerrainAssetFactory.kt](C:\codex_3dgame_android\project_air_defense\core\src\main\kotlin\com\airdefense\game\BattleTerrainAssetFactory.kt): `16 -> 5`
+- [BattleBuildingAssetFactory.kt](C:\codex_3dgame_android\project_air_defense\core\src\main\kotlin\com\airdefense\game\BattleBuildingAssetFactory.kt): `43 -> 3`
+- combined texture-pipeline debt:
+  [BattleTextureFactory.kt](C:\codex_3dgame_android\project_air_defense\core\src\main\kotlin\com\airdefense\game\BattleTextureFactory.kt),
+  [BattleSurfaceTextureFactory.kt](C:\codex_3dgame_android\project_air_defense\core\src\main\kotlin\com\airdefense\game\BattleSurfaceTextureFactory.kt),
+  [BattleBackdropTextureFactory.kt](C:\codex_3dgame_android\project_air_defense\core\src\main\kotlin\com\airdefense\game\BattleBackdropTextureFactory.kt):
+  `59 -> 7`
+
+Root-cause corrections in this slice:
+
+- the old all-in-one [BattleTextureFactory.kt](C:\codex_3dgame_android\project_air_defense\core\src\main\kotlin\com\airdefense\game\BattleTextureFactory.kt) is now only a coordinator/context holder
+- [BattleSurfaceTextureFactory.kt](C:\codex_3dgame_android\project_air_defense\core\src\main\kotlin\com\airdefense\game\BattleSurfaceTextureFactory.kt) now owns generated facade, road, terrain, metal, concrete, and solid texture logic
+- [BattleBackdropTextureFactory.kt](C:\codex_3dgame_android\project_air_defense\core\src\main\kotlin\com\airdefense\game\BattleBackdropTextureFactory.kt) now owns sky, fog, glow, reflection, and horizon-loading logic
+- [BattleTerrainAssetFactory.kt](C:\codex_3dgame_android\project_air_defense\core\src\main\kotlin\com\airdefense\game\BattleTerrainAssetFactory.kt) no longer contains one 236-line `build()` method; it now composes terrain sections through dedicated helpers
+- [BattleDefenseAssetFactory.kt](C:\codex_3dgame_android\project_air_defense\core\src\main\kotlin\com\airdefense\game\BattleDefenseAssetFactory.kt) now builds launcher and radar models through dedicated model helpers instead of one long `build()` method
+- [BattleBuildingAssetFactory.kt](C:\codex_3dgame_android\project_air_defense\core\src\main\kotlin\com\airdefense\game\BattleBuildingAssetFactory.kt) now uses named skyline archetype constants instead of inline dimension lists
+
+Verification after the texture-domain split:
+
+- `ktlintCheck` succeeded
+- `:core:test` succeeded with `39` tests passing and `0` failures
+- `:core:detekt` succeeded
+- `:android:installDebug` succeeded
+- seeded Monte Carlo guardrail remained unchanged at `88%` city integrity, `89%` intercept rate, `1200` score, `1.00` hostile impacts, `0.00` destroyed buildings
+- menu OCR confirmed `ENTER AIRSPACE`
+- battle OCR confirmed `BATTLESPACE`, `CONTROL`, `CITY 100%`, and live `WAVE 1 ACTIVE` state
+- crash buffer was empty
+- emulator process stayed alive
+
+Artifacts:
+
+- [menu capture](C:\codex_3dgame_android\project_air_defense\benchmark-results\visual-qa\texture-split-pass-menu.png)
+- [battle capture](C:\codex_3dgame_android\project_air_defense\benchmark-results\visual-qa\texture-split-pass-battle.png)
+- [battle OCR](C:\codex_3dgame_android\project_air_defense\benchmark-results\visual-qa\texture-split-pass-ocr.txt)
+- [post-tap logcat](C:\codex_3dgame_android\project_air_defense\benchmark-results\visual-qa\texture-split-pass-logcat.txt)
+- [crash buffer](C:\codex_3dgame_android\project_air_defense\benchmark-results\visual-qa\texture-split-pass-crash.txt)
+- [seeded Monte Carlo output](C:\codex_3dgame_android\project_air_defense\benchmark-results\visual-qa\texture-split-pass-montecarlo.txt)
+
+## Current next target
+
+Highest-impact remaining debt:
+
+- [BattleScreen.kt](C:\codex_3dgame_android\project_air_defense\core\src\main\kotlin\com\airdefense\game\BattleScreen.kt)
+  still owns the largest remaining integration surface and most of the surviving `MagicNumber` debt
+- [BattleSceneRenderer.kt](C:\codex_3dgame_android\project_air_defense\core\src\main\kotlin\com\airdefense\game\BattleSceneRenderer.kt)
+  still carries a `TooManyFunctions` finding and most of the surviving renderer-only line-length debt
+- [BattleTerrainAssetFactory.kt](C:\codex_3dgame_android\project_air_defense\core\src\main\kotlin\com\airdefense\game\BattleTerrainAssetFactory.kt)
+  is down to one `TooManyFunctions` finding and a few formatting issues, making it the safest next mechanical cleanup
 - crash buffer stayed empty
 
 Artifacts:
 
-- [menu capture](C:\codex_3dgame_android\project_air_defense\benchmark-results\visual-qa\root-cause-pass-menu.png)
-- [battle capture](C:\codex_3dgame_android\project_air_defense\benchmark-results\visual-qa\root-cause-pass-battle.png)
-- [logcat](C:\codex_3dgame_android\project_air_defense\benchmark-results\visual-qa\root-cause-pass-logcat.txt)
-- [crash buffer](C:\codex_3dgame_android\project_air_defense\benchmark-results\visual-qa\root-cause-pass-crash.txt)
+- [menu capture](C:\codex_3dgame_android\project_air_defense\benchmark-results\visual-qa\texture-split-pass-menu.png)
+- [battle capture](C:\codex_3dgame_android\project_air_defense\benchmark-results\visual-qa\texture-split-pass-battle.png)
+- [logcat](C:\codex_3dgame_android\project_air_defense\benchmark-results\visual-qa\texture-split-pass-logcat.txt)
+- [crash buffer](C:\codex_3dgame_android\project_air_defense\benchmark-results\visual-qa\texture-split-pass-crash.txt)
 
 ## Next active target
 
 P2 remains active, but the highest-value remaining slice is now narrower:
 
-- [BattleScreen.kt](C:\codex_3dgame_android\project_air_defense\core\src\main\kotlin\com\airdefense\game\BattleScreen.kt) still carries the last two long methods:
-  - `generateTerrainModels()`
-  - `generateProjectileModels()`
+- [BattleScreen.kt](C:\codex_3dgame_android\project_air_defense\core\src\main\kotlin\com\airdefense\game\BattleScreen.kt) is now dominated by scene, HUD, and effects constants rather than long-method debt
 - class-level `LargeClass` and `TooManyFunctions` remain concentrated in `BattleScreen`
-- the next safe reduction is to move scene-model synthesis into a dedicated asset pipeline instead of keeping model generation in the screen
+- the next safe reduction is to keep moving HUD/effects constants and renderer-owned formatting debt out of `BattleScreen` and `BattleSceneRenderer`
 
 ## Refactor rule
 

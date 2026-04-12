@@ -6,9 +6,23 @@
 - `StartScreen`
   Draws the textured menu scene and transitions into `BattleScreen`.
 - `BattleScreen`
-  Owns battle orchestration, live entity state, audio/effects hooks, and delegates frame composition to `BattleSceneRenderer`.
+  Owns battle orchestration, live entity state, audio/effects hooks, and delegates rendering/asset work to specialized collaborators.
 - `BattleSceneRenderer`
   Owns backdrop composition, atmosphere passes, loading/game-over screens, and radar/threat overlay rendering.
+- `BattleTextureFactory`
+  Coordinates the generated texture pipeline and shared texture registration.
+- `BattleSurfaceTextureFactory`
+  Owns generated facade, terrain, metal, concrete, and solid material textures plus tiled UV attributes.
+- `BattleBackdropTextureFactory`
+  Owns generated sky, fog, glow, and reflection textures plus horizon image loading.
+- `BattleTerrainAssetFactory`
+  Owns the ground/sea/beach/promenade/road model bundle plus backdrop texture selection.
+- `BattleBuildingAssetFactory`
+  Owns procedural tower/hotel/podium/slab model generation.
+- `BattleDefenseAssetFactory`
+  Owns launcher and radar model generation.
+- `BattleProjectileAssetFactory`
+  Owns threat, interceptor, blast, trail, debris, and moon model generation.
 - `BattleSimulation`
   Owns the live battle math used by both the GUI and the headless runner.
 - `BattleWorldLayout`
@@ -32,9 +46,9 @@
 
 ## Rendering Layers
 - Procedural models:
-  sky sphere, ground plane, roads, launchers, radar, missiles, interceptors, effects, debris.
+  terrain, coastline, roads, launchers, radar, buildings, missiles, interceptors, effects, debris.
 - Generated textures:
-  facade/window maps, ground/road maps, metal maps, concrete maps.
+  facade/window maps, ground/sea/beach/park/promenade/road maps, metal maps, concrete maps, sky/fog/glow/reflection maps.
 - Imported textures:
   sky panorama and skyline backdrop.
 - Frame composition:

@@ -6,14 +6,10 @@ import com.badlogic.gdx.InputAdapter
 import com.badlogic.gdx.ScreenAdapter
 import com.badlogic.gdx.audio.Sound
 import com.badlogic.gdx.graphics.Color
-import com.badlogic.gdx.graphics.GL20
 import com.badlogic.gdx.graphics.PerspectiveCamera
-import com.badlogic.gdx.graphics.Pixmap
 import com.badlogic.gdx.graphics.Texture
-import com.badlogic.gdx.graphics.VertexAttributes
 import com.badlogic.gdx.graphics.g2d.TextureRegion
 import com.badlogic.gdx.graphics.g3d.Environment
-import com.badlogic.gdx.graphics.g3d.Material
 import com.badlogic.gdx.graphics.g3d.Model
 import com.badlogic.gdx.graphics.g3d.ModelBatch
 import com.badlogic.gdx.graphics.g3d.ModelInstance
@@ -21,17 +17,10 @@ import com.badlogic.gdx.graphics.g3d.attributes.BlendingAttribute
 import com.badlogic.gdx.graphics.g3d.attributes.ColorAttribute
 import com.badlogic.gdx.graphics.g3d.attributes.FloatAttribute
 import com.badlogic.gdx.graphics.g3d.attributes.IntAttribute
-import com.badlogic.gdx.graphics.g3d.attributes.TextureAttribute
 import com.badlogic.gdx.graphics.g3d.environment.DirectionalLight
 import com.badlogic.gdx.graphics.g3d.environment.PointLight
 import com.badlogic.gdx.graphics.g3d.loader.ObjLoader
-import com.badlogic.gdx.graphics.g3d.utils.ModelBuilder
-import com.badlogic.gdx.graphics.g3d.utils.shapebuilders.BoxShapeBuilder
-import com.badlogic.gdx.graphics.g3d.utils.shapebuilders.ConeShapeBuilder
-import com.badlogic.gdx.graphics.g3d.utils.shapebuilders.CylinderShapeBuilder
-import com.badlogic.gdx.graphics.g3d.utils.shapebuilders.SphereShapeBuilder
 import com.badlogic.gdx.math.MathUtils
-import com.badlogic.gdx.math.Matrix4
 import com.badlogic.gdx.math.Vector3
 import com.badlogic.gdx.math.collision.BoundingBox
 import com.badlogic.gdx.scenes.scene2d.Actor
@@ -74,6 +63,13 @@ class BattleScreen(
     private val skin = TacticalUiSkin.create(textures, TacticalUiDensity.BATTLE)
     private val whiteRegion by lazy { skin.get("white_region", com.badlogic.gdx.graphics.g2d.TextureRegion::class.java) }
     private val sceneRenderer by lazy { BattleSceneRenderer(stage, skin, whiteRegion) }
+    private val textureFactory = BattleTextureFactory(qualityProfile, ::registerTexture)
+    private val surfaceTextures by lazy { textureFactory.surfaces }
+    private val backdropTextures by lazy { textureFactory.backdrop }
+    private val terrainAssetFactory by lazy { BattleTerrainAssetFactory(qualityProfile, surfaceTextures, backdropTextures) }
+    private val buildingAssetFactory by lazy { BattleBuildingAssetFactory(surfaceTextures) }
+    private val defenseAssetFactory by lazy { BattleDefenseAssetFactory(surfaceTextures) }
+    private val projectileAssetFactory by lazy { BattleProjectileAssetFactory(qualityProfile, surfaceTextures) }
     private var battleSkyTexture: Texture? = null
     private var battleSkyRegion: TextureRegion? = null
     private var battleHorizonTexture: Texture? = null
@@ -110,7 +106,6 @@ class BattleScreen(
     private val tempB = Vector3()
     private val tempC = Vector3()
     private val tempD = Vector3()
-    private val tmpMatrix = Matrix4()
 
     private var credits = 10000
     private var wave = 1
@@ -503,11 +498,6 @@ class BattleScreen(
     private val simulationStepApplier = SimulationStepApplier()
     private val battleHudBuilder = BattleHudBuilder()
 
-    private fun scaledSceneTextureSize(
-        base: Int,
-        minimum: Int = 64,
-    ): Int = max(minimum, (base * qualityProfile.sceneTextureScale).toInt())
-
     private fun currentEffectBudgetScale(): Float {
         val scenePressure = threats.size + interceptors.size * 0.75f + effects.size / 18f
         val pressureScale =
@@ -609,20 +599,6 @@ class BattleScreen(
         camera.update()
     }
 
-    private fun loadTexture(
-        path: String,
-        fallbackColor: Color,
-    ): Texture {
-        val file = Gdx.files.internal(path)
-        if (file.exists()) {
-            return registerTexture(Texture(file))
-        }
-        val pixmap = Pixmap(8, 8, Pixmap.Format.RGBA8888)
-        pixmap.setColor(fallbackColor)
-        pixmap.fill()
-        return registerTexture(Texture(pixmap)).also { pixmap.dispose() }
-    }
-
     private fun registerTexture(
         texture: Texture,
         repeat: Boolean = false,
@@ -633,562 +609,15 @@ class BattleScreen(
         return texture
     }
 
-    private fun createTiledAttribute(
-        texture: Texture,
-        scaleU: Float,
-        scaleV: Float,
-    ): TextureAttribute =
-        TextureAttribute.createDiffuse(texture).apply {
-            this.scaleU = scaleU
-            this.scaleV = scaleV
-        }
-
-    private fun createTextureSet(
-        diffuse: Pixmap,
-        roughness: Pixmap,
-        repeat: Boolean = true,
-    ): SurfaceTextureSet {
-        val diffuseTexture = registerTexture(Texture(diffuse), repeat)
-        val roughnessTexture = registerTexture(Texture(roughness), repeat)
-        diffuse.dispose()
-        roughness.dispose()
-        return SurfaceTextureSet(diffuseTexture, roughnessTexture)
-    }
-
-    private fun createSolidTextureSet(
-        color: Color,
-        roughnessValue: Float,
-    ): SurfaceTextureSet {
-        val diffuse =
-            Pixmap(4, 4, Pixmap.Format.RGBA8888).apply {
-                setColor(color)
-                fill()
-            }
-        val roughness =
-            Pixmap(4, 4, Pixmap.Format.RGBA8888).apply {
-                setColor(roughnessValue, roughnessValue, roughnessValue, 1f)
-                fill()
-            }
-        return createTextureSet(diffuse, roughness, repeat = false)
-    }
-
-    private fun createFacadeTextureSet(
-        width: Int,
-        height: Int,
-        base: Color,
-        lit: Color,
-    ): SurfaceTextureSet {
-        val diffuse = Pixmap(width, height, Pixmap.Format.RGBA8888)
-        val roughness = Pixmap(width, height, Pixmap.Format.RGBA8888)
-        diffuse.setColor(base)
-        diffuse.fill()
-        roughness.setColor(0.84f, 0.84f, 0.84f, 1f)
-        roughness.fill()
-
-        for (x in 0 until width) {
-            for (y in 0 until height) {
-                val verticalBand = ((x / 14) % 2) * 0.03f
-                val horizontalBand = ((y / 18) % 2) * 0.02f
-                val noise = MathUtils.random(-0.015f, 0.015f)
-                diffuse.setColor(
-                    (base.r + verticalBand + noise).coerceIn(0f, 1f),
-                    (base.g + horizontalBand + noise).coerceIn(0f, 1f),
-                    (base.b + noise).coerceIn(0f, 1f),
-                    1f,
-                )
-                diffuse.drawPixel(x, y)
-            }
-        }
-
-        for (x in 8 until width step 20) {
-            for (y in 10 until height step 22) {
-                val glow = MathUtils.randomBoolean(0.7f)
-                diffuse.setColor(if (glow) lit else Color(0.03f, 0.05f, 0.08f, 1f))
-                diffuse.fillRectangle(x, y, 10, 12)
-                roughness.setColor(if (glow) 0.15f else 0.88f, if (glow) 0.15f else 0.88f, if (glow) 0.15f else 0.88f, 1f)
-                roughness.fillRectangle(x, y, 10, 12)
-            }
-        }
-
-        return createTextureSet(diffuse, roughness)
-    }
-
-    private fun createGroundTextureSet(): SurfaceTextureSet {
-        val textureSize = scaledSceneTextureSize(256, minimum = 128)
-        val diffuse = Pixmap(textureSize, textureSize, Pixmap.Format.RGBA8888)
-        val roughness = Pixmap(textureSize, textureSize, Pixmap.Format.RGBA8888)
-        for (x in 0 until textureSize) {
-            for (y in 0 until textureSize) {
-                val noise = MathUtils.random(-0.03f, 0.03f)
-                val striping = if ((x / 32 + y / 32) % 2 == 0) 0.02f else -0.01f
-                diffuse.setColor(
-                    (0.07f + noise + striping).coerceIn(0f, 1f),
-                    (0.075f + noise).coerceIn(0f, 1f),
-                    (0.08f + noise * 0.7f).coerceIn(0f, 1f),
-                    1f,
-                )
-                diffuse.drawPixel(x, y)
-                val r = (0.82f + MathUtils.random(-0.1f, 0.08f)).coerceIn(0.1f, 1f)
-                roughness.setColor(r, r, r, 1f)
-                roughness.drawPixel(x, y)
-            }
-        }
-        return createTextureSet(diffuse, roughness)
-    }
-
-    private fun createSeaTextureSet(): SurfaceTextureSet {
-        val textureSize = scaledSceneTextureSize(256, minimum = 128)
-        val diffuse = Pixmap(textureSize, textureSize, Pixmap.Format.RGBA8888)
-        val roughness = Pixmap(textureSize, textureSize, Pixmap.Format.RGBA8888)
-        for (x in 0 until textureSize) {
-            for (y in 0 until textureSize) {
-                val wave = kotlin.math.sin((x + y) * 0.045f) * 0.03f
-                val shimmer = kotlin.math.cos(y * 0.08f) * 0.02f
-                val noise = MathUtils.random(-0.018f, 0.018f)
-                diffuse.setColor(
-                    (0.02f + wave + noise).coerceIn(0f, 1f),
-                    (0.12f + shimmer + noise).coerceIn(0f, 1f),
-                    (0.22f + wave + shimmer + noise * 1.2f).coerceIn(0f, 1f),
-                    1f,
-                )
-                diffuse.drawPixel(x, y)
-                val r = (0.32f + MathUtils.random(-0.06f, 0.08f)).coerceIn(0.08f, 1f)
-                roughness.setColor(r, r, r, 1f)
-                roughness.drawPixel(x, y)
-            }
-        }
-        return createTextureSet(diffuse, roughness)
-    }
-
-    private fun createBeachTextureSet(): SurfaceTextureSet {
-        val textureSize = scaledSceneTextureSize(256, minimum = 128)
-        val diffuse = Pixmap(textureSize, textureSize, Pixmap.Format.RGBA8888)
-        val roughness = Pixmap(textureSize, textureSize, Pixmap.Format.RGBA8888)
-        for (x in 0 until textureSize) {
-            for (y in 0 until textureSize) {
-                val dune = kotlin.math.sin(x * 0.03f) * 0.04f + kotlin.math.cos(y * 0.024f) * 0.025f
-                val noise = MathUtils.random(-0.03f, 0.03f)
-                diffuse.setColor(
-                    (0.58f + dune + noise).coerceIn(0f, 1f),
-                    (0.5f + dune * 0.7f + noise).coerceIn(0f, 1f),
-                    (0.34f + noise * 0.6f).coerceIn(0f, 1f),
-                    1f,
-                )
-                diffuse.drawPixel(x, y)
-                val r = (0.9f + MathUtils.random(-0.04f, 0.05f)).coerceIn(0.1f, 1f)
-                roughness.setColor(r, r, r, 1f)
-                roughness.drawPixel(x, y)
-            }
-        }
-        return createTextureSet(diffuse, roughness)
-    }
-
-    private fun createParkTextureSet(): SurfaceTextureSet {
-        val textureSize = scaledSceneTextureSize(256, minimum = 128)
-        val diffuse = Pixmap(textureSize, textureSize, Pixmap.Format.RGBA8888)
-        val roughness = Pixmap(textureSize, textureSize, Pixmap.Format.RGBA8888)
-        for (x in 0 until textureSize) {
-            for (y in 0 until textureSize) {
-                val strip = if ((x / 28 + y / 36) % 2 == 0) 0.03f else -0.02f
-                val noise = MathUtils.random(-0.035f, 0.035f)
-                diffuse.setColor(
-                    (0.06f + strip + noise).coerceIn(0f, 1f),
-                    (0.18f + strip + noise).coerceIn(0f, 1f),
-                    (0.08f + noise).coerceIn(0f, 1f),
-                    1f,
-                )
-                diffuse.drawPixel(x, y)
-                val r = (0.86f + MathUtils.random(-0.06f, 0.05f)).coerceIn(0.1f, 1f)
-                roughness.setColor(r, r, r, 1f)
-                roughness.drawPixel(x, y)
-            }
-        }
-        return createTextureSet(diffuse, roughness)
-    }
-
-    private fun createPromenadeTextureSet(): SurfaceTextureSet {
-        val textureSize = scaledSceneTextureSize(256, minimum = 128)
-        val diffuse = Pixmap(textureSize, textureSize, Pixmap.Format.RGBA8888)
-        val roughness = Pixmap(textureSize, textureSize, Pixmap.Format.RGBA8888)
-        for (x in 0 until textureSize) {
-            for (y in 0 until textureSize) {
-                val tile = if ((x / 48 + y / 48) % 2 == 0) 0.04f else -0.015f
-                val noise = MathUtils.random(-0.02f, 0.02f)
-                diffuse.setColor(
-                    (0.22f + tile + noise).coerceIn(0f, 1f),
-                    (0.2f + tile + noise).coerceIn(0f, 1f),
-                    (0.18f + tile * 0.7f + noise).coerceIn(0f, 1f),
-                    1f,
-                )
-                diffuse.drawPixel(x, y)
-                val r = (0.72f + MathUtils.random(-0.06f, 0.04f)).coerceIn(0.1f, 1f)
-                roughness.setColor(r, r, r, 1f)
-                roughness.drawPixel(x, y)
-            }
-        }
-        return createTextureSet(diffuse, roughness)
-    }
-
-    private fun createSkyTexture(): Texture {
-        val skyFile = Gdx.files.internal("textures/rooftop_night_horizon.jpg")
-        if (skyFile.exists()) {
-            val source = Pixmap(skyFile)
-            val cropY = (source.height * 0.16f).toInt()
-            val cropHeight = (source.height * 0.56f).toInt().coerceAtLeast(1)
-            val cropped = Pixmap(source.width, cropHeight, Pixmap.Format.RGBA8888)
-            cropped.drawPixmap(
-                source,
-                0,
-                0,
-                0,
-                cropY,
-                source.width,
-                cropHeight,
-            )
-            source.dispose()
-            val texture = registerTexture(Texture(cropped))
-            cropped.dispose()
-            return texture
-        }
-        val pixmap =
-            Pixmap(
-                scaledSceneTextureSize(1024, minimum = 512),
-                scaledSceneTextureSize(512, minimum = 256),
-                Pixmap.Format.RGBA8888,
-            )
-        for (x in 0 until pixmap.width) {
-            for (y in 0 until pixmap.height) {
-                val v = y / (pixmap.height - 1f)
-                val horizonGlow = (1f - kotlin.math.abs(v - 0.35f) * 2.2f).coerceIn(0f, 1f)
-                val baseR = 0.01f + horizonGlow * 0.06f
-                val baseG = 0.02f + horizonGlow * 0.08f
-                val baseB = 0.05f + horizonGlow * 0.16f
-                val noise = MathUtils.random(-0.012f, 0.012f)
-                pixmap.setColor(
-                    (baseR + noise).coerceIn(0f, 1f),
-                    (baseG + noise).coerceIn(0f, 1f),
-                    (baseB + noise * 1.4f).coerceIn(0f, 1f),
-                    1f,
-                )
-                pixmap.drawPixel(x, y)
-            }
-        }
-
-        repeat(96) {
-            val x = MathUtils.random(0, pixmap.width - 1)
-            val y = MathUtils.random((pixmap.height * 0.52f).toInt(), pixmap.height - 1)
-            val brightness = MathUtils.random(0.45f, 0.82f)
-            pixmap.setColor(brightness, brightness, brightness, MathUtils.random(0.28f, 0.62f))
-            pixmap.fillCircle(x, y, MathUtils.random(0, 1))
-        }
-
-        val texture = registerTexture(Texture(pixmap))
-        pixmap.dispose()
-        return texture
-    }
-
-    private fun createFogTexture(): Texture {
-        val pixmap =
-            Pixmap(
-                scaledSceneTextureSize(512, minimum = 256),
-                scaledSceneTextureSize(160, minimum = 96),
-                Pixmap.Format.RGBA8888,
-            )
-        for (x in 0 until pixmap.width) {
-            for (y in 0 until pixmap.height) {
-                val vertical = y / (pixmap.height - 1f)
-                val density = (1f - kotlin.math.abs(vertical - 0.44f) * 2.05f).coerceIn(0f, 1f)
-                val noise = MathUtils.random(0.9f, 1.08f)
-                val warmMix = (1f - vertical).coerceIn(0f, 1f)
-                val alpha = (density * 0.36f * noise).coerceIn(0f, 0.38f)
-                pixmap.setColor(
-                    MathUtils.lerp(0.34f, 0.18f, vertical),
-                    MathUtils.lerp(0.28f, 0.3f, vertical),
-                    MathUtils.lerp(0.18f, 0.42f, vertical),
-                    alpha * MathUtils.lerp(1.08f, 0.86f, warmMix),
-                )
-                pixmap.drawPixel(x, y)
-            }
-        }
-        val texture = registerTexture(Texture(pixmap))
-        pixmap.dispose()
-        return texture
-    }
-
-    private fun createGlowTexture(): Texture {
-        val pixmap =
-            Pixmap(
-                scaledSceneTextureSize(512, minimum = 256),
-                scaledSceneTextureSize(220, minimum = 128),
-                Pixmap.Format.RGBA8888,
-            )
-        for (x in 0 until pixmap.width) {
-            for (y in 0 until pixmap.height) {
-                val vertical = y / (pixmap.height - 1f)
-                val horizonBand = (1f - kotlin.math.abs(vertical - 0.24f) * 4f).coerceIn(0f, 1f)
-                val upperBand = (1f - kotlin.math.abs(vertical - 0.58f) * 3.4f).coerceIn(0f, 1f)
-                val sideFade = (1f - kotlin.math.abs((x / (pixmap.width - 1f)) - 0.5f) * 1.55f).coerceIn(0.45f, 1f)
-                val warmAlpha = horizonBand * 0.34f * sideFade
-                val coolAlpha = upperBand * 0.14f
-                val r = 0.12f + warmAlpha * 1.8f + coolAlpha * 0.2f
-                val g = 0.12f + warmAlpha * 1.1f + coolAlpha * 0.55f
-                val b = 0.18f + warmAlpha * 0.28f + coolAlpha * 1.35f
-                val alpha = (warmAlpha + coolAlpha).coerceIn(0f, 0.42f)
-                pixmap.setColor(r.coerceIn(0f, 1f), g.coerceIn(0f, 1f), b.coerceIn(0f, 1f), alpha)
-                pixmap.drawPixel(x, y)
-            }
-        }
-        val texture = registerTexture(Texture(pixmap))
-        pixmap.dispose()
-        return texture
-    }
-
-    private fun createReflectionTexture(): Texture {
-        val pixmap =
-            Pixmap(
-                scaledSceneTextureSize(768, minimum = 256),
-                scaledSceneTextureSize(256, minimum = 128),
-                Pixmap.Format.RGBA8888,
-            )
-        for (x in 0 until pixmap.width) {
-            val u = x / (pixmap.width - 1f)
-            val streakSeed = kotlin.math.sin(u * 26f) * 0.5f + kotlin.math.sin(u * 63f) * 0.24f
-            val warmWindow = (1f - kotlin.math.abs(u - 0.5f) * 1.6f).coerceIn(0f, 1f)
-            for (y in 0 until pixmap.height) {
-                val v = y / (pixmap.height - 1f)
-                val fade = (1f - v).coerceIn(0f, 1f)
-                val wave = kotlin.math.sin((u * 44f) + (v * 18f)) * 0.04f
-                val glow = (streakSeed * fade + warmWindow * 0.45f - v * 0.22f + wave).coerceIn(0f, 1f)
-                val cool = (0.08f + fade * 0.22f + glow * 0.16f).coerceIn(0f, 1f)
-                val warm = (glow * 0.48f).coerceIn(0f, 1f)
-                pixmap.setColor(
-                    (0.08f + warm * 1.1f).coerceIn(0f, 1f),
-                    (0.12f + warm * 0.72f + cool * 0.28f).coerceIn(0f, 1f),
-                    (0.2f + cool * 0.95f).coerceIn(0f, 1f),
-                    (fade * glow * 0.42f).coerceIn(0f, 0.42f),
-                )
-                pixmap.drawPixel(x, y)
-            }
-        }
-        val texture = registerTexture(Texture(pixmap))
-        pixmap.dispose()
-        return texture
-    }
-
-    private fun createRoadTextureSet(): SurfaceTextureSet {
-        val textureSize = scaledSceneTextureSize(256, minimum = 128)
-        val diffuse = Pixmap(textureSize, textureSize, Pixmap.Format.RGBA8888)
-        val roughness = Pixmap(textureSize, textureSize, Pixmap.Format.RGBA8888)
-        for (x in 0 until textureSize) {
-            for (y in 0 until textureSize) {
-                val noise = MathUtils.random(-0.025f, 0.025f)
-                diffuse.setColor(
-                    (0.09f + noise).coerceIn(0f, 1f),
-                    (0.09f + noise).coerceIn(0f, 1f),
-                    (0.1f + noise).coerceIn(0f, 1f),
-                    1f,
-                )
-                diffuse.drawPixel(x, y)
-                val r = (0.74f + MathUtils.random(-0.08f, 0.06f)).coerceIn(0.1f, 1f)
-                roughness.setColor(r, r, r, 1f)
-                roughness.drawPixel(x, y)
-            }
-        }
-        for (x in (textureSize / 2 - 10)..(textureSize / 2 + 10)) {
-            diffuse.setColor(0.65f, 0.6f, 0.36f, 1f)
-            diffuse.fillRectangle(x, 0, 2, textureSize)
-            roughness.setColor(0.42f, 0.42f, 0.42f, 1f)
-            roughness.fillRectangle(x, 0, 2, textureSize)
-        }
-        return createTextureSet(diffuse, roughness)
-    }
-
-    private fun createMetalTextureSet(base: Color): SurfaceTextureSet {
-        val textureSize = scaledSceneTextureSize(128, minimum = 64)
-        val diffuse = Pixmap(textureSize, textureSize, Pixmap.Format.RGBA8888)
-        val roughness = Pixmap(textureSize, textureSize, Pixmap.Format.RGBA8888)
-        for (x in 0 until textureSize) {
-            for (y in 0 until textureSize) {
-                val streak = ((x % 24) / 24f) * 0.05f
-                val noise = MathUtils.random(-0.025f, 0.025f)
-                diffuse.setColor(
-                    (base.r + streak + noise).coerceIn(0f, 1f),
-                    (base.g + streak + noise).coerceIn(0f, 1f),
-                    (base.b + streak + noise).coerceIn(0f, 1f),
-                    1f,
-                )
-                diffuse.drawPixel(x, y)
-                val r = (0.42f + MathUtils.random(-0.1f, 0.08f)).coerceIn(0.08f, 1f)
-                roughness.setColor(r, r, r, 1f)
-                roughness.drawPixel(x, y)
-            }
-        }
-        return createTextureSet(diffuse, roughness)
-    }
-
-    private fun createConcreteTextureSet(base: Color): SurfaceTextureSet {
-        val textureSize = scaledSceneTextureSize(128, minimum = 64)
-        val diffuse = Pixmap(textureSize, textureSize, Pixmap.Format.RGBA8888)
-        val roughness = Pixmap(textureSize, textureSize, Pixmap.Format.RGBA8888)
-        for (x in 0 until textureSize) {
-            for (y in 0 until textureSize) {
-                val noise = MathUtils.random(-0.05f, 0.05f)
-                diffuse.setColor(
-                    (base.r + noise).coerceIn(0f, 1f),
-                    (base.g + noise).coerceIn(0f, 1f),
-                    (base.b + noise).coerceIn(0f, 1f),
-                    1f,
-                )
-                diffuse.drawPixel(x, y)
-                val r = (0.88f + MathUtils.random(-0.06f, 0.04f)).coerceIn(0.1f, 1f)
-                roughness.setColor(r, r, r, 1f)
-                roughness.drawPixel(x, y)
-            }
-        }
-        return createTextureSet(diffuse, roughness)
-    }
-
-    private fun defaultVertexAttributes(): Long =
-        (
-            VertexAttributes.Usage.Position or
-                VertexAttributes.Usage.Normal or
-                VertexAttributes.Usage.TextureCoordinates
-        ).toLong()
-
     private fun generateTerrainModels() {
-        val attr = defaultVertexAttributes()
-        val mb = ModelBuilder()
-        battleSkyTexture = createSkyTexture()
-        battleSkyRegion = battleSkyTexture?.let { TextureRegion(it) }
-        val groundSet = createGroundTextureSet()
-        val seaSet = createSeaTextureSet()
-        val beachSet = createBeachTextureSet()
-        val parkSet = createParkTextureSet()
-        val promenadeSet = createPromenadeTextureSet()
-        val roadSet = createRoadTextureSet()
-        battleHorizonTexture = loadTexture("textures/city_backdrop_telaviv.jpg", Color(0.08f, 0.09f, 0.12f, 1f))
-        battleFogTexture = if (qualityProfile.showAtmosphereLayers) createFogTexture() else null
-        battleGlowTexture = if (qualityProfile.showGlowLayer) createGlowTexture() else null
-        battleReflectionTexture = if (qualityProfile.showReflectionLayer) createReflectionTexture() else null
-
-        mb.begin()
-        val inlandGround =
-            mb.part(
-                "inland_ground",
-                GL20.GL_TRIANGLES,
-                attr,
-                Material(
-                    createTiledAttribute(groundSet.diffuse, 12f, 12f),
-                    TextureAttribute.createSpecular(groundSet.roughness),
-                    ColorAttribute.createDiffuse(Color(0.3f, 0.34f, 0.4f, 1f)),
-                    ColorAttribute.createSpecular(Color(0.12f, 0.14f, 0.18f, 1f)),
-                    FloatAttribute.createShininess(18f),
-                ),
-            )
-        BoxShapeBuilder.build(inlandGround, 9600f, 3f, 9800f, 1180f, -2f, 220f)
-        val sea =
-            mb.part(
-                "sea",
-                GL20.GL_TRIANGLES,
-                attr,
-                Material(
-                    TextureAttribute.createDiffuse(seaSet.diffuse),
-                    TextureAttribute.createSpecular(seaSet.roughness),
-                    ColorAttribute.createDiffuse(Color.WHITE),
-                    ColorAttribute.createSpecular(Color(0.44f, 0.66f, 0.84f, 1f)),
-                    FloatAttribute.createShininess(56f),
-                ),
-            )
-        BoxShapeBuilder.build(sea, 9600f, 2f, 3600f, 1180f, -4f, -4580f)
-        BoxShapeBuilder.build(sea, 8200f, 1f, 1280f, 1180f, -4f, -3170f)
-        val beach =
-            mb.part(
-                "beach",
-                GL20.GL_TRIANGLES,
-                attr,
-                Material(
-                    TextureAttribute.createDiffuse(beachSet.diffuse),
-                    TextureAttribute.createSpecular(beachSet.roughness),
-                    ColorAttribute.createDiffuse(Color(1f, 0.98f, 0.92f, 1f)),
-                    ColorAttribute.createSpecular(Color(0.2f, 0.18f, 0.12f, 1f)),
-                    FloatAttribute.createShininess(8f),
-                ),
-            )
-        BoxShapeBuilder.build(beach, 8600f, 4f, 760f, 1180f, -1f, -2550f)
-        val promenade =
-            mb.part(
-                "promenade",
-                GL20.GL_TRIANGLES,
-                attr,
-                Material(
-                    createTiledAttribute(promenadeSet.diffuse, 18f, 2.6f),
-                    TextureAttribute.createSpecular(promenadeSet.roughness),
-                    ColorAttribute.createDiffuse(Color(0.6f, 0.62f, 0.66f, 1f)),
-                    ColorAttribute.createSpecular(Color(0.22f, 0.24f, 0.28f, 1f)),
-                    FloatAttribute.createShininess(28f),
-                ),
-            )
-        BoxShapeBuilder.build(promenade, 8400f, 2f, 180f, 1180f, 0f, -2100f)
-        val park =
-            mb.part(
-                "park",
-                GL20.GL_TRIANGLES,
-                attr,
-                Material(
-                    TextureAttribute.createDiffuse(parkSet.diffuse),
-                    TextureAttribute.createSpecular(parkSet.roughness),
-                    ColorAttribute.createDiffuse(Color.WHITE),
-                    ColorAttribute.createSpecular(Color(0.12f, 0.18f, 0.1f, 1f)),
-                    FloatAttribute.createShininess(6f),
-                ),
-            )
-        BoxShapeBuilder.build(park, 1560f, 2f, 3600f, 880f, -1f, -820f)
-        val road =
-            mb.part(
-                "road",
-                GL20.GL_TRIANGLES,
-                attr,
-                Material(
-                    createTiledAttribute(roadSet.diffuse, 18f, 3.2f),
-                    TextureAttribute.createSpecular(roadSet.roughness),
-                    ColorAttribute.createDiffuse(Color(0.34f, 0.36f, 0.4f, 1f)),
-                    ColorAttribute.createSpecular(Color(0.18f, 0.18f, 0.2f, 1f)),
-                    FloatAttribute.createShininess(22f),
-                ),
-            )
-        BoxShapeBuilder.build(road, 8600f, 1f, 120f, 1180f, 0f, -1910f)
-        BoxShapeBuilder.build(road, 7600f, 1f, 48f, 1180f, 0f, -640f)
-        BoxShapeBuilder.build(road, 6200f, 1f, 42f, 1480f, 0f, 180f)
-        BoxShapeBuilder.build(road, 50f, 1f, 4200f, -260f, 0f, -620f)
-        BoxShapeBuilder.build(road, 52f, 1f, 4700f, 920f, 0f, -320f)
-        BoxShapeBuilder.build(road, 48f, 1f, 4400f, 2140f, 0f, -460f)
-        val glowBand =
-            mb.part(
-                "glow",
-                GL20.GL_TRIANGLES,
-                attr,
-                Material(
-                    ColorAttribute.createDiffuse(Color(0.74f, 0.46f, 0.18f, 1f)),
-                    BlendingAttribute(0.2f),
-                ),
-            )
-        BoxShapeBuilder.build(glowBand, 8400f, 0.5f, 260f, 1180f, 5f, -2070f)
-        BoxShapeBuilder.build(glowBand, 8200f, 0.5f, 620f, 1180f, 4f, -1820f)
-        val defensePad =
-            mb.part(
-                "defense_pad",
-                GL20.GL_TRIANGLES,
-                attr,
-                Material(
-                    createTiledAttribute(groundSet.diffuse, 4f, 2f),
-                    TextureAttribute.createSpecular(groundSet.roughness),
-                    ColorAttribute.createDiffuse(Color(0.48f, 0.5f, 0.54f, 1f)),
-                    ColorAttribute.createSpecular(Color(0.18f, 0.18f, 0.2f, 1f)),
-                    FloatAttribute.createShininess(26f),
-                ),
-            )
-        BoxShapeBuilder.build(defensePad, 2520f, 14f, 620f, 520f, 5f, 310f)
-        models.put("ground", mb.end())
+        val terrainAssets = terrainAssetFactory.build()
+        battleSkyTexture = terrainAssets.skyTexture
+        battleSkyRegion = TextureRegion(terrainAssets.skyTexture)
+        battleHorizonTexture = terrainAssets.horizonTexture
+        battleFogTexture = terrainAssets.fogTexture
+        battleGlowTexture = terrainAssets.glowTexture
+        battleReflectionTexture = terrainAssets.reflectionTexture
+        models.put("ground", terrainAssets.groundModel)
         sceneRenderer.updateBackdropTextures(
             skyRegion = battleSkyRegion,
             horizonTexture = battleHorizonTexture,
@@ -1199,243 +628,21 @@ class BattleScreen(
     }
 
     private fun generateBuildingModels() {
-        val attr = defaultVertexAttributes()
-        val mb = ModelBuilder()
-        val facadeA = createFacadeTextureSet(192, 384, Color(0.08f, 0.1f, 0.14f, 1f), Color(1f, 0.82f, 0.48f, 1f))
-        val facadeB = createFacadeTextureSet(192, 384, Color(0.05f, 0.07f, 0.11f, 1f), Color(0.7f, 0.88f, 1f, 1f))
-        val facadeC = createFacadeTextureSet(192, 384, Color(0.1f, 0.08f, 0.09f, 1f), Color(1f, 0.62f, 0.3f, 1f))
-        val facadeD = createFacadeTextureSet(192, 384, Color(0.07f, 0.09f, 0.12f, 1f), Color(0.56f, 0.96f, 0.96f, 1f))
-        val facadeE = createFacadeTextureSet(192, 384, Color(0.12f, 0.1f, 0.08f, 1f), Color(1f, 0.9f, 0.62f, 1f))
-
-        fun createBuildingModel(
-            name: String,
-            width: Float,
-            height: Float,
-            depth: Float,
-            texture: SurfaceTextureSet,
-            tint: Color,
-        ) {
-            val glow =
-                Color(
-                    (tint.r * 0.13f).coerceIn(0f, 0.22f),
-                    (tint.g * 0.13f).coerceIn(0f, 0.22f),
-                    (tint.b * 0.16f).coerceIn(0f, 0.28f),
-                    1f,
-                )
-            models.put(
-                name,
-                mb.createBox(
-                    width,
-                    height,
-                    depth,
-                    Material(
-                        TextureAttribute.createDiffuse(texture.diffuse),
-                        TextureAttribute.createSpecular(texture.roughness),
-                        ColorAttribute.createDiffuse(tint),
-                        ColorAttribute.createEmissive(glow),
-                        ColorAttribute.createSpecular(Color(0.12f, 0.14f, 0.18f, 1f)),
-                        FloatAttribute.createShininess(12f),
-                    ),
-                    attr,
-                ),
-            )
+        buildingAssetFactory.build().forEach { namedModel ->
+            models.put(namedModel.key, namedModel.model)
         }
-
-        createBuildingModel("tower_a", 58f, 280f, 58f, facadeA, Color(0.9f, 0.95f, 1f, 1f))
-        createBuildingModel("tower_b", 84f, 210f, 84f, facadeB, Color(0.82f, 0.9f, 1f, 1f))
-        createBuildingModel("tower_c", 120f, 130f, 90f, facadeC, Color(1f, 0.95f, 0.9f, 1f))
-        createBuildingModel("tower_d", 96f, 360f, 74f, facadeD, Color(0.84f, 0.98f, 1f, 1f))
-        createBuildingModel("tower_e", 146f, 178f, 112f, facadeE, Color(1f, 0.94f, 0.86f, 1f))
-        createBuildingModel("podium", 180f, 78f, 120f, facadeB, Color(0.9f, 0.94f, 1f, 1f))
-        createBuildingModel("hotel", 132f, 118f, 72f, facadeC, Color(1f, 0.96f, 0.9f, 1f))
-        createBuildingModel("coastal_slab", 228f, 96f, 56f, facadeE, Color(1f, 0.97f, 0.91f, 1f))
-        createBuildingModel("office_slab", 168f, 152f, 92f, facadeA, Color(0.86f, 0.92f, 1f, 1f))
-        createBuildingModel("needle_tower", 44f, 420f, 44f, facadeD, Color(0.82f, 0.96f, 1f, 1f))
-        createBuildingModel("setback_tower", 118f, 304f, 92f, facadeB, Color(0.9f, 0.96f, 1f, 1f))
     }
 
     private fun generateDefenseModels() {
-        val attr = defaultVertexAttributes()
-        val mb = ModelBuilder()
-        val launcherSet = createMetalTextureSet(Color(0.18f, 0.24f, 0.19f, 1f))
-        val radarSet = createMetalTextureSet(Color(0.22f, 0.32f, 0.24f, 1f))
-        val launcherMaterial =
-            Material(
-                TextureAttribute.createDiffuse(launcherSet.diffuse),
-                TextureAttribute.createSpecular(launcherSet.roughness),
-                ColorAttribute.createDiffuse(Color.WHITE),
-                ColorAttribute.createSpecular(Color(0.5f, 0.56f, 0.52f, 1f)),
-                FloatAttribute.createShininess(40f),
-            )
-        mb.begin()
-        mb.part("chassis", GL20.GL_TRIANGLES, attr, launcherMaterial).apply {
-            BoxShapeBuilder.build(this, 48f, 7f, 72f)
+        defenseAssetFactory.build().forEach { namedModel ->
+            models.put(namedModel.key, namedModel.model)
         }
-        mb.part("cab", GL20.GL_TRIANGLES, attr, launcherMaterial).apply {
-            BoxShapeBuilder.build(this, 26f, 14f, 24f, 0f, 10f, 24f)
-        }
-        repeat(4) { index ->
-            mb.part("tube_$index", GL20.GL_TRIANGLES, attr, launcherMaterial).apply {
-                BoxShapeBuilder.build(this, 6f, 6f, 44f, -12f + index * 8f, 20f, -10f)
-            }
-        }
-        models.put("launcher", mb.end())
-
-        mb.begin()
-        val radarMaterial =
-            Material(
-                TextureAttribute.createDiffuse(radarSet.diffuse),
-                TextureAttribute.createSpecular(radarSet.roughness),
-                ColorAttribute.createDiffuse(Color.WHITE),
-                ColorAttribute.createSpecular(Color(0.55f, 0.64f, 0.6f, 1f)),
-                FloatAttribute.createShininess(44f),
-            )
-        mb.part("base", GL20.GL_TRIANGLES, attr, radarMaterial).apply {
-            BoxShapeBuilder.build(this, 56f, 10f, 56f)
-        }
-        mb.part("face", GL20.GL_TRIANGLES, attr, radarMaterial).apply {
-            BoxShapeBuilder.build(this, 82f, 46f, 8f, 0f, 36f, -10f)
-        }
-        models.put("radar", mb.end())
     }
 
     private fun generateProjectileModels() {
-        val attr = defaultVertexAttributes()
-        val mb = ModelBuilder()
-        val threatSet = createMetalTextureSet(Color(0.32f, 0.35f, 0.38f, 1f))
-        val interceptorSet = createMetalTextureSet(Color(0.9f, 0.92f, 0.94f, 1f))
-        val debrisSet = createConcreteTextureSet(Color(0.22f, 0.24f, 0.28f, 1f))
-        val blastSet = createSolidTextureSet(Color(1f, 0.82f, 0.35f, 1f), 0.12f)
-        val trailSet = createSolidTextureSet(Color(0.92f, 0.9f, 0.84f, 1f), 0.8f)
-        val moonSet = createSolidTextureSet(Color(0.88f, 0.9f, 1f, 1f), 0.65f)
-
-        mb.begin()
-        val threatMaterial =
-            Material(
-                TextureAttribute.createDiffuse(threatSet.diffuse),
-                TextureAttribute.createSpecular(threatSet.roughness),
-                ColorAttribute.createDiffuse(Color(1f, 0.78f, 0.42f, 1f)),
-                ColorAttribute.createSpecular(Color(1f, 0.88f, 0.66f, 1f)),
-                ColorAttribute.createEmissive(Color(0.18f, 0.08f, 0.03f, 1f)),
-                FloatAttribute.createShininess(78f),
-            )
-        mb.part("body", GL20.GL_TRIANGLES, attr, threatMaterial).apply {
-            CylinderShapeBuilder.build(this, 8f, 34f, 8f, 20)
+        projectileAssetFactory.build().forEach { namedModel ->
+            models.put(namedModel.key, namedModel.model)
         }
-        mb.part("nose", GL20.GL_TRIANGLES, attr, threatMaterial).apply {
-            tmpMatrix.idt().translate(0f, 22f, 0f)
-            setVertexTransform(tmpMatrix)
-            ConeShapeBuilder.build(this, 8.8f, 13f, 8.8f, 20)
-        }
-        repeat(4) { index ->
-            mb.part("fin_$index", GL20.GL_TRIANGLES, attr, threatMaterial).apply {
-                val yaw = index * 90f
-                tmpMatrix.idt().rotate(Vector3.Y, yaw)
-                tmpMatrix.translate(0f, -10f, 0f)
-                setVertexTransform(tmpMatrix)
-                BoxShapeBuilder.build(this, 8f, 10f, 0.8f)
-            }
-        }
-        models.put("threat", mb.end())
-
-        mb.begin()
-        val interceptorMaterial =
-            Material(
-                TextureAttribute.createDiffuse(interceptorSet.diffuse),
-                TextureAttribute.createSpecular(interceptorSet.roughness),
-                ColorAttribute.createDiffuse(Color(0.82f, 0.96f, 1f, 1f)),
-                ColorAttribute.createSpecular(Color(0.94f, 0.98f, 1f, 1f)),
-                ColorAttribute.createEmissive(Color(0.05f, 0.12f, 0.18f, 1f)),
-                FloatAttribute.createShininess(92f),
-            )
-        mb.part("body", GL20.GL_TRIANGLES, attr, interceptorMaterial).apply {
-            CylinderShapeBuilder.build(this, 5.4f, 32f, 5.4f, 20)
-        }
-        mb.part("nose", GL20.GL_TRIANGLES, attr, interceptorMaterial).apply {
-            tmpMatrix.idt().translate(0f, 21f, 0f)
-            setVertexTransform(tmpMatrix)
-            ConeShapeBuilder.build(this, 5.8f, 11f, 5.8f, 20)
-        }
-        repeat(4) { index ->
-            mb.part("fin_$index", GL20.GL_TRIANGLES, attr, interceptorMaterial).apply {
-                val yaw = index * 90f + 45f
-                tmpMatrix.idt().rotate(Vector3.Y, yaw)
-                tmpMatrix.translate(0f, -10f, 0f)
-                setVertexTransform(tmpMatrix)
-                BoxShapeBuilder.build(this, 5f, 6f, 0.55f)
-            }
-        }
-        models.put("interceptor", mb.end())
-        models.put(
-            "blast",
-            mb.createSphere(
-                1f,
-                1f,
-                1f,
-                16,
-                12,
-                Material(
-                    TextureAttribute.createDiffuse(blastSet.diffuse),
-                    TextureAttribute.createSpecular(blastSet.roughness),
-                    ColorAttribute.createDiffuse(Color.WHITE),
-                    ColorAttribute.createSpecular(Color.WHITE),
-                    ColorAttribute.createEmissive(Color(1f, 0.65f, 0.2f, 1f)),
-                    BlendingAttribute(0.92f),
-                ),
-                attr,
-            ),
-        )
-        models.put(
-            "trail",
-            mb.createSphere(
-                1f,
-                1f,
-                1f,
-                10,
-                8,
-                Material(
-                    TextureAttribute.createDiffuse(trailSet.diffuse),
-                    TextureAttribute.createSpecular(trailSet.roughness),
-                    ColorAttribute.createDiffuse(Color.WHITE),
-                    ColorAttribute.createEmissive(Color(0.32f, 0.38f, 0.44f, 1f)),
-                    BlendingAttribute(0.55f),
-                ),
-                attr,
-            ),
-        )
-        models.put(
-            "debris",
-            mb.createBox(
-                6f,
-                6f,
-                6f,
-                Material(
-                    TextureAttribute.createDiffuse(debrisSet.diffuse),
-                    TextureAttribute.createSpecular(debrisSet.roughness),
-                    ColorAttribute.createDiffuse(Color.WHITE),
-                    ColorAttribute.createSpecular(Color(0.18f, 0.18f, 0.2f, 1f)),
-                    FloatAttribute.createShininess(10f),
-                ),
-                attr,
-            ),
-        )
-        models.put(
-            "moon",
-            mb.createSphere(
-                80f,
-                80f,
-                80f,
-                18,
-                18,
-                Material(
-                    TextureAttribute.createDiffuse(moonSet.diffuse),
-                    TextureAttribute.createSpecular(moonSet.roughness),
-                    ColorAttribute.createDiffuse(Color.WHITE),
-                    ColorAttribute.createEmissive(Color(0.18f, 0.2f, 0.24f, 1f)),
-                ),
-                attr,
-            ),
-        )
     }
 
     private fun loadImportedModels() {
@@ -2337,11 +1544,6 @@ data class DebrisEntity(
     var life: Float,
     val scale: Float,
     val rotation: Vector3 = Vector3(),
-)
-
-data class SurfaceTextureSet(
-    val diffuse: Texture,
-    val roughness: Texture,
 )
 
 data class InitializationTask(
