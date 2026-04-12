@@ -4,26 +4,29 @@ Measured from [core detekt XML](C:\codex_3dgame_android\project_air_defense\core
 
 ## Current Verified State
 
-- Core detekt findings: `344`
+- Core detekt findings: `300`
 - Findings by rule:
-  - `MagicNumber`: `305`
-  - `MaxLineLength`: `34`
+  - `MagicNumber`: `254`
+  - `MaxLineLength`: `40`
   - `TooManyFunctions`: `4`
   - `LargeClass`: `1`
+  - `LongParameterList`: `1`
 - Findings by file:
-  - [BattleScreen.kt](C:\codex_3dgame_android\project_air_defense\core\src\main\kotlin\com\airdefense\game\BattleScreen.kt): `317`
+  - [BattleScreen.kt](C:\codex_3dgame_android\project_air_defense\core\src\main\kotlin\com\airdefense\game\BattleScreen.kt): `266`
   - [BattleSceneRenderer.kt](C:\codex_3dgame_android\project_air_defense\core\src\main\kotlin\com\airdefense\game\BattleSceneRenderer.kt): `10`
   - [BattleTerrainAssetFactory.kt](C:\codex_3dgame_android\project_air_defense\core\src\main\kotlin\com\airdefense\game\BattleTerrainAssetFactory.kt): `5`
+  - [BattleHudController.kt](C:\codex_3dgame_android\project_air_defense\core\src\main\kotlin\com\airdefense\game\BattleHudController.kt): `4`
   - [BattleSurfaceTextureFactory.kt](C:\codex_3dgame_android\project_air_defense\core\src\main\kotlin\com\airdefense\game\BattleSurfaceTextureFactory.kt): `4`
-  - [BattleBackdropTextureFactory.kt](C:\codex_3dgame_android\project_air_defense\core\src\main\kotlin\com\airdefense\game\BattleBackdropTextureFactory.kt): `3`
+  - [BattleHudStateTest.kt](C:\codex_3dgame_android\project_air_defense\core\src\test\kotlin\com\airdefense\game\BattleHudStateTest.kt): `3`
   - [BattleBuildingAssetFactory.kt](C:\codex_3dgame_android\project_air_defense\core\src\main\kotlin\com\airdefense\game\BattleBuildingAssetFactory.kt): `3`
+  - [BattleBackdropTextureFactory.kt](C:\codex_3dgame_android\project_air_defense\core\src\main\kotlin\com\airdefense\game\BattleBackdropTextureFactory.kt): `3`
   - [BattleProjectileAssetFactory.kt](C:\codex_3dgame_android\project_air_defense\core\src\main\kotlin\com\airdefense\game\BattleProjectileAssetFactory.kt): `2`
 - Measured reduction from the last verified branch baseline:
-  - core detekt: `450 -> 344` (`-106`)
-  - [BattleScreen.kt](C:\codex_3dgame_android\project_air_defense\core\src\main\kotlin\com\airdefense\game\BattleScreen.kt): `316 -> 317` (`+1`)
+  - core detekt: `344 -> 300` (`-44`)
+  - [BattleScreen.kt](C:\codex_3dgame_android\project_air_defense\core\src\main\kotlin\com\airdefense\game\BattleScreen.kt): `317 -> 266` (`-51`)
 - Measured reduction from the original baseline:
-  - core detekt: `1929 -> 344` (`-1585`)
-  - [BattleScreen.kt](C:\codex_3dgame_android\project_air_defense\core\src\main\kotlin\com\airdefense\game\BattleScreen.kt): `1362 -> 317` (`-1045`)
+  - core detekt: `1929 -> 300` (`-1629`)
+  - [BattleScreen.kt](C:\codex_3dgame_android\project_air_defense\core\src\main\kotlin\com\airdefense\game\BattleScreen.kt): `1362 -> 266` (`-1096`)
 
 ## Baseline
 
@@ -412,6 +415,52 @@ Artifacts:
 - [post-tap logcat](C:\codex_3dgame_android\project_air_defense\benchmark-results\visual-qa\texture-split-pass-logcat.txt)
 - [crash buffer](C:\codex_3dgame_android\project_air_defense\benchmark-results\visual-qa\texture-split-pass-crash.txt)
 - [seeded Monte Carlo output](C:\codex_3dgame_android\project_air_defense\benchmark-results\visual-qa\texture-split-pass-montecarlo.txt)
+
+## P2 HUD and step-apply extraction
+
+Status: complete on `2026-04-12`.
+
+Measured result after extracting HUD state/rendering and simulation-step application out of [BattleScreen.kt](C:\codex_3dgame_android\project_air_defense\core\src\main\kotlin\com\airdefense\game\BattleScreen.kt):
+
+- core detekt findings: `344 -> 300` (`-44`)
+- [BattleScreen.kt](C:\codex_3dgame_android\project_air_defense\core\src\main\kotlin\com\airdefense\game\BattleScreen.kt): `317 -> 266` (`-51`)
+- new collaborators:
+  - [BattleHudController.kt](C:\codex_3dgame_android\project_air_defense\core\src\main\kotlin\com\airdefense\game\BattleHudController.kt)
+  - [BattleHudState.kt](C:\codex_3dgame_android\project_air_defense\core\src\main\kotlin\com\airdefense\game\BattleHudState.kt)
+  - [BattleSimulationStepApplier.kt](C:\codex_3dgame_android\project_air_defense\core\src\main\kotlin\com\airdefense\game\BattleSimulationStepApplier.kt)
+
+Root-cause corrections in this slice:
+
+- `BattleScreen` no longer formats HUD text or mutates individual HUD widgets directly
+- HUD state is now computed as a single [BattleHudSnapshot](C:\codex_3dgame_android\project_air_defense\core\src\main\kotlin\com\airdefense\game\BattleHudState.kt), which made wave/button/summary presentation unit-testable
+- application of [BattleStepEvents](C:\codex_3dgame_android\project_air_defense\core\src\main\kotlin\com\airdefense\game\BattleSimulation.kt) is now isolated in [BattleSimulationStepApplier.kt](C:\codex_3dgame_android\project_air_defense\core\src\main\kotlin\com\airdefense\game\BattleSimulationStepApplier.kt), leaving `BattleScreen` as orchestration
+- the Android crash introduced during the extraction was traced to nested `Table().apply { ... }` receivers resolving `skin` to the widget property instead of the controller-owned `Skin`
+- correction: [BattleHudController.kt](C:\codex_3dgame_android\project_air_defense\core\src\main\kotlin\com\airdefense\game\BattleHudController.kt) now holds an unambiguous `uiSkin` reference, and the isolated emulator lane was rerun after that fix
+
+Verification after the HUD and step-apply extraction:
+
+- `ktlintCheck` succeeded
+- `:core:test` succeeded
+- `:core:detekt` succeeded
+- `:android:installDebug` succeeded
+- deterministic seeded Monte Carlo remained exact at `88%` city integrity, `89%` intercept rate, `1200` score, `1.00` hostile impacts, `0.00` destroyed buildings
+- new pure HUD formatter coverage landed in [BattleHudStateTest.kt](C:\codex_3dgame_android\project_air_defense\core\src\test\kotlin\com\airdefense\game\BattleHudStateTest.kt)
+- isolated debug-package emulator QA confirmed:
+  - menu OCR found `ENTER AIRSPACE`
+  - OCR-driven tap hit `ENTER AIRSPACE`
+  - battle OCR found `BATTLESPACE`, `CITY 100%`, `CR 10000`, and live `WAVE 1` hostile text
+  - post-tap logcat contained `BattleInit` plus live `BattleFrame` telemetry
+  - debug process stayed alive
+  - crash buffer was empty
+
+Artifacts:
+
+- [menu capture](C:\codex_3dgame_android\project_air_defense\benchmark-results\visual-qa\hud-refactor-final-menu.png)
+- [battle capture](C:\codex_3dgame_android\project_air_defense\benchmark-results\visual-qa\hud-refactor-final-battle.png)
+- [battle OCR](C:\codex_3dgame_android\project_air_defense\benchmark-results\visual-qa\hud-refactor-final-battle-ocr.json)
+- [post-tap logcat](C:\codex_3dgame_android\project_air_defense\benchmark-results\visual-qa\hud-refactor-final-logcat.txt)
+- [process proof](C:\codex_3dgame_android\project_air_defense\benchmark-results\visual-qa\hud-refactor-final-process.txt)
+- [seeded Monte Carlo output](C:\codex_3dgame_android\project_air_defense\benchmark-results\visual-qa\hud-refactor-final-montecarlo.json)
 
 ## Current next target
 
