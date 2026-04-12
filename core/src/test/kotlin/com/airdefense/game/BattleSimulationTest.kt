@@ -35,11 +35,13 @@ class BattleSimulationTest {
     fun `batch runner shows bounded but non-zero threat leakage`() {
         val results =
             BattleMonteCarloRunner.run(
-                runs = 48,
-                waves = 1,
-                maxSecondsPerWave = 48f,
-                stepSeconds = 0.05f,
-                baseSeed = 9000L,
+                BattleMonteCarloConfig(
+                    runs = 48,
+                    waves = 1,
+                    maxSecondsPerWave = 48f,
+                    stepSeconds = 0.05f,
+                    baseSeed = 9000L,
+                ),
             )
 
         val averageInterceptRate = results.map { it.interceptRate }.average()
@@ -54,21 +56,25 @@ class BattleSimulationTest {
     fun `shield wall doctrine improves intercept performance over disciplined doctrine`() {
         val disciplined =
             BattleMonteCarloRunner.run(
-                runs = 48,
-                waves = 1,
-                maxSecondsPerWave = 48f,
-                stepSeconds = 0.05f,
-                baseSeed = 12000L,
-                settings = DefenseSettings(doctrine = DefenseDoctrine.DISCIPLINED),
+                BattleMonteCarloConfig(
+                    runs = 48,
+                    waves = 1,
+                    maxSecondsPerWave = 48f,
+                    stepSeconds = 0.05f,
+                    baseSeed = 12000L,
+                    settings = DefenseSettings(doctrine = DefenseDoctrine.DISCIPLINED),
+                ),
             )
         val shieldWall =
             BattleMonteCarloRunner.run(
-                runs = 48,
-                waves = 1,
-                maxSecondsPerWave = 48f,
-                stepSeconds = 0.05f,
-                baseSeed = 12000L,
-                settings = DefenseSettings(doctrine = DefenseDoctrine.SHIELD_WALL),
+                BattleMonteCarloConfig(
+                    runs = 48,
+                    waves = 1,
+                    maxSecondsPerWave = 48f,
+                    stepSeconds = 0.05f,
+                    baseSeed = 12000L,
+                    settings = DefenseSettings(doctrine = DefenseDoctrine.SHIELD_WALL),
+                ),
             )
 
         val disciplinedInterceptRate = disciplined.map { it.interceptRate }.average()
@@ -122,14 +128,17 @@ class BattleSimulationTest {
 
     @Test
     fun `seeded single run snapshot stays stable`() {
-        val result =
+        val results =
             BattleMonteCarloRunner.run(
-                runs = 1,
-                waves = 1,
-                maxSecondsPerWave = 48f,
-                stepSeconds = 0.05f,
-                baseSeed = 4242L,
-            ).single()
+                BattleMonteCarloConfig(
+                    runs = 1,
+                    waves = 1,
+                    maxSecondsPerWave = 48f,
+                    stepSeconds = 0.05f,
+                    baseSeed = 4242L,
+                ),
+            )
+        val result = results.single()
 
         assertEquals(9, result.threatsSpawned)
         assertEquals(8, result.threatsIntercepted)

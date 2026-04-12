@@ -257,11 +257,21 @@ class BattleSimulation(
                 threat.position.dst2(threat.targetPosition) <=
                     PhysicsModel.THREAT_IMPACT_RADIUS * PhysicsModel.THREAT_IMPACT_RADIUS
             return when {
-                reachedTarget && threat.position.y <= THREAT_TERMINAL_ALTITUDE -> threat.targetPosition.cpy()
-                threat.position.y <= 0f -> Vector3(threat.position.x, 0f, threat.position.z)
-                threat.position.z >= PhysicsModel.THREAT_FAILSAFE_Z ->
+                reachedTarget && threat.position.y <= THREAT_TERMINAL_ALTITUDE -> {
+                    threat.targetPosition.cpy()
+                }
+
+                threat.position.y <= 0f -> {
+                    Vector3(threat.position.x, 0f, threat.position.z)
+                }
+
+                threat.position.z >= PhysicsModel.THREAT_FAILSAFE_Z -> {
                     Vector3(threat.position.x, threat.position.y.coerceAtLeast(0f), threat.position.z)
-                else -> null
+                }
+
+                else -> {
+                    null
+                }
             }
         }
     }
@@ -340,10 +350,16 @@ class BattleSimulation(
         ): Boolean {
             val closesWithinFuse =
                 EngagementPhysics.closesWithinFuse(
-                    interceptorPos = interceptor.position,
-                    interceptorVel = interceptor.velocity,
-                    targetPos = target.position,
-                    targetVel = target.velocity,
+                    interceptor =
+                        MotionSample(
+                            position = interceptor.position,
+                            velocity = interceptor.velocity,
+                        ),
+                    target =
+                        MotionSample(
+                            position = target.position,
+                            velocity = target.velocity,
+                        ),
                     dt = context.dt,
                     fuseRadius = context.effectiveBlastRadius,
                 )
@@ -387,7 +403,7 @@ class BattleSimulation(
     private val interceptorStepper = InterceptorStepper()
     private val defenseOrigin =
         if (launcherPads.isEmpty()) {
-            BattleWorldLayout.defenseOrigin.cpy()
+            BattleWorldLayout.defenseOrigin()
         } else {
             Vector3().also { average ->
                 launcherPads.forEach { average.add(it.x, 0f, it.z) }
@@ -587,12 +603,18 @@ class BattleSimulation(
         buildings.forEach { building ->
             val damage =
                 DamageModel.computeBuildingDamage(
-                    buildingPosition = building.position,
-                    buildingWidth = building.width,
-                    buildingDepth = building.depth,
-                    impactPosition = position,
-                    blastRadius = radius,
-                    hostile = hostile,
+                    building =
+                        BuildingFootprint(
+                            position = building.position,
+                            width = building.width,
+                            depth = building.depth,
+                        ),
+                    impact =
+                        BlastImpact(
+                            position = position,
+                            radius = radius,
+                            hostile = hostile,
+                        ),
                 )
             if (damage <= 0f) return@forEach
             applyBuildingImpact(building, damage, position, buildingDamageEvents)

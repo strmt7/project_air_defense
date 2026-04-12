@@ -10,21 +10,33 @@ class DamageModelTest {
     fun `damage is high near impact and zero outside radius`() {
         val centerDamage =
             DamageModel.computeBuildingDamage(
-                buildingPosition = Vector3(0f, 0f, 0f),
-                buildingWidth = 60f,
-                buildingDepth = 60f,
-                impactPosition = Vector3(0f, 0f, 0f),
-                blastRadius = 85f,
-                hostile = true,
+                building =
+                    BuildingFootprint(
+                        position = Vector3(0f, 0f, 0f),
+                        width = 60f,
+                        depth = 60f,
+                    ),
+                impact =
+                    BlastImpact(
+                        position = Vector3(0f, 0f, 0f),
+                        radius = 85f,
+                        hostile = true,
+                    ),
             )
         val distantDamage =
             DamageModel.computeBuildingDamage(
-                buildingPosition = Vector3(400f, 0f, 400f),
-                buildingWidth = 60f,
-                buildingDepth = 60f,
-                impactPosition = Vector3(0f, 0f, 0f),
-                blastRadius = 85f,
-                hostile = true,
+                building =
+                    BuildingFootprint(
+                        position = Vector3(400f, 0f, 400f),
+                        width = 60f,
+                        depth = 60f,
+                    ),
+                impact =
+                    BlastImpact(
+                        position = Vector3(0f, 0f, 0f),
+                        radius = 85f,
+                        hostile = true,
+                    ),
             )
 
         assertTrue(centerDamage > 70f)
