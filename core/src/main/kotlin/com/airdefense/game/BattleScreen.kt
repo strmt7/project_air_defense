@@ -23,15 +23,9 @@ import com.badlogic.gdx.graphics.g3d.loader.ObjLoader
 import com.badlogic.gdx.math.MathUtils
 import com.badlogic.gdx.math.Vector3
 import com.badlogic.gdx.math.collision.BoundingBox
-import com.badlogic.gdx.scenes.scene2d.Actor
 import com.badlogic.gdx.scenes.scene2d.InputEvent
 import com.badlogic.gdx.scenes.scene2d.Stage
-import com.badlogic.gdx.scenes.scene2d.ui.Label
 import com.badlogic.gdx.scenes.scene2d.ui.Skin
-import com.badlogic.gdx.scenes.scene2d.ui.Slider
-import com.badlogic.gdx.scenes.scene2d.ui.Table
-import com.badlogic.gdx.scenes.scene2d.ui.TextButton
-import com.badlogic.gdx.scenes.scene2d.utils.ChangeListener
 import com.badlogic.gdx.utils.Array
 import com.badlogic.gdx.utils.ObjectMap
 import com.badlogic.gdx.utils.viewport.ScreenViewport
@@ -90,15 +84,48 @@ class BattleScreen(
     private val debris = Array<DebrisEntity>()
     private val sounds = ObjectMap<String, Sound>()
     private lateinit var simulation: BattleSimulation
-
-    private val statusLabel = Label("AIR DEFENSE NETWORK ONLINE", skin, "headline")
-    private val creditsLabel = Label("", skin, "headline")
-    private lateinit var waveButton: TextButton
-    private lateinit var rangeValueLabel: Label
-    private lateinit var fuseValueLabel: Label
-    private lateinit var doctrineValueLabel: Label
-    private lateinit var doctrineDetailLabel: Label
-    private lateinit var doctrineButton: TextButton
+    private val hudController by lazy {
+        BattleHudController(
+            stage = stage,
+            uiSkin = skin,
+            settings = settings,
+            onSettingsChanged = ::syncHud,
+            onStartWaveRequested = ::handleStartWaveRequest,
+        )
+    }
+    private val simulationStepApplier by lazy {
+        BattleSimulationStepApplier(
+            simulationProvider = { simulation },
+            renderCollections =
+                BattleRenderCollections(
+                    models = models,
+                    launchers = launchers,
+                    cityBlocksById = cityBlocksById,
+                    threats = threats,
+                    threatsById = threatsById,
+                    interceptors = interceptors,
+                    interceptorsById = interceptorsById,
+                ),
+            callbacks =
+                BattleStepCallbacks(
+                    canSpawnTrail = ::canSpawnTrail,
+                    spawnTrail = ::spawnTrail,
+                    syncProjectileTransform = ::syncProjectileTransform,
+                    syncRenderEntitiesFromSimulation = ::syncRenderEntitiesFromSimulation,
+                    syncBattleStateFromSimulation = ::syncBattleStateFromSimulation,
+                    pulseLauncher = ::pulseLauncher,
+                    spawnBlast = ::spawnBlast,
+                    spawnDebris = ::spawnDebris,
+                    triggerShake = ::triggerShake,
+                    playSfx = ::playSfx,
+                    applyBuildingDamageVisual = ::applyBuildingDamageVisual,
+                    setStatus = ::setStatus,
+                    syncHud = ::syncHud,
+                ),
+            threatScale = THREAT_SCALE,
+            interceptorScale = INTERCEPTOR_SCALE,
+        )
+    }
 
     private val cameraBase = Vector3(280f, 380f, 1760f)
     private val cameraLookAt = Vector3(980f, 120f, -2550f)
@@ -170,333 +197,18 @@ class BattleScreen(
         private const val INTERCEPTOR_SCALE = 3.4f
     }
 
-    private inner class SimulationStepApplier {
-        fun apply(step: BattleStepEvents) {
-            applySpawnedThreats(step.spawnedThreatIds)
-            applyLaunchedInterceptors(step.launchedInterceptors)
-            applyTrailEvents(step.trailEvents)
-            applyBlastEvents(step.blastEvents)
-            applyBuildingDamageEvents(step.buildingDamageEvents)
-            removeThreatEntities(step.removedThreatIds)
-            removeInterceptorEntities(step.removedInterceptorIds)
-            syncRenderEntitiesFromSimulation()
-            syncBattleStateFromSimulation()
-            applyStepStatus(step)
+    private fun pulseLauncher(
+        launch: InterceptorLaunchEvent,
+        launchVelocity: Vector3,
+    ) {
+        if (launch.launcherIndex in 0 until launchers.size) {
+            launchers[launch.launcherIndex].setRotationToward(launchVelocity)
         }
-
-        private fun applySpawnedThreats(ids: List<String>) {
-            ids.forEach { id ->
-                simulation.findThreat(id)?.let { threat ->
-                    val renderThreat =
-                        ThreatEntity(
-                            instance = ModelInstance(models.get("threat")),
-                            position = threat.position.cpy(),
-                            targetPosition = threat.targetPosition.cpy(),
-                            velocity = threat.velocity.cpy(),
-                            id = threat.id,
-                            isTracked = threat.isTracked,
-                            trailCooldown = threat.trailCooldown,
-                        )
-                    syncProjectileTransform(
-                        renderThreat.instance,
-                        renderThreat.position,
-                        renderThreat.velocity,
-                        THREAT_SCALE,
-                    )
-                    threats.add(renderThreat)
-                    threatsById.put(id, renderThreat)
-                }
-            }
-        }
-
-        private fun applyLaunchedInterceptors(launches: List<InterceptorLaunchEvent>) {
-            launches.forEach { launch ->
-                val interceptorState = simulation.findInterceptor(launch.interceptorId) ?: return@forEach
-                val renderInterceptor =
-                    InterceptorEntity(
-                        id = interceptorState.id,
-                        instance = ModelInstance(models.get("interceptor")),
-                        position = interceptorState.position.cpy(),
-                        velocity = interceptorState.velocity.cpy(),
-                        target = interceptorState.targetId?.let { threatsById[it] },
-                        trailCooldown = interceptorState.trailCooldown,
-                    )
-                syncProjectileTransform(
-                    renderInterceptor.instance,
-                    renderInterceptor.position,
-                    renderInterceptor.velocity,
-                    INTERCEPTOR_SCALE,
-                )
-                interceptors.add(renderInterceptor)
-                interceptorsById.put(renderInterceptor.id, renderInterceptor)
-                pulseLauncher(launch, interceptorState.velocity)
-                spawnBlast(launch.launcherPosition, 14f)
-                playSfx("launch", 0.35f)
-            }
-        }
-
-        private fun pulseLauncher(
-            launch: InterceptorLaunchEvent,
-            launchVelocity: Vector3,
-        ) {
-            if (launch.launcherIndex in 0 until launchers.size) {
-                launchers[launch.launcherIndex].setRotationToward(launchVelocity)
-            }
-            when (launch.launcherIndex) {
-                0 -> launcherLeftPulse = 1f
-                1 -> launcherRightPulse = 1f
-            }
-        }
-
-        private fun applyTrailEvents(trails: List<TrailEvent>) {
-            trails.forEach { trail ->
-                if (canSpawnTrail(trail.hostile)) {
-                    spawnTrail(trail.position, trail.hostile)
-                }
-            }
-        }
-
-        private fun applyBlastEvents(blasts: List<BlastEvent>) {
-            blasts.forEach { blast ->
-                when (blast.kind) {
-                    BlastKind.HOSTILE_IMPACT -> {
-                        spawnBlast(blast.position, blast.radius)
-                        spawnDebris(blast.position, 24, Color(0.4f, 0.38f, 0.36f, 1f))
-                        triggerShake(26f, 0.55f)
-                        playSfx("impact", 0.8f)
-                    }
-
-                    BlastKind.INTERCEPT -> {
-                        spawnBlast(blast.position, blast.radius)
-                        spawnDebris(blast.position, 10, Color(0.7f, 0.7f, 0.74f, 1f))
-                        triggerShake(10f, 0.3f)
-                        playSfx("detonate", 0.5f)
-                    }
-                }
-            }
-        }
-
-        private fun applyBuildingDamageEvents(damages: List<BuildingDamageEvent>) {
-            damages.forEach { damage ->
-                cityBlocksById[damage.buildingId]?.let { building ->
-                    applyBuildingDamageVisual(building, damage.integrity, damage.epicenter)
-                }
-            }
-        }
-
-        private fun removeThreatEntities(ids: List<String>) {
-            ids.forEach { id ->
-                threatsById.remove(id)?.let { threats.removeValue(it, true) }
-            }
-        }
-
-        private fun removeInterceptorEntities(ids: List<String>) {
-            ids.forEach { id ->
-                interceptorsById.remove(id)?.let { interceptors.removeValue(it, true) }
-            }
-        }
-
-        private fun applyStepStatus(step: BattleStepEvents) {
-            if (step.waveCleared) {
-                setStatus("status", "SKY CLEAR // PREPARE NEXT WAVE")
-                refreshWaveButton()
-            }
-            if (step.gameOver) {
-                setStatus("critical", "DEFENSE FAILED")
-                refreshWaveButton()
-            }
+        when (launch.launcherIndex) {
+            0 -> launcherLeftPulse = 1f
+            1 -> launcherRightPulse = 1f
         }
     }
-
-    private inner class BattleHudBuilder {
-        fun build() {
-            stage.clear()
-            val uiScale = Gdx.graphics.height / 1080f
-            val root = Table().apply { setFillParent(true) }
-
-            root
-                .add(createTopBar(uiScale))
-                .expandX()
-                .fillX()
-                .top()
-                .pad(12f * uiScale)
-                .row()
-            root.add().expand().row()
-            root
-                .add(createControlDock(uiScale))
-                .expand()
-                .bottom()
-                .left()
-                .pad(14f * uiScale)
-
-            stage.addActor(root)
-            updateHud()
-            refreshWaveButton()
-        }
-
-        private fun createTopBar(uiScale: Float): Table =
-            Table().apply {
-                background = this@BattleScreen.skin.getDrawable("hud_panel")
-                pad(12f * uiScale)
-                add(
-                    Table().apply {
-                        defaults().left()
-                        add(Label("BATTLESPACE", this@BattleScreen.skin, "title")).row()
-                        add(statusLabel).padTop(4f * uiScale).row()
-                    },
-                ).expandX().left()
-                add(creditsLabel).right().padLeft(18f * uiScale)
-            }
-
-        private fun createControlDock(uiScale: Float): Table =
-            Table().apply {
-                background = this@BattleScreen.skin.getDrawable("hud_panel")
-                pad(14f * uiScale)
-                defaults().pad(8f * uiScale)
-                add(Label("CONTROL", this@BattleScreen.skin, "status")).left().padLeft(6f * uiScale).row()
-                add(createControlRow(uiScale, createRangeCard(uiScale), createFuseCard(uiScale))).left().row()
-                add(createControlRow(uiScale, createDoctrineCard(uiScale), createActionCard(uiScale)))
-                    .left()
-                    .padTop(2f * uiScale)
-                    .row()
-            }
-
-        private fun createControlRow(
-            uiScale: Float,
-            leftCard: Table,
-            rightCard: Table,
-        ): Table =
-            Table().apply {
-                defaults().pad(6f * uiScale)
-                add(leftCard).width(364f * uiScale).fillY()
-                add(rightCard).width(364f * uiScale).fillY()
-            }
-
-        private fun createSoftCard(uiScale: Float): Table =
-            Table().apply {
-                background = this@BattleScreen.skin.getDrawable("hud_soft")
-                pad(14f * uiScale)
-                defaults().left()
-            }
-
-        private fun createRangeCard(uiScale: Float): Table =
-            createSoftCard(uiScale).apply {
-                val uiSkin = this@BattleScreen.skin
-                rangeValueLabel = Label("", uiSkin, "display")
-                add(Label("AUTO ENGAGE RANGE", uiSkin, "status")).row()
-                add(rangeValueLabel).padTop(8f * uiScale).row()
-                add(
-                    Slider(1200f, 3200f, 25f, false, uiSkin).apply {
-                        value = settings.engagementRange
-                        addListener(
-                            object : ChangeListener() {
-                                override fun changed(
-                                    event: ChangeEvent?,
-                                    actor: Actor?,
-                                ) {
-                                    settings.engagementRange = value
-                                    updateHud()
-                                }
-                            },
-                        )
-                    },
-                ).width(340f * uiScale)
-                    .fillX()
-                    .height(56f * uiScale)
-                    .padTop(10f * uiScale)
-            }
-
-        private fun createFuseCard(uiScale: Float): Table =
-            createSoftCard(uiScale).apply {
-                val uiSkin = this@BattleScreen.skin
-                fuseValueLabel = Label("", uiSkin, "display")
-                add(Label("FUZE WINDOW", uiSkin, "status")).row()
-                add(fuseValueLabel).padTop(8f * uiScale).row()
-                add(createFuseSlider())
-                    .width(340f * uiScale)
-                    .fillX()
-                    .height(56f * uiScale)
-                    .padTop(10f * uiScale)
-            }
-
-        private fun createFuseSlider(): Slider =
-            Slider(56f, 120f, 2f, false, this@BattleScreen.skin).apply {
-                value = settings.blastRadius
-                addListener(
-                    object : ChangeListener() {
-                        override fun changed(
-                            event: ChangeEvent?,
-                            actor: Actor?,
-                        ) {
-                            settings.blastRadius = value
-                            updateHud()
-                        }
-                    },
-                )
-            }
-
-        private fun createDoctrineCard(uiScale: Float): Table =
-            createSoftCard(uiScale).apply {
-                val uiSkin = this@BattleScreen.skin
-                doctrineValueLabel = Label("", uiSkin, "display")
-                doctrineDetailLabel =
-                    Label("", uiSkin, "status").apply {
-                        setWrap(true)
-                    }
-                doctrineButton =
-                    TextButton("CYCLE DOCTRINE", uiSkin).apply {
-                        addListener(
-                            object : ChangeListener() {
-                                override fun changed(
-                                    event: ChangeEvent?,
-                                    actor: Actor?,
-                                ) {
-                                    settings.doctrine = settings.doctrine.next()
-                                    updateHud()
-                                }
-                            },
-                        )
-                    }
-                add(Label("DOCTRINE", uiSkin, "status")).row()
-                add(doctrineValueLabel).padTop(8f * uiScale).row()
-                add(doctrineDetailLabel)
-                    .width(340f * uiScale)
-                    .padTop(6f * uiScale)
-                    .row()
-                add(doctrineButton)
-                    .width(340f * uiScale)
-                    .height(96f * uiScale)
-                    .fillX()
-                    .padTop(12f * uiScale)
-            }
-
-        private fun createActionCard(uiScale: Float): Table =
-            createSoftCard(uiScale).apply {
-                val uiSkin = this@BattleScreen.skin
-                add(Label("WAVE", uiSkin, "status")).row()
-                waveButton =
-                    TextButton("START NEXT WAVE", uiSkin).apply {
-                        addListener(
-                            object : ChangeListener() {
-                                override fun changed(
-                                    event: ChangeEvent?,
-                                    actor: Actor?,
-                                ) {
-                                    if (!waveInProgress && !isGameOver) startNewWave()
-                                }
-                            },
-                        )
-                    }
-                add(waveButton)
-                    .width(340f * uiScale)
-                    .height(96f * uiScale)
-                    .fillX()
-                    .padTop(12f * uiScale)
-            }
-    }
-
-    private val simulationStepApplier = SimulationStepApplier()
-    private val battleHudBuilder = BattleHudBuilder()
 
     private fun currentEffectBudgetScale(): Float {
         val scenePressure = threats.size + interceptors.size * 0.75f + effects.size / 18f
@@ -752,8 +464,7 @@ class BattleScreen(
         styleName: String,
         text: String,
     ) {
-        statusLabel.style = skin.get(styleName, Label.LabelStyle::class.java)
-        statusLabel.setText(text)
+        hudController.setStatus(styleName, text)
     }
 
     private fun applySimulationStep(step: BattleStepEvents) {
@@ -814,7 +525,8 @@ class BattleScreen(
     }
 
     private fun setupHud() {
-        battleHudBuilder.build()
+        hudController.build()
+        syncHud()
     }
 
     private fun loadAudio() {
@@ -843,7 +555,11 @@ class BattleScreen(
         if (!simulation.startNewWave()) return
         syncBattleStateFromSimulation()
         setStatus("critical", "MULTIPLE INBOUND TRACKS // WAVE $wave")
-        refreshWaveButton()
+        syncHud()
+    }
+
+    private fun handleStartWaveRequest() {
+        startNewWave()
     }
 
     override fun render(delta: Float) {
@@ -974,13 +690,12 @@ class BattleScreen(
         updateBuildings(dt)
         syncBattleStateFromSimulation()
         updateSceneLights(dt)
-        updateHud()
+        syncHud()
 
         if (isGameOver) {
             isGameOver = true
-            statusLabel.style = skin.get("critical", Label.LabelStyle::class.java)
-            statusLabel.setText("DEFENSE FAILED")
-            refreshWaveButton()
+            setStatus("critical", "DEFENSE FAILED")
+            syncHud()
         }
     }
 
@@ -1397,50 +1112,24 @@ class BattleScreen(
         building.instance.transform.scale(1f, heightScale, 1f)
     }
 
-    private fun updateHud() {
-        val waveState =
-            when {
-                isGameOver -> "STATUS LOST"
-                waveInProgress -> "WAVE $wave LIVE / ${threats.size + threatsRemainingInWave} HOSTILES"
-                else -> "WAVE $wave READY"
-            }
-        val effectiveRange = DefenseTuning.engagementRange(settings)
-        val effectiveFuse = DefenseTuning.blastRadius(settings)
-        if (::rangeValueLabel.isInitialized) {
-            rangeValueLabel.setText("${effectiveRange.toInt()} M")
-        }
-        if (::fuseValueLabel.isInitialized) {
-            fuseValueLabel.setText("${effectiveFuse.toInt()} M")
-        }
-        if (::doctrineValueLabel.isInitialized) {
-            doctrineValueLabel.setText(settings.doctrine.label)
-        }
-        if (::doctrineDetailLabel.isInitialized) {
-            doctrineDetailLabel.setText(settings.doctrine.summary)
-        }
-        creditsLabel.setText(
-            "CITY ${(cityIntegrity.coerceAtLeast(0f)).toInt()}%   SCORE $score   CR $credits   $waveState",
+    private fun currentHudSnapshot(): BattleHudSnapshot =
+        BattleHudSnapshot(
+            cityIntegrity = cityIntegrity,
+            score = score,
+            credits = credits,
+            wave = wave,
+            waveInProgress = waveInProgress,
+            isGameOver = isGameOver,
+            visibleThreats = threats.size,
+            remainingThreatsInWave = threatsRemainingInWave,
+            effectiveRangeMeters = DefenseTuning.engagementRange(settings),
+            effectiveFuseMeters = DefenseTuning.blastRadius(settings),
+            doctrineLabel = settings.doctrine.label,
+            doctrineSummary = settings.doctrine.summary,
         )
-    }
 
-    private fun refreshWaveButton() {
-        if (!::waveButton.isInitialized) return
-        when {
-            isGameOver -> {
-                waveButton.setText("DEFENSE FAILED")
-                waveButton.isDisabled = true
-            }
-
-            waveInProgress -> {
-                waveButton.setText("WAVE $wave ACTIVE")
-                waveButton.isDisabled = true
-            }
-
-            else -> {
-                waveButton.setText("START NEXT WAVE")
-                waveButton.isDisabled = false
-            }
-        }
+    private fun syncHud() {
+        hudController.update(currentHudSnapshot())
     }
 
     private fun triggerShake(

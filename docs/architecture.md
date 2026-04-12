@@ -7,6 +7,12 @@
   Draws the textured menu scene and transitions into `BattleScreen`.
 - `BattleScreen`
   Owns battle orchestration, live entity state, audio/effects hooks, and delegates rendering/asset work to specialized collaborators.
+- `BattleHudController`
+  Owns battle HUD widget construction and snapshot-driven widget updates.
+- `BattleHudState`
+  Owns pure HUD text/button-state shaping for the battle screen.
+- `BattleSimulationStepApplier`
+  Owns translation of shared simulation step events into live render-entity/effect/audio updates.
 - `BattleSceneRenderer`
   Owns backdrop composition, atmosphere passes, loading/game-over screens, and radar/threat overlay rendering.
 - `BattleTextureFactory`
@@ -25,6 +31,8 @@
   Owns threat, interceptor, blast, trail, debris, and moon model generation.
 - `BattleSimulation`
   Owns the live battle math used by both the GUI and the headless runner.
+- `BattleSimulationStepApplier`
+  Applies `BattleStepEvents` from the shared simulation to render entities, launcher pulses, damage visuals, blasts, and status/HUD updates.
 - `BattleWorldLayout`
   Owns launcher coordinates, city-building placement, shoreline safety constraints, and radar projection rules.
 
@@ -75,6 +83,8 @@
 ## Verification Surface
 - Logic:
   `core/src/test/kotlin/com/airdefense/game/*`
+- HUD state:
+  [BattleHudStateTest.kt](C:\codex_3dgame_android\project_air_defense\core\src\test\kotlin\com\airdefense\game\BattleHudStateTest.kt) covers wave-state, summary, and button-state formatting.
 - Headless balance:
   `.\gradlew.bat :core:runBattleMonteCarlo -Pruns=300 -Pwaves=1 -Pseconds=48 -Pstep=0.05`
 - Windows shortcut:
