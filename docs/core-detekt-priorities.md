@@ -66,6 +66,50 @@ was:
 
 Source: [detekt-refactor-baseline.json](C:\codex_3dgame_android\project_air_defense\benchmark-results\detekt-refactor-baseline.json)
 
+## P1 outcome
+
+Status: complete on `2026-04-12`.
+
+Measured result after the refactor:
+
+- core detekt findings: `1929 -> 1899` (`-30`)
+- [BattleSimulation.kt](C:\codex_3dgame_android\project_air_defense\core\src\main\kotlin\com\airdefense\game\BattleSimulation.kt): `27 -> 0`
+- [BattleSimulationTest.kt](C:\codex_3dgame_android\project_air_defense\core\src\test\kotlin\com\airdefense\game\BattleSimulationTest.kt): `3 -> 0`
+
+Seeded equivalence after the refactor for the same `runs=1 waves=1 seconds=48 step=0.05 seed=4242 doctrine=SHIELD_WALL` guardrail:
+
+- city integrity: `88.000%` unchanged
+- intercept rate: `88.889%` unchanged
+- score: `1200` unchanged
+- hostile impacts: `1` unchanged
+- destroyed buildings: `0` unchanged
+
+Source: [detekt-refactor-after.json](C:\codex_3dgame_android\project_air_defense\benchmark-results\detekt-refactor-after.json)
+
+Android live-path verification after the refactor:
+
+- `:android:installDebug` succeeded
+- menu OCR confirmed `ENTER AIRSPACE`
+- battle OCR confirmed `CONTROL`, `CITY 100%`, and live wave text
+- crash buffer was empty
+- emulator process stayed alive
+
+Artifacts:
+
+- [menu capture](C:\codex_3dgame_android\project_air_defense\benchmark-results\visual-qa\detekt-pass-menu.png)
+- [battle capture](C:\codex_3dgame_android\project_air_defense\benchmark-results\visual-qa\detekt-pass-battle.png)
+- [post-tap logcat](C:\codex_3dgame_android\project_air_defense\benchmark-results\visual-qa\detekt-pass-posttap-logcat.txt)
+
+## Next highest-impact target
+
+P2 is now the active priority.
+
+Why it moves to the top:
+
+- [BattleScreen.kt](C:\codex_3dgame_android\project_air_defense\core\src\main\kotlin\com\airdefense\game\BattleScreen.kt) still accounts for `1362 / 1899` core detekt findings
+- it still owns the biggest runtime integration risk: simulation application, renderer state, HUD, effects, and asset generation
+- structural debt there is now the clearest remaining blocker to safer graphics and gameplay work
+
 ## Refactor rule
 
 Do not suppress the findings first.

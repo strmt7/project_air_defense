@@ -2,6 +2,7 @@ package com.airdefense.game
 
 import com.badlogic.gdx.math.Vector3
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class BattleSimulationTest {
@@ -24,7 +25,9 @@ class BattleSimulationTest {
 
         assertTrue(simulation.totalThreatsSpawned > 0)
         assertTrue(simulation.totalInterceptorsLaunched >= simulation.totalThreatsIntercepted)
-        assertTrue(simulation.totalThreatsIntercepted + simulation.totalHostileImpacts <= simulation.totalThreatsSpawned)
+        assertTrue(
+            simulation.totalThreatsIntercepted + simulation.totalHostileImpacts <= simulation.totalThreatsSpawned,
+        )
         assertTrue(simulation.cityIntegrity in 0f..100f)
     }
 
@@ -75,11 +78,17 @@ class BattleSimulationTest {
 
         assertTrue(
             shieldWallInterceptRate > disciplinedInterceptRate,
-            "shield wall should raise intercept rate: disciplined=$disciplinedInterceptRate shieldWall=$shieldWallInterceptRate",
+            (
+                "shield wall should raise intercept rate: disciplined=$disciplinedInterceptRate " +
+                    "shieldWall=$shieldWallInterceptRate"
+            ),
         )
         assertTrue(
             shieldWallIntegrity >= disciplinedIntegrity,
-            "shield wall should not reduce average city integrity: disciplined=$disciplinedIntegrity shieldWall=$shieldWallIntegrity",
+            (
+                "shield wall should not reduce average city integrity: disciplined=$disciplinedIntegrity " +
+                    "shieldWall=$shieldWallIntegrity"
+            ),
         )
     }
 
@@ -109,5 +118,78 @@ class BattleSimulationTest {
             }
 
         assertTrue(nearestBuildingDistance < 140f)
+    }
+
+    @Test
+    fun `seeded single run snapshot stays stable`() {
+        val result =
+            BattleMonteCarloRunner.run(
+                runs = 1,
+                waves = 1,
+                maxSecondsPerWave = 48f,
+                stepSeconds = 0.05f,
+                baseSeed = 4242L,
+            ).single()
+
+        assertEquals(9, result.threatsSpawned)
+        assertEquals(8, result.threatsIntercepted)
+        assertEquals(1, result.hostileImpacts)
+        assertEquals(0, result.destroyedBuildings)
+        assertEquals(1200, result.score)
+        assertEquals(88f, result.cityIntegrity, 0.0001f)
+        assertEquals(8f / 9f, result.interceptRate, 0.0001f)
+        assertTrue(!result.gameOver)
+    }
+
+    @Test
+    fun `step removes orphan interceptor without affecting city state`() {
+        val simulation =
+            BattleSimulation(
+                buildingDefinitions = BattleWorldLayout.buildingDefinitions(),
+                launcherPositions = BattleWorldLayout.launcherPositions(),
+                settings = DefenseSettings(),
+                random = SeededRandomSource(77L),
+            )
+        simulation.interceptors +=
+            SimulationInterceptor(
+                id = "I-TEST",
+                position = Vector3(0f, 200f, 0f),
+                velocity = Vector3(0f, 1f, 0f),
+                targetId = "missing-threat",
+                launcherIndex = 0,
+            )
+
+        val events = simulation.step(0.05f)
+
+        assertTrue("I-TEST" in events.removedInterceptorIds)
+        assertTrue(simulation.interceptors.isEmpty())
+        assertEquals(100f, simulation.cityIntegrity, 0.0001f)
+    }
+
+    @Test
+    fun `step resolves hostile impact when a threat reaches its target`() {
+        val simulation =
+            BattleSimulation(
+                buildingDefinitions = BattleWorldLayout.buildingDefinitions(),
+                launcherPositions = BattleWorldLayout.launcherPositions(),
+                settings = DefenseSettings(),
+                random = SeededRandomSource(88L),
+            )
+        val targetBuilding = simulation.buildings.first()
+        simulation.threats +=
+            SimulationThreat(
+                id = "T-IMPACT",
+                position = targetBuilding.position.cpy().add(0f, 80f, 0f),
+                targetPosition = targetBuilding.position.cpy(),
+                velocity = Vector3.Zero.cpy(),
+            )
+
+        val events = simulation.step(0.05f)
+
+        assertTrue("T-IMPACT" in events.removedThreatIds)
+        assertTrue(events.blastEvents.any { it.kind == BlastKind.HOSTILE_IMPACT })
+        assertTrue(events.buildingDamageEvents.any { it.buildingId == targetBuilding.id })
+        assertEquals(1, simulation.totalHostileImpacts)
+        assertTrue(simulation.cityIntegrity < 100f)
     }
 }
