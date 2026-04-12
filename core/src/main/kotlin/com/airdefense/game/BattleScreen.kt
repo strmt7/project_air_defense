@@ -13,7 +13,6 @@ import com.badlogic.gdx.graphics.g3d.Environment
 import com.badlogic.gdx.graphics.g3d.Model
 import com.badlogic.gdx.graphics.g3d.ModelBatch
 import com.badlogic.gdx.graphics.g3d.ModelInstance
-import com.badlogic.gdx.graphics.g3d.attributes.BlendingAttribute
 import com.badlogic.gdx.graphics.g3d.attributes.ColorAttribute
 import com.badlogic.gdx.graphics.g3d.attributes.FloatAttribute
 import com.badlogic.gdx.graphics.g3d.attributes.IntAttribute
@@ -80,10 +79,15 @@ class BattleScreen(
     private val threatsById = ObjectMap<String, ThreatEntity>()
     private val interceptors = Array<InterceptorEntity>()
     private val interceptorsById = ObjectMap<String, InterceptorEntity>()
-    private val effects = Array<VisualEffect>()
-    private val debris = Array<DebrisEntity>()
     private val sounds = ObjectMap<String, Sound>()
     private lateinit var simulation: BattleSimulation
+    private val effectsController by lazy {
+        BattleEffectsController(
+            models = models,
+            qualityProfile = qualityProfile,
+            impactLight = impactLight,
+        )
+    }
     private val hudController by lazy {
         BattleHudController(
             stage = stage,
@@ -108,14 +112,18 @@ class BattleScreen(
                 ),
             callbacks =
                 BattleStepCallbacks(
-                    canSpawnTrail = ::canSpawnTrail,
-                    spawnTrail = ::spawnTrail,
+                    canSpawnTrail = { hostile -> effectsController.canSpawnTrail(hostile, threats.size, interceptors.size) },
+                    spawnTrail = effectsController::spawnTrail,
                     syncProjectileTransform = ::syncProjectileTransform,
                     syncRenderEntitiesFromSimulation = ::syncRenderEntitiesFromSimulation,
                     syncBattleStateFromSimulation = ::syncBattleStateFromSimulation,
                     pulseLauncher = ::pulseLauncher,
-                    spawnBlast = ::spawnBlast,
-                    spawnDebris = ::spawnDebris,
+                    spawnBlast = { position, size ->
+                        effectsController.spawnBlast(position, size, threats.size, interceptors.size)
+                    },
+                    spawnDebris = { position, count, color ->
+                        effectsController.spawnDebris(position, count, color, threats.size, interceptors.size)
+                    },
                     triggerShake = ::triggerShake,
                     playSfx = ::playSfx,
                     applyBuildingDamageVisual = ::applyBuildingDamageVisual,
@@ -151,8 +159,6 @@ class BattleScreen(
     private var battleLiveTime = 0f
     private var launcherLeftPulse = 0f
     private var launcherRightPulse = 0f
-    private var hostileTrailSamples = 0
-    private var interceptorTrailSamples = 0
     private val frameTimeWindowMs = FloatArray(180)
     private var frameTimeWindowCursor = 0
     private var frameTimeWindowSize = 0
@@ -209,65 +215,6 @@ class BattleScreen(
             1 -> launcherRightPulse = 1f
         }
     }
-
-    private fun currentEffectBudgetScale(): Float {
-        val scenePressure = threats.size + interceptors.size * 0.75f + effects.size / 18f
-        val pressureScale =
-            when {
-                scenePressure >= 18f -> 0.62f
-                scenePressure >= 12f -> 0.78f
-                scenePressure >= 8f -> 0.9f
-                else -> 1f
-            }
-        return qualityProfile.effectBudgetScale * pressureScale
-    }
-
-    private fun activeTrailEffectCount(): Int {
-        var count = 0
-        effects.forEach { effect ->
-            if (effect.type == EffectType.TRAIL) count++
-        }
-        return count
-    }
-
-    private fun adjustedEffectCount(
-        baseCount: Int,
-        minimum: Int,
-    ): Int {
-        val scaled = (baseCount * currentEffectBudgetScale()).toInt()
-        return max(minimum, min(baseCount, scaled))
-    }
-
-    private fun adjustedTrailStride(baseStride: Int): Int {
-        val scenePressure = threats.size + interceptors.size + effects.size / 20
-        val extraStride =
-            when {
-                scenePressure >= 22 -> 2
-                scenePressure >= 14 -> 1
-                else -> 0
-            }
-        return (baseStride + extraStride).coerceAtLeast(1)
-    }
-
-    private fun canSpawnTrail(hostile: Boolean): Boolean {
-        val activeTrailEffects = activeTrailEffectCount()
-        if (activeTrailEffects >= qualityProfile.maxTrailEffects) return false
-
-        val stride =
-            adjustedTrailStride(
-                if (hostile) qualityProfile.hostileTrailStride else qualityProfile.interceptorTrailStride,
-            )
-        return stride <= 1 || nextTrailSampleIndex(hostile) % stride == 1
-    }
-
-    private fun nextTrailSampleIndex(hostile: Boolean): Int =
-        if (hostile) {
-            hostileTrailSamples += 1
-            hostileTrailSamples
-        } else {
-            interceptorTrailSamples += 1
-            interceptorTrailSamples
-        }
 
     init {
         Gdx.graphics.isContinuousRendering = true
@@ -518,9 +465,21 @@ class BattleScreen(
         if (previousIntegrity > 0f && building.integrity <= 0f) {
             building.visibleHeight = building.baseHeight * 0.12f
             building.collapseVelocity = max(building.collapseVelocity, 60f)
-            spawnDebris(building.position.cpy().add(0f, building.baseHeight * 0.35f, 0f), 28, Color(0.25f, 0.25f, 0.28f, 1f))
+            effectsController.spawnDebris(
+                position = building.position.cpy().add(0f, building.baseHeight * 0.35f, 0f),
+                count = 28,
+                color = Color(0.25f, 0.25f, 0.28f, 1f),
+                threatCount = threats.size,
+                interceptorCount = interceptors.size,
+            )
         } else {
-            spawnDebris(building.position.cpy().add(0f, building.baseHeight * 0.45f, 0f), 6, Color(0.3f, 0.3f, 0.34f, 1f))
+            effectsController.spawnDebris(
+                position = building.position.cpy().add(0f, building.baseHeight * 0.45f, 0f),
+                count = 6,
+                color = Color(0.3f, 0.3f, 0.34f, 1f),
+                threatCount = threats.size,
+                interceptorCount = interceptors.size,
+            )
         }
     }
 
@@ -592,8 +551,8 @@ class BattleScreen(
         cityBlocks.forEach { if (it.visibleHeight > 1f) modelBatch.render(it.instance, environment) }
         threats.forEach { modelBatch.render(it.instance, environment) }
         interceptors.forEach { modelBatch.render(it.instance, environment) }
-        debris.forEach { modelBatch.render(it.instance, environment) }
-        effects.forEach { modelBatch.render(it.instance, environment) }
+        effectsController.debris.forEach { modelBatch.render(it.instance, environment) }
+        effectsController.effects.forEach { modelBatch.render(it.instance, environment) }
         modelBatch.end()
     }
 
@@ -635,7 +594,7 @@ class BattleScreen(
             return buildString {
                 append("LIVE 0s // FPS 0.0 // FT 0.0/0.0/0.0")
                 append(" // Q ${qualityProfile.label}")
-                append(" // FX${effects.size}")
+                append(" // FX${effectsController.effects.size}")
                 append(" // T${threats.size} I${interceptors.size}")
             }
         }
@@ -652,7 +611,7 @@ class BattleScreen(
                 " // FT ${"%.1f".format(Locale.US, p50)}/${"%.1f".format(Locale.US, p95)}/${"%.1f".format(Locale.US, maxFrameMs)}",
             )
             append(" // Q ${qualityProfile.label}")
-            append(" // FX${effects.size}")
+            append(" // FX${effectsController.effects.size}")
             append(" // T${threats.size} I${interceptors.size}")
         }
     }
@@ -685,8 +644,7 @@ class BattleScreen(
         updateCameraShake(dt)
         val step = simulation.step(dt)
         applySimulationStep(step)
-        updateEffects(dt)
-        updateDebris(dt)
+        effectsController.update(dt)
         updateBuildings(dt)
         syncBattleStateFromSimulation()
         updateSceneLights(dt)
@@ -750,345 +708,6 @@ class BattleScreen(
             }
             building.lean += (building.leanTarget - building.lean) * min(1f, dt * 1.7f)
             syncBuildingTransform(building)
-        }
-    }
-
-    private fun spawnBlast(
-        position: Vector3,
-        size: Float,
-    ) {
-        val sparkCount = adjustedEffectCount(qualityProfile.baseSparkCount, minimum = 2)
-        val smokeCount = adjustedEffectCount(qualityProfile.baseSmokeCount, minimum = 1)
-        addBlastCoreEffect(position, size)
-        addShockwaveEffect(position, size)
-        spawnSparkEffects(position, size, sparkCount)
-        spawnSmokeEffects(position, size, smokeCount)
-        brightenImpactLight(position, size)
-    }
-
-    private fun addBlastCoreEffect(
-        position: Vector3,
-        size: Float,
-    ) {
-        val core = ModelInstance(models.get("blast"))
-        core.transform.setToScaling(0.1f, 0.1f, 0.1f).trn(position)
-        core.materials.first().set(ColorAttribute.createDiffuse(Color(1f, 0.96f, 0.86f, 1f)))
-        core.materials.first().set(ColorAttribute.createEmissive(Color(1f, 0.74f, 0.28f, 1f)))
-        effects.add(
-            VisualEffect(
-                instance = core,
-                position = position.cpy(),
-                life = 0.7f,
-                initialLife = 0.7f,
-                type = EffectType.BLAST,
-                maxScale = size * 1.18f,
-            ),
-        )
-    }
-
-    private fun addShockwaveEffect(
-        position: Vector3,
-        size: Float,
-    ) {
-        val shockwave = ModelInstance(models.get("blast"))
-        shockwave.transform.setToScaling(0.1f, 0.03f, 0.1f).trn(position.x, position.y + 6f, position.z)
-        shockwave.materials.first().set(ColorAttribute.createDiffuse(Color(1f, 0.72f, 0.34f, 1f)))
-        shockwave.materials.first().set(ColorAttribute.createEmissive(Color(0.72f, 0.28f, 0.08f, 1f)))
-        effects.add(
-            VisualEffect(
-                instance = shockwave,
-                position = Vector3(position.x, position.y + 6f, position.z),
-                life = 0.56f,
-                initialLife = 0.56f,
-                type = EffectType.SHOCKWAVE,
-                maxScale = size * 2.8f,
-            ),
-        )
-    }
-
-    private fun spawnSparkEffects(
-        position: Vector3,
-        size: Float,
-        sparkCount: Int,
-    ) {
-        repeat(sparkCount) {
-            val sparkLife = MathUtils.random(0.26f, 0.46f)
-            val spark = ModelInstance(models.get("trail"))
-            spark.transform.setToScaling(0.3f, 0.3f, 0.3f).trn(position)
-            spark.materials.first().set(ColorAttribute.createDiffuse(Color(1f, 0.72f, 0.28f, 1f)))
-            spark.materials.first().set(ColorAttribute.createEmissive(Color(0.95f, 0.42f, 0.08f, 1f)))
-            effects.add(
-                VisualEffect(
-                    instance = spark,
-                    position = position.cpy(),
-                    life = sparkLife,
-                    initialLife = sparkLife,
-                    type = EffectType.SPARK,
-                    maxScale = size * MathUtils.random(0.22f, 0.42f),
-                    velocity =
-                        Vector3(
-                            MathUtils.random(-160f, 160f),
-                            MathUtils.random(40f, 180f),
-                            MathUtils.random(-160f, 160f),
-                        ),
-                ),
-            )
-        }
-    }
-
-    private fun spawnSmokeEffects(
-        position: Vector3,
-        size: Float,
-        smokeCount: Int,
-    ) {
-        repeat(smokeCount) {
-            val smokeLife = MathUtils.random(1.1f, 1.65f)
-            val smoke = ModelInstance(models.get("trail"))
-            smoke.transform.setToScaling(0.4f, 0.4f, 0.4f).trn(position)
-            smoke.materials.first().set(ColorAttribute.createDiffuse(Color(0.22f, 0.22f, 0.24f, 1f)))
-            smoke.materials.first().set(ColorAttribute.createEmissive(Color(0.06f, 0.06f, 0.07f, 1f)))
-            effects.add(
-                VisualEffect(
-                    instance = smoke,
-                    position = position.cpy(),
-                    life = smokeLife,
-                    initialLife = smokeLife,
-                    type = EffectType.SMOKE,
-                    maxScale = size * MathUtils.random(0.7f, 1.15f),
-                    velocity =
-                        Vector3(
-                            MathUtils.random(-28f, 28f),
-                            MathUtils.random(22f, 48f),
-                            MathUtils.random(-20f, 20f),
-                        ),
-                ),
-            )
-        }
-    }
-
-    private fun brightenImpactLight(
-        position: Vector3,
-        size: Float,
-    ) {
-        impactLight.set(Color(1f, 0.82f, 0.5f, 1f), position, size * 18f * qualityProfile.lightIntensityScale)
-    }
-
-    private fun spawnTrail(
-        position: Vector3,
-        hostile: Boolean,
-    ) {
-        if (effects.size >= qualityProfile.maxTrailEffects + 80) return
-        val instance = ModelInstance(models.get("trail"))
-        val initialScale = if (hostile) 0.86f else 0.56f
-        instance.transform.setToScaling(initialScale, initialScale, initialScale).trn(position)
-        val effect =
-            VisualEffect(
-                instance,
-                position.cpy(),
-                if (hostile) 0.56f else 0.34f,
-                if (hostile) 0.56f else 0.34f,
-                EffectType.TRAIL,
-                if (hostile) 2.25f else 1.45f,
-                Vector3(0f, if (hostile) 8f else 4f, 0f),
-            )
-        val material = effect.instance.materials.first()
-        material.set(
-            ColorAttribute.createDiffuse(
-                if (hostile) Color(1f, 0.42f, 0.08f, 1f) else Color(0.46f, 0.9f, 1f, 1f),
-            ),
-        )
-        material.set(
-            ColorAttribute.createEmissive(
-                if (hostile) Color(0.62f, 0.18f, 0.04f, 1f) else Color(0.12f, 0.38f, 0.48f, 1f),
-            ),
-        )
-        effects.add(effect)
-    }
-
-    private fun updateEffects(dt: Float) {
-        val iterator = effects.iterator()
-        var strongest = 0f
-        val strongestPos = tempA.setZero()
-        while (iterator.hasNext()) {
-            val effect = iterator.next()
-            strongest =
-                updateEffect(
-                    effect = effect,
-                    dt = dt,
-                    strongest = strongest,
-                    strongestPos = strongestPos,
-                )
-            if (effect.life <= 0f) {
-                iterator.remove()
-            }
-        }
-        updateImpactLightFromEffects(dt, strongest, strongestPos)
-    }
-
-    private fun updateEffect(
-        effect: VisualEffect,
-        dt: Float,
-        strongest: Float,
-        strongestPos: Vector3,
-    ): Float {
-        effect.life -= dt
-        val progress = (effect.life / effect.initialLife).coerceIn(0f, 1f)
-        val blend =
-            effect.instance.materials
-                .first()
-                .get(BlendingAttribute.Type) as? BlendingAttribute
-        return when (effect.type) {
-            EffectType.BLAST -> {
-                updateBlastEffect(effect, progress, blend, strongest, strongestPos)
-            }
-
-            EffectType.SHOCKWAVE -> {
-                updateShockwaveEffect(effect, progress, blend)
-                strongest
-            }
-
-            EffectType.SMOKE -> {
-                updateSmokeEffect(effect, dt, progress, blend)
-                strongest
-            }
-
-            EffectType.SPARK -> {
-                updateSparkEffect(effect, dt, progress, blend)
-                strongest
-            }
-
-            EffectType.TRAIL -> {
-                updateTrailEffect(effect, dt, progress, blend)
-                strongest
-            }
-        }
-    }
-
-    private fun updateBlastEffect(
-        effect: VisualEffect,
-        progress: Float,
-        blend: BlendingAttribute?,
-        strongest: Float,
-        strongestPos: Vector3,
-    ): Float {
-        val scale = effect.maxScale * (1.25f - progress * progress)
-        effect.instance.transform
-            .setToScaling(scale, scale, scale)
-            .trn(effect.position)
-        blend?.opacity = (progress * progress).coerceIn(0f, 1f)
-        val intensity = effect.maxScale * progress * 20f
-        if (intensity > strongest) {
-            strongestPos.set(effect.position)
-            return intensity
-        }
-        return strongest
-    }
-
-    private fun updateShockwaveEffect(
-        effect: VisualEffect,
-        progress: Float,
-        blend: BlendingAttribute?,
-    ) {
-        val scale = effect.maxScale * (1.18f - progress)
-        effect.instance.transform
-            .setToScaling(scale, scale * 0.08f, scale)
-            .trn(effect.position)
-        blend?.opacity = (progress * 0.72f).coerceIn(0f, 1f)
-    }
-
-    private fun updateSmokeEffect(
-        effect: VisualEffect,
-        dt: Float,
-        progress: Float,
-        blend: BlendingAttribute?,
-    ) {
-        effect.position.mulAdd(effect.velocity, dt)
-        effect.velocity.y += dt * 10f
-        val scale = 0.6f + (1f - progress) * effect.maxScale
-        effect.instance.transform
-            .setToScaling(scale, scale, scale)
-            .trn(effect.position)
-        blend?.opacity = (0.26f * kotlin.math.sqrt(progress)).coerceIn(0f, 0.3f)
-    }
-
-    private fun updateSparkEffect(
-        effect: VisualEffect,
-        dt: Float,
-        progress: Float,
-        blend: BlendingAttribute?,
-    ) {
-        effect.position.mulAdd(effect.velocity, dt)
-        effect.velocity.scl((1f - dt * 1.8f).coerceAtLeast(0.2f))
-        effect.velocity.y -= dt * 140f
-        val scale = 0.18f + progress * effect.maxScale * 0.12f
-        effect.instance.transform
-            .setToScaling(scale, scale, scale)
-            .trn(effect.position)
-        blend?.opacity = (0.72f * progress).coerceIn(0f, 0.85f)
-    }
-
-    private fun updateTrailEffect(
-        effect: VisualEffect,
-        dt: Float,
-        progress: Float,
-        blend: BlendingAttribute?,
-    ) {
-        effect.position.mulAdd(effect.velocity, dt)
-        val scale = 0.45f + (1f - progress) * effect.maxScale
-        effect.instance.transform
-            .setToScaling(scale, scale, scale)
-            .trn(effect.position)
-        blend?.opacity = 0.42f * progress
-    }
-
-    private fun updateImpactLightFromEffects(
-        dt: Float,
-        strongest: Float,
-        strongestPos: Vector3,
-    ) {
-        if (strongest > 0f) {
-            impactLight.set(Color(1f, 0.8f, 0.42f, 1f), strongestPos, strongest)
-            return
-        }
-        impactLight.intensity = max(0f, impactLight.intensity - dt * 260f)
-    }
-
-    private fun spawnDebris(
-        position: Vector3,
-        count: Int,
-        color: Color,
-    ) {
-        val debrisCount = adjustedEffectCount(min(count, qualityProfile.maxDebrisPieces), minimum = 1)
-        repeat(debrisCount) {
-            val velocity =
-                Vector3(
-                    MathUtils.random(-1f, 1f),
-                    MathUtils.random(0.3f, 1.5f),
-                    MathUtils.random(-1f, 1f),
-                ).nor().scl(MathUtils.random(40f, 220f))
-            val instance = ModelInstance(models.get("debris"))
-            instance.materials.first().set(ColorAttribute.createDiffuse(color))
-            val size = MathUtils.random(0.35f, 1.5f)
-            instance.transform.setToScaling(size, size, size).trn(position)
-            debris.add(DebrisEntity(instance, position.cpy(), velocity, MathUtils.random(1.1f, 3.2f), size))
-        }
-    }
-
-    private fun updateDebris(dt: Float) {
-        val iterator = debris.iterator()
-        while (iterator.hasNext()) {
-            val piece = iterator.next()
-            piece.life -= dt
-            piece.velocity.y -= 120f * dt
-            piece.position.mulAdd(piece.velocity, dt)
-            piece.rotation.mulAdd(Vector3(1.5f, 0.9f, 1.2f), dt * 120f)
-            piece.instance.transform
-                .setToScaling(piece.scale, piece.scale, piece.scale)
-                .rotate(Vector3.X, piece.rotation.x)
-                .rotate(Vector3.Y, piece.rotation.y)
-                .rotate(Vector3.Z, piece.rotation.z)
-                .trn(piece.position)
-            if (piece.position.y <= 0f || piece.life <= 0f) iterator.remove()
         }
     }
 

@@ -4,29 +4,30 @@ Measured from [core detekt XML](C:\codex_3dgame_android\project_air_defense\core
 
 ## Current Verified State
 
-- Core detekt findings: `300`
+- Core detekt findings: `212`
 - Findings by rule:
-  - `MagicNumber`: `254`
-  - `MaxLineLength`: `40`
-  - `TooManyFunctions`: `4`
+  - `MagicNumber`: `163`
+  - `MaxLineLength`: `42`
+  - `TooManyFunctions`: `5`
   - `LargeClass`: `1`
   - `LongParameterList`: `1`
 - Findings by file:
-  - [BattleScreen.kt](C:\codex_3dgame_android\project_air_defense\core\src\main\kotlin\com\airdefense\game\BattleScreen.kt): `266`
+  - [BattleScreen.kt](C:\codex_3dgame_android\project_air_defense\core\src\main\kotlin\com\airdefense\game\BattleScreen.kt): `140`
+  - [BattleEffectsController.kt](C:\codex_3dgame_android\project_air_defense\core\src\main\kotlin\com\airdefense\game\BattleEffectsController.kt): `38`
   - [BattleSceneRenderer.kt](C:\codex_3dgame_android\project_air_defense\core\src\main\kotlin\com\airdefense\game\BattleSceneRenderer.kt): `10`
   - [BattleTerrainAssetFactory.kt](C:\codex_3dgame_android\project_air_defense\core\src\main\kotlin\com\airdefense\game\BattleTerrainAssetFactory.kt): `5`
   - [BattleHudController.kt](C:\codex_3dgame_android\project_air_defense\core\src\main\kotlin\com\airdefense\game\BattleHudController.kt): `4`
   - [BattleSurfaceTextureFactory.kt](C:\codex_3dgame_android\project_air_defense\core\src\main\kotlin\com\airdefense\game\BattleSurfaceTextureFactory.kt): `4`
-  - [BattleHudStateTest.kt](C:\codex_3dgame_android\project_air_defense\core\src\test\kotlin\com\airdefense\game\BattleHudStateTest.kt): `3`
   - [BattleBuildingAssetFactory.kt](C:\codex_3dgame_android\project_air_defense\core\src\main\kotlin\com\airdefense\game\BattleBuildingAssetFactory.kt): `3`
+  - [BattleHudStateTest.kt](C:\codex_3dgame_android\project_air_defense\core\src\test\kotlin\com\airdefense\game\BattleHudStateTest.kt): `3`
   - [BattleBackdropTextureFactory.kt](C:\codex_3dgame_android\project_air_defense\core\src\main\kotlin\com\airdefense\game\BattleBackdropTextureFactory.kt): `3`
   - [BattleProjectileAssetFactory.kt](C:\codex_3dgame_android\project_air_defense\core\src\main\kotlin\com\airdefense\game\BattleProjectileAssetFactory.kt): `2`
 - Measured reduction from the last verified branch baseline:
-  - core detekt: `344 -> 300` (`-44`)
-  - [BattleScreen.kt](C:\codex_3dgame_android\project_air_defense\core\src\main\kotlin\com\airdefense\game\BattleScreen.kt): `317 -> 266` (`-51`)
+  - core detekt: `300 -> 212` (`-88`)
+  - [BattleScreen.kt](C:\codex_3dgame_android\project_air_defense\core\src\main\kotlin\com\airdefense\game\BattleScreen.kt): `266 -> 140` (`-126`)
 - Measured reduction from the original baseline:
-  - core detekt: `1929 -> 300` (`-1629`)
-  - [BattleScreen.kt](C:\codex_3dgame_android\project_air_defense\core\src\main\kotlin\com\airdefense\game\BattleScreen.kt): `1362 -> 266` (`-1096`)
+  - core detekt: `1929 -> 212` (`-1717`)
+  - [BattleScreen.kt](C:\codex_3dgame_android\project_air_defense\core\src\main\kotlin\com\airdefense\game\BattleScreen.kt): `1362 -> 140` (`-1222`)
 
 ## Baseline
 
@@ -462,32 +463,73 @@ Artifacts:
 - [process proof](C:\codex_3dgame_android\project_air_defense\benchmark-results\visual-qa\hud-refactor-final-process.txt)
 - [seeded Monte Carlo output](C:\codex_3dgame_android\project_air_defense\benchmark-results\visual-qa\hud-refactor-final-montecarlo.json)
 
+## P2 effects-subsystem extraction
+
+Status: complete on `2026-04-12`.
+
+Measured result after moving trail budgeting, explosions, smoke, sparks, debris, and impact-light decay out of [BattleScreen.kt](C:\codex_3dgame_android\project_air_defense\core\src\main\kotlin\com\airdefense\game\BattleScreen.kt) into [BattleEffectsController.kt](C:\codex_3dgame_android\project_air_defense\core\src\main\kotlin\com\airdefense\game\BattleEffectsController.kt):
+
+- core detekt findings: `300 -> 212` (`-88`)
+- [BattleScreen.kt](C:\codex_3dgame_android\project_air_defense\core\src\main\kotlin\com\airdefense\game\BattleScreen.kt): `266 -> 140` (`-126`)
+- new collaborators:
+  - [BattleEffectsController.kt](C:\codex_3dgame_android\project_air_defense\core\src\main\kotlin\com\airdefense\game\BattleEffectsController.kt)
+  - [BattleEffectsControllerTest.kt](C:\codex_3dgame_android\project_air_defense\core\src\test\kotlin\com\airdefense\game\BattleEffectsControllerTest.kt)
+
+Root-cause corrections in this slice:
+
+- `BattleScreen` no longer owns trail-sample throttling, blast/smoke/spark creation, debris generation, effect lifetime updates, or impact-light decay.
+- effect-budget and trail-stride math now lives in pure helpers that can be tested without a renderer.
+- the effect/debris arrays are now owned by one controller, which removes duplicated scene-pressure math and keeps effect lifecycle rules in one place.
+
+Verification after the extraction:
+
+- `ktlintCheck` succeeded
+- `:core:test` succeeded
+- `:core:detekt` succeeded
+- `:android:installDebug` succeeded
+- deterministic seeded Monte Carlo remained exact at `88%` city integrity, `89%` intercept rate, `1200` score, `1.00` hostile impacts, `0.00` destroyed buildings
+- new pure coverage landed in [BattleEffectsControllerTest.kt](C:\codex_3dgame_android\project_air_defense\core\src\test\kotlin\com\airdefense\game\BattleEffectsControllerTest.kt)
+- isolated debug-package emulator QA confirmed:
+  - menu OCR found `ENTER AIRSPACE`
+  - OCR-driven tap hit `ENTER AIRSPACE`
+  - battle OCR found `BATTLESPACE`, `CONTROL`, `CITY 100%`, and live `WAVE 1 ACTIVE`
+  - post-tap logcat contained `StartScreen`, `BattleInit`, and live `BattleFrame` telemetry
+  - debug process stayed alive
+  - crash buffer was empty
+
+Artifacts:
+
+- [menu capture](C:\codex_3dgame_android\project_air_defense\benchmark-results\visual-qa\effects-pass-menu.png)
+- [menu OCR](C:\codex_3dgame_android\project_air_defense\benchmark-results\visual-qa\effects-pass-menu-ocr.json)
+- [tap proof](C:\codex_3dgame_android\project_air_defense\benchmark-results\visual-qa\effects-pass-tap.json)
+- [battle capture](C:\codex_3dgame_android\project_air_defense\benchmark-results\visual-qa\effects-pass-battle.png)
+- [battle OCR](C:\codex_3dgame_android\project_air_defense\benchmark-results\visual-qa\effects-pass-battle-ocr.json)
+- [post-tap logcat](C:\codex_3dgame_android\project_air_defense\benchmark-results\visual-qa\effects-pass-logcat.txt)
+- [crash buffer](C:\codex_3dgame_android\project_air_defense\benchmark-results\visual-qa\effects-pass-crash.txt)
+- [process proof](C:\codex_3dgame_android\project_air_defense\benchmark-results\visual-qa\effects-pass-process.txt)
+- [seeded Monte Carlo output](C:\codex_3dgame_android\project_air_defense\benchmark-results\visual-qa\effects-pass-montecarlo.txt)
+
 ## Current next target
 
 Highest-impact remaining debt:
 
 - [BattleScreen.kt](C:\codex_3dgame_android\project_air_defense\core\src\main\kotlin\com\airdefense\game\BattleScreen.kt)
   still owns the largest remaining integration surface and most of the surviving `MagicNumber` debt
+- [BattleEffectsController.kt](C:\codex_3dgame_android\project_air_defense\core\src\main\kotlin\com\airdefense\game\BattleEffectsController.kt)
+  now isolates the effects domain, making it the right place for the next constants-and-shaping cleanup instead of keeping that debt in `BattleScreen`
 - [BattleSceneRenderer.kt](C:\codex_3dgame_android\project_air_defense\core\src\main\kotlin\com\airdefense\game\BattleSceneRenderer.kt)
   still carries a `TooManyFunctions` finding and most of the surviving renderer-only line-length debt
 - [BattleTerrainAssetFactory.kt](C:\codex_3dgame_android\project_air_defense\core\src\main\kotlin\com\airdefense\game\BattleTerrainAssetFactory.kt)
   is down to one `TooManyFunctions` finding and a few formatting issues, making it the safest next mechanical cleanup
-- crash buffer stayed empty
-
-Artifacts:
-
-- [menu capture](C:\codex_3dgame_android\project_air_defense\benchmark-results\visual-qa\texture-split-pass-menu.png)
-- [battle capture](C:\codex_3dgame_android\project_air_defense\benchmark-results\visual-qa\texture-split-pass-battle.png)
-- [logcat](C:\codex_3dgame_android\project_air_defense\benchmark-results\visual-qa\texture-split-pass-logcat.txt)
-- [crash buffer](C:\codex_3dgame_android\project_air_defense\benchmark-results\visual-qa\texture-split-pass-crash.txt)
 
 ## Next active target
 
 P2 remains active, but the highest-value remaining slice is now narrower:
 
-- [BattleScreen.kt](C:\codex_3dgame_android\project_air_defense\core\src\main\kotlin\com\airdefense\game\BattleScreen.kt) is now dominated by scene, HUD, and effects constants rather than long-method debt
+- [BattleScreen.kt](C:\codex_3dgame_android\project_air_defense\core\src\main\kotlin\com\airdefense\game\BattleScreen.kt) is now dominated by scene constants and orchestration glue rather than long-method debt
+- [BattleEffectsController.kt](C:\codex_3dgame_android\project_air_defense\core\src\main\kotlin\com\airdefense\game\BattleEffectsController.kt) is the new isolated home for the remaining effects-domain `MagicNumber` cleanup
 - class-level `LargeClass` and `TooManyFunctions` remain concentrated in `BattleScreen`
-- the next safe reduction is to keep moving HUD/effects constants and renderer-owned formatting debt out of `BattleScreen` and `BattleSceneRenderer`
+- the next safe reduction is to keep moving renderer/effects constants and renderer-owned formatting debt out of `BattleScreen` and `BattleSceneRenderer`
 
 ## Refactor rule
 

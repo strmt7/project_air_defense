@@ -13,6 +13,8 @@
   Owns pure HUD text/button-state shaping for the battle screen.
 - `BattleSimulationStepApplier`
   Owns translation of shared simulation step events into live render-entity/effect/audio updates.
+- `BattleEffectsController`
+  Owns battle effect pressure rules, trail throttling, explosions, smoke, sparks, debris, and impact-light updates.
 - `BattleSceneRenderer`
   Owns backdrop composition, atmosphere passes, loading/game-over screens, and radar/threat overlay rendering.
 - `BattleTextureFactory`
@@ -61,6 +63,8 @@
   sky panorama and skyline backdrop.
 - Frame composition:
   `BattleSceneRenderer` draws backdrop bands, reflection/horizon layers, atmosphere fog, radar contacts, and tracked-threat labels after the 3D world pass.
+- Effects lifecycle:
+  `BattleEffectsController` owns the visual-effect and debris arrays, including budget scaling and per-frame effect updates.
 - Shader:
   `NightShader` combines diffuse textures, roughness textures, emissive glow, directional moon/fill light, impact point light, specular response, fresnel rim, and fog.
 
@@ -85,6 +89,8 @@
   `core/src/test/kotlin/com/airdefense/game/*`
 - HUD state:
   [BattleHudStateTest.kt](C:\codex_3dgame_android\project_air_defense\core\src\test\kotlin\com\airdefense\game\BattleHudStateTest.kt) covers wave-state, summary, and button-state formatting.
+- Effects budget math:
+  [BattleEffectsControllerTest.kt](C:\codex_3dgame_android\project_air_defense\core\src\test\kotlin\com\airdefense\game\BattleEffectsControllerTest.kt) covers effect-budget scaling, trail-stride escalation, and bounded effect-count reduction.
 - Headless balance:
   `.\gradlew.bat :core:runBattleMonteCarlo -Pruns=300 -Pwaves=1 -Pseconds=48 -Pstep=0.05`
 - Windows shortcut:
