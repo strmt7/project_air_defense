@@ -179,6 +179,335 @@ class BattleScreen(
         private const val INTERCEPTOR_SCALE = 3.4f
     }
 
+    private inner class SimulationStepApplier {
+        fun apply(step: BattleStepEvents) {
+            applySpawnedThreats(step.spawnedThreatIds)
+            applyLaunchedInterceptors(step.launchedInterceptors)
+            applyTrailEvents(step.trailEvents)
+            applyBlastEvents(step.blastEvents)
+            applyBuildingDamageEvents(step.buildingDamageEvents)
+            removeThreatEntities(step.removedThreatIds)
+            removeInterceptorEntities(step.removedInterceptorIds)
+            syncRenderEntitiesFromSimulation()
+            syncBattleStateFromSimulation()
+            applyStepStatus(step)
+        }
+
+        private fun applySpawnedThreats(ids: List<String>) {
+            ids.forEach { id ->
+                simulation.findThreat(id)?.let { threat ->
+                    val renderThreat =
+                        ThreatEntity(
+                            instance = ModelInstance(models.get("threat")),
+                            position = threat.position.cpy(),
+                            targetPosition = threat.targetPosition.cpy(),
+                            velocity = threat.velocity.cpy(),
+                            id = threat.id,
+                            isTracked = threat.isTracked,
+                            trailCooldown = threat.trailCooldown,
+                        )
+                    syncProjectileTransform(
+                        renderThreat.instance,
+                        renderThreat.position,
+                        renderThreat.velocity,
+                        THREAT_SCALE,
+                    )
+                    threats.add(renderThreat)
+                    threatsById.put(id, renderThreat)
+                }
+            }
+        }
+
+        private fun applyLaunchedInterceptors(launches: List<InterceptorLaunchEvent>) {
+            launches.forEach { launch ->
+                val interceptorState = simulation.findInterceptor(launch.interceptorId) ?: return@forEach
+                val renderInterceptor =
+                    InterceptorEntity(
+                        id = interceptorState.id,
+                        instance = ModelInstance(models.get("interceptor")),
+                        position = interceptorState.position.cpy(),
+                        velocity = interceptorState.velocity.cpy(),
+                        target = interceptorState.targetId?.let { threatsById[it] },
+                        trailCooldown = interceptorState.trailCooldown,
+                    )
+                syncProjectileTransform(
+                    renderInterceptor.instance,
+                    renderInterceptor.position,
+                    renderInterceptor.velocity,
+                    INTERCEPTOR_SCALE,
+                )
+                interceptors.add(renderInterceptor)
+                interceptorsById.put(renderInterceptor.id, renderInterceptor)
+                pulseLauncher(launch, interceptorState.velocity)
+                spawnBlast(launch.launcherPosition, 14f)
+                playSfx("launch", 0.35f)
+            }
+        }
+
+        private fun pulseLauncher(
+            launch: InterceptorLaunchEvent,
+            launchVelocity: Vector3,
+        ) {
+            if (launch.launcherIndex in 0 until launchers.size) {
+                launchers[launch.launcherIndex].setRotationToward(launchVelocity)
+            }
+            when (launch.launcherIndex) {
+                0 -> launcherLeftPulse = 1f
+                1 -> launcherRightPulse = 1f
+            }
+        }
+
+        private fun applyTrailEvents(trails: List<TrailEvent>) {
+            trails.forEach { trail ->
+                if (canSpawnTrail(trail.hostile)) {
+                    spawnTrail(trail.position, trail.hostile)
+                }
+            }
+        }
+
+        private fun applyBlastEvents(blasts: List<BlastEvent>) {
+            blasts.forEach { blast ->
+                when (blast.kind) {
+                    BlastKind.HOSTILE_IMPACT -> {
+                        spawnBlast(blast.position, blast.radius)
+                        spawnDebris(blast.position, 24, Color(0.4f, 0.38f, 0.36f, 1f))
+                        triggerShake(26f, 0.55f)
+                        playSfx("impact", 0.8f)
+                    }
+
+                    BlastKind.INTERCEPT -> {
+                        spawnBlast(blast.position, blast.radius)
+                        spawnDebris(blast.position, 10, Color(0.7f, 0.7f, 0.74f, 1f))
+                        triggerShake(10f, 0.3f)
+                        playSfx("detonate", 0.5f)
+                    }
+                }
+            }
+        }
+
+        private fun applyBuildingDamageEvents(damages: List<BuildingDamageEvent>) {
+            damages.forEach { damage ->
+                cityBlocksById[damage.buildingId]?.let { building ->
+                    applyBuildingDamageVisual(building, damage.integrity, damage.epicenter)
+                }
+            }
+        }
+
+        private fun removeThreatEntities(ids: List<String>) {
+            ids.forEach { id ->
+                threatsById.remove(id)?.let { threats.removeValue(it, true) }
+            }
+        }
+
+        private fun removeInterceptorEntities(ids: List<String>) {
+            ids.forEach { id ->
+                interceptorsById.remove(id)?.let { interceptors.removeValue(it, true) }
+            }
+        }
+
+        private fun applyStepStatus(step: BattleStepEvents) {
+            if (step.waveCleared) {
+                setStatus("status", "SKY CLEAR // PREPARE NEXT WAVE")
+                refreshWaveButton()
+            }
+            if (step.gameOver) {
+                setStatus("critical", "DEFENSE FAILED")
+                refreshWaveButton()
+            }
+        }
+    }
+
+    private inner class BattleHudBuilder {
+        fun build() {
+            stage.clear()
+            val uiScale = Gdx.graphics.height / 1080f
+            val root = Table().apply { setFillParent(true) }
+
+            root
+                .add(createTopBar(uiScale))
+                .expandX()
+                .fillX()
+                .top()
+                .pad(12f * uiScale)
+                .row()
+            root.add().expand().row()
+            root
+                .add(createControlDock(uiScale))
+                .expand()
+                .bottom()
+                .left()
+                .pad(14f * uiScale)
+
+            stage.addActor(root)
+            updateHud()
+            refreshWaveButton()
+        }
+
+        private fun createTopBar(uiScale: Float): Table =
+            Table().apply {
+                background = this@BattleScreen.skin.getDrawable("hud_panel")
+                pad(12f * uiScale)
+                add(
+                    Table().apply {
+                        defaults().left()
+                        add(Label("BATTLESPACE", this@BattleScreen.skin, "title")).row()
+                        add(statusLabel).padTop(4f * uiScale).row()
+                    },
+                ).expandX().left()
+                add(creditsLabel).right().padLeft(18f * uiScale)
+            }
+
+        private fun createControlDock(uiScale: Float): Table =
+            Table().apply {
+                background = this@BattleScreen.skin.getDrawable("hud_panel")
+                pad(14f * uiScale)
+                defaults().pad(8f * uiScale)
+                add(Label("CONTROL", this@BattleScreen.skin, "status")).left().padLeft(6f * uiScale).row()
+                add(createControlRow(uiScale, createRangeCard(uiScale), createFuseCard(uiScale))).left().row()
+                add(createControlRow(uiScale, createDoctrineCard(uiScale), createActionCard(uiScale)))
+                    .left()
+                    .padTop(2f * uiScale)
+                    .row()
+            }
+
+        private fun createControlRow(
+            uiScale: Float,
+            leftCard: Table,
+            rightCard: Table,
+        ): Table =
+            Table().apply {
+                defaults().pad(6f * uiScale)
+                add(leftCard).width(364f * uiScale).fillY()
+                add(rightCard).width(364f * uiScale).fillY()
+            }
+
+        private fun createSoftCard(uiScale: Float): Table =
+            Table().apply {
+                background = this@BattleScreen.skin.getDrawable("hud_soft")
+                pad(14f * uiScale)
+                defaults().left()
+            }
+
+        private fun createRangeCard(uiScale: Float): Table =
+            createSoftCard(uiScale).apply {
+                val uiSkin = this@BattleScreen.skin
+                rangeValueLabel = Label("", uiSkin, "display")
+                add(Label("AUTO ENGAGE RANGE", uiSkin, "status")).row()
+                add(rangeValueLabel).padTop(8f * uiScale).row()
+                add(
+                    Slider(1200f, 3200f, 25f, false, uiSkin).apply {
+                        value = settings.engagementRange
+                        addListener(
+                            object : ChangeListener() {
+                                override fun changed(
+                                    event: ChangeEvent?,
+                                    actor: Actor?,
+                                ) {
+                                    settings.engagementRange = value
+                                    updateHud()
+                                }
+                            },
+                        )
+                    },
+                )
+                    .width(340f * uiScale)
+                    .fillX()
+                    .height(56f * uiScale)
+                    .padTop(10f * uiScale)
+            }
+
+        private fun createFuseCard(uiScale: Float): Table =
+            createSoftCard(uiScale).apply {
+                val uiSkin = this@BattleScreen.skin
+                fuseValueLabel = Label("", uiSkin, "display")
+                add(Label("FUZE WINDOW", uiSkin, "status")).row()
+                add(fuseValueLabel).padTop(8f * uiScale).row()
+                add(createFuseSlider())
+                    .width(340f * uiScale)
+                    .fillX()
+                    .height(56f * uiScale)
+                    .padTop(10f * uiScale)
+            }
+
+        private fun createFuseSlider(): Slider =
+            Slider(56f, 120f, 2f, false, this@BattleScreen.skin).apply {
+                value = settings.blastRadius
+                addListener(
+                    object : ChangeListener() {
+                        override fun changed(
+                            event: ChangeEvent?,
+                            actor: Actor?,
+                        ) {
+                            settings.blastRadius = value
+                            updateHud()
+                        }
+                    },
+                )
+            }
+
+        private fun createDoctrineCard(uiScale: Float): Table =
+            createSoftCard(uiScale).apply {
+                val uiSkin = this@BattleScreen.skin
+                doctrineValueLabel = Label("", uiSkin, "display")
+                doctrineDetailLabel =
+                    Label("", uiSkin, "status").apply {
+                        setWrap(true)
+                    }
+                doctrineButton =
+                    TextButton("CYCLE DOCTRINE", uiSkin).apply {
+                        addListener(
+                            object : ChangeListener() {
+                                override fun changed(
+                                    event: ChangeEvent?,
+                                    actor: Actor?,
+                                ) {
+                                    settings.doctrine = settings.doctrine.next()
+                                    updateHud()
+                                }
+                            },
+                        )
+                    }
+                add(Label("DOCTRINE", uiSkin, "status")).row()
+                add(doctrineValueLabel).padTop(8f * uiScale).row()
+                add(doctrineDetailLabel)
+                    .width(340f * uiScale)
+                    .padTop(6f * uiScale)
+                    .row()
+                add(doctrineButton)
+                    .width(340f * uiScale)
+                    .height(96f * uiScale)
+                    .fillX()
+                    .padTop(12f * uiScale)
+            }
+
+        private fun createActionCard(uiScale: Float): Table =
+            createSoftCard(uiScale).apply {
+                val uiSkin = this@BattleScreen.skin
+                add(Label("WAVE", uiSkin, "status")).row()
+                waveButton =
+                    TextButton("START NEXT WAVE", uiSkin).apply {
+                        addListener(
+                            object : ChangeListener() {
+                                override fun changed(
+                                    event: ChangeEvent?,
+                                    actor: Actor?,
+                                ) {
+                                    if (!waveInProgress && !isGameOver) startNewWave()
+                                }
+                            },
+                        )
+                    }
+                add(waveButton)
+                    .width(340f * uiScale)
+                    .height(96f * uiScale)
+                    .fillX()
+                    .padTop(12f * uiScale)
+            }
+    }
+
+    private val simulationStepApplier = SimulationStepApplier()
+    private val battleHudBuilder = BattleHudBuilder()
+
     private fun scaledSceneTextureSize(
         base: Int,
         minimum: Int = 64,
@@ -236,18 +565,17 @@ class BattleScreen(
             adjustedTrailStride(
                 if (hostile) qualityProfile.hostileTrailStride else qualityProfile.interceptorTrailStride,
             )
-        if (stride <= 1) return true
-
-        val sampleIndex =
-            if (hostile) {
-                hostileTrailSamples += 1
-                hostileTrailSamples
-            } else {
-                interceptorTrailSamples += 1
-                interceptorTrailSamples
-            }
-        return sampleIndex % stride == 1
+        return stride <= 1 || nextTrailSampleIndex(hostile) % stride == 1
     }
+
+    private fun nextTrailSampleIndex(hostile: Boolean): Int =
+        if (hostile) {
+            hostileTrailSamples += 1
+            hostileTrailSamples
+        } else {
+            interceptorTrailSamples += 1
+            interceptorTrailSamples
+        }
 
     init {
         Gdx.graphics.isContinuousRendering = true
@@ -1564,103 +1892,16 @@ class BattleScreen(
         threatsRemainingInWave = simulation.threatsRemainingInWave
     }
 
+    private fun setStatus(
+        styleName: String,
+        text: String,
+    ) {
+        statusLabel.style = skin.get(styleName, Label.LabelStyle::class.java)
+        statusLabel.setText(text)
+    }
+
     private fun applySimulationStep(step: BattleStepEvents) {
-        step.spawnedThreatIds.forEach { id ->
-            simulation.findThreat(id)?.let { threat ->
-                val instance = ModelInstance(models.get("threat"))
-                val renderThreat =
-                    ThreatEntity(
-                        instance = instance,
-                        position = threat.position.cpy(),
-                        targetPosition = threat.targetPosition.cpy(),
-                        velocity = threat.velocity.cpy(),
-                        id = threat.id,
-                        isTracked = threat.isTracked,
-                        trailCooldown = threat.trailCooldown,
-                    )
-                syncProjectileTransform(renderThreat.instance, renderThreat.position, renderThreat.velocity, THREAT_SCALE)
-                threats.add(renderThreat)
-                threatsById.put(id, renderThreat)
-            }
-        }
-
-        step.launchedInterceptors.forEach { launch ->
-            val interceptorState = simulation.findInterceptor(launch.interceptorId) ?: return@forEach
-            val instance = ModelInstance(models.get("interceptor"))
-            val renderInterceptor =
-                InterceptorEntity(
-                    id = interceptorState.id,
-                    instance = instance,
-                    position = interceptorState.position.cpy(),
-                    velocity = interceptorState.velocity.cpy(),
-                    target = interceptorState.targetId?.let { threatsById[it] },
-                    trailCooldown = interceptorState.trailCooldown,
-                )
-            syncProjectileTransform(renderInterceptor.instance, renderInterceptor.position, renderInterceptor.velocity, INTERCEPTOR_SCALE)
-            interceptors.add(renderInterceptor)
-            interceptorsById.put(renderInterceptor.id, renderInterceptor)
-            if (launch.launcherIndex in 0 until launchers.size) {
-                launchers[launch.launcherIndex].setRotationToward(interceptorState.velocity)
-            }
-            spawnBlast(launch.launcherPosition, 14f)
-            when (launch.launcherIndex) {
-                0 -> launcherLeftPulse = 1f
-                1 -> launcherRightPulse = 1f
-            }
-            playSfx("launch", 0.35f)
-        }
-
-        step.trailEvents.forEach { trail ->
-            if (canSpawnTrail(trail.hostile)) {
-                spawnTrail(trail.position, trail.hostile)
-            }
-        }
-
-        step.blastEvents.forEach { blast ->
-            when (blast.kind) {
-                BlastKind.HOSTILE_IMPACT -> {
-                    spawnBlast(blast.position, blast.radius)
-                    spawnDebris(blast.position, 24, Color(0.4f, 0.38f, 0.36f, 1f))
-                    triggerShake(26f, 0.55f)
-                    playSfx("impact", 0.8f)
-                }
-
-                BlastKind.INTERCEPT -> {
-                    spawnBlast(blast.position, blast.radius)
-                    spawnDebris(blast.position, 10, Color(0.7f, 0.7f, 0.74f, 1f))
-                    triggerShake(10f, 0.3f)
-                    playSfx("detonate", 0.5f)
-                }
-            }
-        }
-
-        step.buildingDamageEvents.forEach { damage ->
-            cityBlocksById[damage.buildingId]?.let { building ->
-                applyBuildingDamageVisual(building, damage.integrity, damage.epicenter)
-            }
-        }
-
-        step.removedThreatIds.forEach { id ->
-            threatsById.remove(id)?.let { threats.removeValue(it, true) }
-        }
-
-        step.removedInterceptorIds.forEach { id ->
-            interceptorsById.remove(id)?.let { interceptors.removeValue(it, true) }
-        }
-
-        syncRenderEntitiesFromSimulation()
-        syncBattleStateFromSimulation()
-
-        if (step.waveCleared) {
-            statusLabel.style = skin.get("status", Label.LabelStyle::class.java)
-            statusLabel.setText("SKY CLEAR // PREPARE NEXT WAVE")
-            refreshWaveButton()
-        }
-        if (step.gameOver) {
-            statusLabel.style = skin.get("critical", Label.LabelStyle::class.java)
-            statusLabel.setText("DEFENSE FAILED")
-            refreshWaveButton()
-        }
+        simulationStepApplier.apply(step)
     }
 
     private fun syncRenderEntitiesFromSimulation() {
@@ -1717,190 +1958,7 @@ class BattleScreen(
     }
 
     private fun setupHud() {
-        stage.clear()
-        val uiScale = Gdx.graphics.height / 1080f
-        val root = Table().apply { setFillParent(true) }
-
-        val top =
-            Table().apply {
-                background = this@BattleScreen.skin.getDrawable("hud_panel")
-                pad(12f * uiScale)
-            }
-        val missionBlock = Table().apply { defaults().left() }
-        missionBlock.add(Label("BATTLESPACE", skin, "title")).row()
-        missionBlock.add(statusLabel).padTop(4f * uiScale).row()
-        top.add(missionBlock).expandX().left()
-        top.add(creditsLabel).right().padLeft(18f * uiScale)
-        root
-            .add(top)
-            .expandX()
-            .fillX()
-            .top()
-            .pad(12f * uiScale)
-            .row()
-
-        root.add().expand().row()
-
-        val dock =
-            Table().apply {
-                background = this@BattleScreen.skin.getDrawable("hud_panel")
-                pad(14f * uiScale)
-                defaults().pad(8f * uiScale)
-            }
-
-        val rangeCard =
-            Table().apply {
-                background = this@BattleScreen.skin.getDrawable("hud_soft")
-                pad(14f * uiScale)
-                defaults().left()
-            }
-        rangeValueLabel = Label("", skin, "display")
-        rangeCard.add(Label("AUTO ENGAGE RANGE", skin, "status")).row()
-        rangeCard.add(rangeValueLabel).padTop(8f * uiScale).row()
-        rangeCard
-            .add(
-                Slider(1200f, 3200f, 25f, false, skin).apply {
-                    value = settings.engagementRange
-                    addListener(
-                        object : ChangeListener() {
-                            override fun changed(
-                                event: ChangeEvent?,
-                                actor: Actor?,
-                            ) {
-                                settings.engagementRange = value
-                                updateHud()
-                            }
-                        },
-                    )
-                },
-            ).width(340f * uiScale)
-            .fillX()
-            .height(56f * uiScale)
-            .padTop(10f * uiScale)
-
-        val fuseCard =
-            Table().apply {
-                background = this@BattleScreen.skin.getDrawable("hud_soft")
-                pad(14f * uiScale)
-                defaults().left()
-            }
-        fuseValueLabel = Label("", skin, "display")
-        fuseCard.add(Label("FUZE WINDOW", skin, "status")).row()
-        fuseCard.add(fuseValueLabel).padTop(8f * uiScale).row()
-        fuseCard
-            .add(
-                Slider(56f, 120f, 2f, false, skin).apply {
-                    value = settings.blastRadius
-                    addListener(
-                        object : ChangeListener() {
-                            override fun changed(
-                                event: ChangeEvent?,
-                                actor: Actor?,
-                            ) {
-                                settings.blastRadius = value
-                                updateHud()
-                            }
-                        },
-                    )
-                },
-            ).width(340f * uiScale)
-            .fillX()
-            .height(56f * uiScale)
-            .padTop(10f * uiScale)
-
-        val doctrineCard =
-            Table().apply {
-                background = this@BattleScreen.skin.getDrawable("hud_soft")
-                pad(14f * uiScale)
-                defaults().left()
-            }
-        doctrineValueLabel = Label("", skin, "display")
-        doctrineDetailLabel =
-            Label("", skin, "status").apply {
-                setWrap(true)
-            }
-        doctrineButton =
-            TextButton("CYCLE DOCTRINE", skin).apply {
-                addListener(
-                    object : ChangeListener() {
-                        override fun changed(
-                            event: ChangeEvent?,
-                            actor: Actor?,
-                        ) {
-                            settings.doctrine = settings.doctrine.next()
-                            updateHud()
-                        }
-                    },
-                )
-            }
-        doctrineCard.add(Label("DOCTRINE", skin, "status")).row()
-        doctrineCard.add(doctrineValueLabel).padTop(8f * uiScale).row()
-        doctrineCard
-            .add(doctrineDetailLabel)
-            .width(340f * uiScale)
-            .padTop(6f * uiScale)
-            .row()
-        doctrineCard
-            .add(doctrineButton)
-            .width(340f * uiScale)
-            .height(96f * uiScale)
-            .fillX()
-            .padTop(12f * uiScale)
-
-        val actionCard =
-            Table().apply {
-                background = this@BattleScreen.skin.getDrawable("hud_soft")
-                pad(14f * uiScale)
-                defaults().left()
-            }
-        actionCard.add(Label("WAVE", skin, "status")).row()
-        waveButton =
-            TextButton("START NEXT WAVE", skin).apply {
-                addListener(
-                    object : ChangeListener() {
-                        override fun changed(
-                            event: ChangeEvent?,
-                            actor: Actor?,
-                        ) {
-                            if (!waveInProgress && !isGameOver) startNewWave()
-                        }
-                    },
-                )
-            }
-        actionCard
-            .add(waveButton)
-            .width(340f * uiScale)
-            .height(96f * uiScale)
-            .fillX()
-            .padTop(12f * uiScale)
-
-        val firstRow = Table().apply { defaults().pad(6f * uiScale) }
-        firstRow.add(rangeCard).width(364f * uiScale).fillY()
-        firstRow.add(fuseCard).width(364f * uiScale).fillY()
-        val secondRow = Table().apply { defaults().pad(6f * uiScale) }
-        secondRow.add(doctrineCard).width(364f * uiScale).fillY()
-        secondRow.add(actionCard).width(364f * uiScale).fillY()
-        dock
-            .add(Label("CONTROL", skin, "status"))
-            .left()
-            .padLeft(6f * uiScale)
-            .row()
-        dock.add(firstRow).left().row()
-        dock
-            .add(secondRow)
-            .left()
-            .padTop(2f * uiScale)
-            .row()
-        root
-            .add(dock)
-            .expand()
-            .bottom()
-            .left()
-            .pad(14f * uiScale)
-
-        stage.addActor(root)
-        updateHud()
-        refreshWaveButton()
+        battleHudBuilder.build()
     }
 
     private fun loadAudio() {
@@ -1928,8 +1986,7 @@ class BattleScreen(
     private fun startNewWave() {
         if (!simulation.startNewWave()) return
         syncBattleStateFromSimulation()
-        statusLabel.style = skin.get("critical", Label.LabelStyle::class.java)
-        statusLabel.setText("MULTIPLE INBOUND TRACKS // WAVE $wave")
+        setStatus("critical", "MULTIPLE INBOUND TRACKS // WAVE $wave")
         refreshWaveButton()
     }
 
@@ -2330,6 +2387,17 @@ class BattleScreen(
     ) {
         val sparkCount = adjustedEffectCount(qualityProfile.baseSparkCount, minimum = 2)
         val smokeCount = adjustedEffectCount(qualityProfile.baseSmokeCount, minimum = 1)
+        addBlastCoreEffect(position, size)
+        addShockwaveEffect(position, size)
+        spawnSparkEffects(position, size, sparkCount)
+        spawnSmokeEffects(position, size, smokeCount)
+        brightenImpactLight(position, size)
+    }
+
+    private fun addBlastCoreEffect(
+        position: Vector3,
+        size: Float,
+    ) {
         val core = ModelInstance(models.get("blast"))
         core.transform.setToScaling(0.1f, 0.1f, 0.1f).trn(position)
         core.materials.first().set(ColorAttribute.createDiffuse(Color(1f, 0.96f, 0.86f, 1f)))
@@ -2344,7 +2412,12 @@ class BattleScreen(
                 maxScale = size * 1.18f,
             ),
         )
+    }
 
+    private fun addShockwaveEffect(
+        position: Vector3,
+        size: Float,
+    ) {
         val shockwave = ModelInstance(models.get("blast"))
         shockwave.transform.setToScaling(0.1f, 0.03f, 0.1f).trn(position.x, position.y + 6f, position.z)
         shockwave.materials.first().set(ColorAttribute.createDiffuse(Color(1f, 0.72f, 0.34f, 1f)))
@@ -2359,7 +2432,13 @@ class BattleScreen(
                 maxScale = size * 2.8f,
             ),
         )
+    }
 
+    private fun spawnSparkEffects(
+        position: Vector3,
+        size: Float,
+        sparkCount: Int,
+    ) {
         repeat(sparkCount) {
             val sparkLife = MathUtils.random(0.26f, 0.46f)
             val spark = ModelInstance(models.get("trail"))
@@ -2383,7 +2462,13 @@ class BattleScreen(
                 ),
             )
         }
+    }
 
+    private fun spawnSmokeEffects(
+        position: Vector3,
+        size: Float,
+        smokeCount: Int,
+    ) {
         repeat(smokeCount) {
             val smokeLife = MathUtils.random(1.1f, 1.65f)
             val smoke = ModelInstance(models.get("trail"))
@@ -2407,7 +2492,12 @@ class BattleScreen(
                 ),
             )
         }
+    }
 
+    private fun brightenImpactLight(
+        position: Vector3,
+        size: Float,
+    ) {
         impactLight.set(Color(1f, 0.82f, 0.5f, 1f), position, size * 18f * qualityProfile.lightIntensityScale)
     }
 
@@ -2449,70 +2539,140 @@ class BattleScreen(
         val strongestPos = tempA.setZero()
         while (iterator.hasNext()) {
             val effect = iterator.next()
-            effect.life -= dt
-            val progress = (effect.life / effect.initialLife).coerceIn(0f, 1f)
-            val material = effect.instance.materials.first()
-            val blend = material.get(BlendingAttribute.Type) as? BlendingAttribute
-            when (effect.type) {
-                EffectType.BLAST -> {
-                    val scale = effect.maxScale * (1.25f - progress * progress)
-                    effect.instance.transform
-                        .setToScaling(scale, scale, scale)
-                        .trn(effect.position)
-                    blend?.opacity = (progress * progress).coerceIn(0f, 1f)
-                    val intensity = effect.maxScale * progress * 20f
-                    if (intensity > strongest) {
-                        strongest = intensity
-                        strongestPos.set(effect.position)
-                    }
-                }
-
-                EffectType.SHOCKWAVE -> {
-                    val scale = effect.maxScale * (1.18f - progress)
-                    effect.instance.transform
-                        .setToScaling(scale, scale * 0.08f, scale)
-                        .trn(effect.position)
-                    blend?.opacity = (progress * 0.72f).coerceIn(0f, 1f)
-                }
-
-                EffectType.SMOKE -> {
-                    effect.position.mulAdd(effect.velocity, dt)
-                    effect.velocity.y += dt * 10f
-                    val scale = 0.6f + (1f - progress) * effect.maxScale
-                    effect.instance.transform
-                        .setToScaling(scale, scale, scale)
-                        .trn(effect.position)
-                    blend?.opacity = (0.26f * kotlin.math.sqrt(progress)).coerceIn(0f, 0.3f)
-                }
-
-                EffectType.SPARK -> {
-                    effect.position.mulAdd(effect.velocity, dt)
-                    effect.velocity.scl((1f - dt * 1.8f).coerceAtLeast(0.2f))
-                    effect.velocity.y -= dt * 140f
-                    val scale = 0.18f + progress * effect.maxScale * 0.12f
-                    effect.instance.transform
-                        .setToScaling(scale, scale, scale)
-                        .trn(effect.position)
-                    blend?.opacity = (0.72f * progress).coerceIn(0f, 0.85f)
-                }
-
-                EffectType.TRAIL -> {
-                    effect.position.mulAdd(effect.velocity, dt)
-                    val scale = 0.45f + (1f - progress) * effect.maxScale
-                    effect.instance.transform
-                        .setToScaling(scale, scale, scale)
-                        .trn(effect.position)
-                    blend?.opacity = 0.42f * progress
-                }
+            strongest =
+                updateEffect(
+                    effect = effect,
+                    dt = dt,
+                    strongest = strongest,
+                    strongestPos = strongestPos,
+                )
+            if (effect.life <= 0f) {
+                iterator.remove()
             }
-            if (effect.life <= 0f) iterator.remove()
         }
+        updateImpactLightFromEffects(dt, strongest, strongestPos)
+    }
 
+    private fun updateEffect(
+        effect: VisualEffect,
+        dt: Float,
+        strongest: Float,
+        strongestPos: Vector3,
+    ): Float {
+        effect.life -= dt
+        val progress = (effect.life / effect.initialLife).coerceIn(0f, 1f)
+        val blend = effect.instance.materials.first().get(BlendingAttribute.Type) as? BlendingAttribute
+        return when (effect.type) {
+            EffectType.BLAST -> updateBlastEffect(effect, progress, blend, strongest, strongestPos)
+            EffectType.SHOCKWAVE -> {
+                updateShockwaveEffect(effect, progress, blend)
+                strongest
+            }
+
+            EffectType.SMOKE -> {
+                updateSmokeEffect(effect, dt, progress, blend)
+                strongest
+            }
+
+            EffectType.SPARK -> {
+                updateSparkEffect(effect, dt, progress, blend)
+                strongest
+            }
+
+            EffectType.TRAIL -> {
+                updateTrailEffect(effect, dt, progress, blend)
+                strongest
+            }
+        }
+    }
+
+    private fun updateBlastEffect(
+        effect: VisualEffect,
+        progress: Float,
+        blend: BlendingAttribute?,
+        strongest: Float,
+        strongestPos: Vector3,
+    ): Float {
+        val scale = effect.maxScale * (1.25f - progress * progress)
+        effect.instance.transform
+            .setToScaling(scale, scale, scale)
+            .trn(effect.position)
+        blend?.opacity = (progress * progress).coerceIn(0f, 1f)
+        val intensity = effect.maxScale * progress * 20f
+        if (intensity > strongest) {
+            strongestPos.set(effect.position)
+            return intensity
+        }
+        return strongest
+    }
+
+    private fun updateShockwaveEffect(
+        effect: VisualEffect,
+        progress: Float,
+        blend: BlendingAttribute?,
+    ) {
+        val scale = effect.maxScale * (1.18f - progress)
+        effect.instance.transform
+            .setToScaling(scale, scale * 0.08f, scale)
+            .trn(effect.position)
+        blend?.opacity = (progress * 0.72f).coerceIn(0f, 1f)
+    }
+
+    private fun updateSmokeEffect(
+        effect: VisualEffect,
+        dt: Float,
+        progress: Float,
+        blend: BlendingAttribute?,
+    ) {
+        effect.position.mulAdd(effect.velocity, dt)
+        effect.velocity.y += dt * 10f
+        val scale = 0.6f + (1f - progress) * effect.maxScale
+        effect.instance.transform
+            .setToScaling(scale, scale, scale)
+            .trn(effect.position)
+        blend?.opacity = (0.26f * kotlin.math.sqrt(progress)).coerceIn(0f, 0.3f)
+    }
+
+    private fun updateSparkEffect(
+        effect: VisualEffect,
+        dt: Float,
+        progress: Float,
+        blend: BlendingAttribute?,
+    ) {
+        effect.position.mulAdd(effect.velocity, dt)
+        effect.velocity.scl((1f - dt * 1.8f).coerceAtLeast(0.2f))
+        effect.velocity.y -= dt * 140f
+        val scale = 0.18f + progress * effect.maxScale * 0.12f
+        effect.instance.transform
+            .setToScaling(scale, scale, scale)
+            .trn(effect.position)
+        blend?.opacity = (0.72f * progress).coerceIn(0f, 0.85f)
+    }
+
+    private fun updateTrailEffect(
+        effect: VisualEffect,
+        dt: Float,
+        progress: Float,
+        blend: BlendingAttribute?,
+    ) {
+        effect.position.mulAdd(effect.velocity, dt)
+        val scale = 0.45f + (1f - progress) * effect.maxScale
+        effect.instance.transform
+            .setToScaling(scale, scale, scale)
+            .trn(effect.position)
+        blend?.opacity = 0.42f * progress
+    }
+
+    private fun updateImpactLightFromEffects(
+        dt: Float,
+        strongest: Float,
+        strongestPos: Vector3,
+    ) {
         if (strongest > 0f) {
             impactLight.set(Color(1f, 0.8f, 0.42f, 1f), strongestPos, strongest)
-        } else {
-            impactLight.intensity = max(0f, impactLight.intensity - dt * 260f)
+            return
         }
+        impactLight.intensity = max(0f, impactLight.intensity - dt * 260f)
     }
 
     private fun spawnDebris(
