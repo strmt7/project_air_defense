@@ -119,12 +119,24 @@ internal class BattleProjectileAssetFactory(
                 FloatAttribute.createShininess(THREAT_SHININESS),
             )
         modelBuilder.part("body", GL20.GL_TRIANGLES, attr, threatMaterial).apply {
-            CylinderShapeBuilder.build(this, THREAT_BODY_DIAMETER, THREAT_BODY_HEIGHT, THREAT_BODY_DIAMETER, THREAT_PART_DIVISIONS)
+            CylinderShapeBuilder.build(
+                this,
+                THREAT_BODY_DIAMETER,
+                THREAT_BODY_HEIGHT,
+                THREAT_BODY_DIAMETER,
+                THREAT_PART_DIVISIONS,
+            )
         }
         modelBuilder.part("nose", GL20.GL_TRIANGLES, attr, threatMaterial).apply {
             transform.idt().translate(0f, THREAT_NOSE_OFFSET_Y, 0f)
             setVertexTransform(transform)
-            ConeShapeBuilder.build(this, THREAT_NOSE_DIAMETER, THREAT_NOSE_HEIGHT, THREAT_NOSE_DIAMETER, THREAT_PART_DIVISIONS)
+            ConeShapeBuilder.build(
+                this,
+                THREAT_NOSE_DIAMETER,
+                THREAT_NOSE_HEIGHT,
+                THREAT_NOSE_DIAMETER,
+                THREAT_PART_DIVISIONS,
+            )
         }
         repeat(FIN_COUNT) { index ->
             modelBuilder.part("fin_$index", GL20.GL_TRIANGLES, attr, threatMaterial).apply {

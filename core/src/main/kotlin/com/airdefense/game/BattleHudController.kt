@@ -155,7 +155,10 @@ internal class BattleHudController(
                         },
                     )
                 },
-            ).width(CARD_CONTROL_WIDTH * uiScale).fillX().height(CARD_CONTROL_HEIGHT * uiScale).padTop(CARD_CONTROL_PAD_TOP * uiScale)
+            ).width(CARD_CONTROL_WIDTH * uiScale)
+                .fillX()
+                .height(CARD_CONTROL_HEIGHT * uiScale)
+                .padTop(CARD_CONTROL_PAD_TOP * uiScale)
         }
 
     private fun createFuseCard(uiScale: Float): Table =
@@ -181,7 +184,10 @@ internal class BattleHudController(
                         },
                     )
                 },
-            ).width(CARD_CONTROL_WIDTH * uiScale).fillX().height(CARD_CONTROL_HEIGHT * uiScale).padTop(CARD_CONTROL_PAD_TOP * uiScale)
+            ).width(CARD_CONTROL_WIDTH * uiScale)
+                .fillX()
+                .height(CARD_CONTROL_HEIGHT * uiScale)
+                .padTop(CARD_CONTROL_PAD_TOP * uiScale)
         }
 
     private fun createDoctrineCard(uiScale: Float): Table =
@@ -207,10 +213,16 @@ internal class BattleHudController(
                 }
             add(Label("DOCTRINE", uiSkin, "status")).row()
             add(doctrineValueLabel).padTop(SUMMARY_PAD_TOP * uiScale).row()
-            add(doctrineDetailLabel).width(CARD_CONTROL_WIDTH * uiScale).padTop(DETAIL_PAD_TOP * uiScale).row()
+            add(doctrineDetailLabel)
+                .width(CARD_CONTROL_WIDTH * uiScale)
+                .padTop(DETAIL_PAD_TOP * uiScale)
+                .row()
             add(
                 doctrineButton,
-            ).width(CARD_CONTROL_WIDTH * uiScale).height(CARD_BUTTON_HEIGHT * uiScale).fillX().padTop(CARD_BUTTON_PAD_TOP * uiScale)
+            ).width(CARD_CONTROL_WIDTH * uiScale)
+                .height(CARD_BUTTON_HEIGHT * uiScale)
+                .fillX()
+                .padTop(CARD_BUTTON_PAD_TOP * uiScale)
         }
 
     private fun createActionCard(uiScale: Float): Table =
@@ -234,6 +246,9 @@ internal class BattleHudController(
                 }
             add(
                 waveButton,
-            ).width(CARD_CONTROL_WIDTH * uiScale).height(CARD_BUTTON_HEIGHT * uiScale).fillX().padTop(CARD_BUTTON_PAD_TOP * uiScale)
+            ).width(CARD_CONTROL_WIDTH * uiScale)
+                .height(CARD_BUTTON_HEIGHT * uiScale)
+                .fillX()
+                .padTop(CARD_BUTTON_PAD_TOP * uiScale)
         }
 }

@@ -22,6 +22,13 @@ data class RadarPlotPoint(
     val y: Float,
 )
 
+data class ImportedLandmarkPlacement(
+    val key: String,
+    val position: Vector3,
+    val yaw: Float,
+    val targetHeight: Float,
+)
+
 private data class LayoutPlacement(
     val modelName: String,
     val x: Float,
@@ -77,6 +84,8 @@ private val launcherPads =
         worldPoint(x = 210f, y = 5f, z = 220f),
     )
 
+private val groundOriginPoint = worldPoint(x = 0f, y = -2f, z = 0f)
+private val moonOriginPoint = worldPoint(x = 1400f, y = 1450f, z = -4200f)
 private val defenseOriginPoint = worldPoint(x = 25f, y = 0f, z = 240f)
 private val radarOriginPoint = worldPoint(x = 24f, y = 5f, z = 120f)
 
@@ -170,17 +179,42 @@ private val layoutPlacements =
         promenadePlacements +
         inlandPlacements
 
+private val importedLandmarkPlacements =
+    listOf(
+        ImportedLandmarkPlacement(
+            key = "engel_house",
+            position = worldPoint(x = -1320f, y = GROUND_LEVEL_Y, z = -1340f),
+            yaw = 90f,
+            targetHeight = 108f,
+        ),
+        ImportedLandmarkPlacement(
+            key = "engel_house",
+            position = worldPoint(x = -760f, y = GROUND_LEVEL_Y, z = -1320f),
+            yaw = 90f,
+            targetHeight = 108f,
+        ),
+    )
+
 object BattleWorldLayout {
     const val WATERFRONT_SAFE_Z = -1480f
     const val RADAR_HALF_WIDTH = 4500f
     const val RADAR_NEAR_Z = 720f
     const val RADAR_FAR_Z = -4500f
 
+    fun groundPosition(): Vector3 = groundOriginPoint.cpy()
+
+    fun moonPosition(): Vector3 = moonOriginPoint.cpy()
+
     fun launcherPositions(): List<Vector3> = launcherPads.map(Vector3::cpy)
 
     fun defenseOrigin(): Vector3 = defenseOriginPoint.cpy()
 
     fun radarPosition(): Vector3 = radarOriginPoint.cpy()
+
+    fun importedLandmarks(): List<ImportedLandmarkPlacement> =
+        importedLandmarkPlacements.map { placement ->
+            placement.copy(position = placement.position.cpy())
+        }
 
     fun buildingMetrics(modelName: String) = buildingMetricsByModel[modelName] ?: defaultBuildingMetrics
 

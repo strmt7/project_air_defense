@@ -53,6 +53,7 @@ private const val GLOW_HORIZON_CENTER = 0.24f
 private const val GLOW_HORIZON_FALLOFF = 4f
 private const val GLOW_UPPER_CENTER = 0.58f
 private const val GLOW_UPPER_FALLOFF = 3.4f
+private const val GLOW_CENTER_U = 0.5f
 private const val GLOW_SIDE_FALLOFF = 1.55f
 private const val GLOW_SIDE_MIN = 0.45f
 private const val GLOW_WARM_ALPHA = 0.34f
@@ -131,7 +132,11 @@ internal class BattleBackdropTextureFactory(
                 pixmap.setColor(
                     (SKY_BASE_COLOR.r + horizonGlow * SKY_HORIZON_RED_GAIN + noise).coerceIn(0f, 1f),
                     (SKY_BASE_COLOR.g + horizonGlow * SKY_HORIZON_GREEN_GAIN + noise).coerceIn(0f, 1f),
-                    (SKY_BASE_COLOR.b + horizonGlow * SKY_HORIZON_BLUE_GAIN + noise * SKY_NOISE_BLUE_SCALE).coerceIn(0f, 1f),
+                    (
+                        SKY_BASE_COLOR.b +
+                            horizonGlow * SKY_HORIZON_BLUE_GAIN +
+                            noise * SKY_NOISE_BLUE_SCALE
+                    ).coerceIn(0f, 1f),
                     1f,
                 )
                 pixmap.drawPixel(x, y)
@@ -191,7 +196,10 @@ internal class BattleBackdropTextureFactory(
                 val vertical = y / (pixmap.height - 1f)
                 val horizonBand = (1f - abs(vertical - GLOW_HORIZON_CENTER) * GLOW_HORIZON_FALLOFF).coerceIn(0f, 1f)
                 val upperBand = (1f - abs(vertical - GLOW_UPPER_CENTER) * GLOW_UPPER_FALLOFF).coerceIn(0f, 1f)
-                val sideFade = (1f - abs((x / (pixmap.width - 1f)) - 0.5f) * GLOW_SIDE_FALLOFF).coerceIn(GLOW_SIDE_MIN, 1f)
+                val sideFade =
+                    (
+                        1f - abs((x / (pixmap.width - 1f)) - GLOW_CENTER_U) * GLOW_SIDE_FALLOFF
+                    ).coerceIn(GLOW_SIDE_MIN, 1f)
                 val warmAlpha = horizonBand * GLOW_WARM_ALPHA * sideFade
                 val coolAlpha = upperBand * GLOW_COOL_ALPHA
                 val red = GLOW_RED_BASE + warmAlpha * GLOW_WARM_RED_GAIN + coolAlpha * GLOW_COOL_RED_GAIN
