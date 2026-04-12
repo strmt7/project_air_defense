@@ -201,6 +201,56 @@ Remaining `BattleScreen` structural targets after the second slice:
 - class-level `LargeClass`
 - class-level `TooManyFunctions`
 
+## P2 automated dead-path reduction
+
+Status: complete on `2026-04-12`.
+
+Measured result after removing the obsolete `generateWorldModels()` path:
+
+- core detekt findings: `1884 -> 1587` (`-297`)
+- [BattleScreen.kt](C:\codex_3dgame_android\project_air_defense\core\src\main\kotlin\com\airdefense\game\BattleScreen.kt): `1347 -> 1050`
+
+Why this removal was allowed:
+
+- `generateWorldModels()` had zero live call sites in source
+- detekt already flagged it as an unused private member
+- the live initialization path already uses the modern split generators:
+  - `generateTerrainModels()`
+  - `generateBuildingModels()`
+  - `generateDefenseModels()`
+  - `generateProjectileModels()`
+  - `loadImportedModels()`
+  - `createWorldInstances()`
+
+This was not a fallback or speculative cleanup. It was a verified dead path fully replaced by the live initialization pipeline.
+
+Verification after the removal:
+
+- `:core:test` succeeded
+- `:core:detekt` succeeded
+- `:android:installDebug` succeeded
+- menu OCR confirmed `ENTER AIRSPACE`
+- battle OCR confirmed `CONTROL`, `CITY`, and `WAVE` text after the tap
+- crash buffer was empty
+- emulator process stayed alive
+- deterministic seeded simulation guardrail remained unchanged at `88%` city integrity, `89%` intercept rate, `1200` score, `1.00` hostile impacts, `0.00` destroyed buildings
+
+Artifacts:
+
+- [menu capture](C:\codex_3dgame_android\project_air_defense\benchmark-results\visual-qa\battle-screen-pass4-menu.png)
+- [battle capture](C:\codex_3dgame_android\project_air_defense\benchmark-results\visual-qa\battle-screen-pass4-battle.png)
+- [post-tap logcat](C:\codex_3dgame_android\project_air_defense\benchmark-results\visual-qa\battle-screen-pass4-posttap-logcat.txt)
+- [crash buffer after fix](C:\codex_3dgame_android\project_air_defense\benchmark-results\visual-qa\battle-screen-pass4-crash.txt)
+- [deterministic Monte Carlo guardrail](C:\codex_3dgame_android\project_air_defense\benchmark-results\visual-qa\battle-screen-pass4-montecarlo.txt)
+
+Remaining `BattleScreen` structural targets after the automated reduction:
+
+- `generateTerrainModels()`
+- `generateProjectileModels()`
+- `render()`
+- class-level `LargeClass`
+- class-level `TooManyFunctions`
+
 ## Refactor rule
 
 Do not suppress the findings first.
