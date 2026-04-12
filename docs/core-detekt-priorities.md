@@ -4,17 +4,16 @@ Measured from [core detekt XML](C:\codex_3dgame_android\project_air_defense\core
 
 ## Current Verified State
 
-- Core detekt findings: `212`
+- Core detekt findings: `194`
 - Findings by rule:
-  - `MagicNumber`: `163`
-  - `MaxLineLength`: `42`
-  - `TooManyFunctions`: `5`
+  - `MagicNumber`: `156`
+  - `MaxLineLength`: `32`
+  - `TooManyFunctions`: `4`
   - `LargeClass`: `1`
   - `LongParameterList`: `1`
 - Findings by file:
-  - [BattleScreen.kt](C:\codex_3dgame_android\project_air_defense\core\src\main\kotlin\com\airdefense\game\BattleScreen.kt): `140`
+  - [BattleScreen.kt](C:\codex_3dgame_android\project_air_defense\core\src\main\kotlin\com\airdefense\game\BattleScreen.kt): `132`
   - [BattleEffectsController.kt](C:\codex_3dgame_android\project_air_defense\core\src\main\kotlin\com\airdefense\game\BattleEffectsController.kt): `38`
-  - [BattleSceneRenderer.kt](C:\codex_3dgame_android\project_air_defense\core\src\main\kotlin\com\airdefense\game\BattleSceneRenderer.kt): `10`
   - [BattleTerrainAssetFactory.kt](C:\codex_3dgame_android\project_air_defense\core\src\main\kotlin\com\airdefense\game\BattleTerrainAssetFactory.kt): `5`
   - [BattleHudController.kt](C:\codex_3dgame_android\project_air_defense\core\src\main\kotlin\com\airdefense\game\BattleHudController.kt): `4`
   - [BattleSurfaceTextureFactory.kt](C:\codex_3dgame_android\project_air_defense\core\src\main\kotlin\com\airdefense\game\BattleSurfaceTextureFactory.kt): `4`
@@ -23,11 +22,11 @@ Measured from [core detekt XML](C:\codex_3dgame_android\project_air_defense\core
   - [BattleBackdropTextureFactory.kt](C:\codex_3dgame_android\project_air_defense\core\src\main\kotlin\com\airdefense\game\BattleBackdropTextureFactory.kt): `3`
   - [BattleProjectileAssetFactory.kt](C:\codex_3dgame_android\project_air_defense\core\src\main\kotlin\com\airdefense\game\BattleProjectileAssetFactory.kt): `2`
 - Measured reduction from the last verified branch baseline:
-  - core detekt: `300 -> 212` (`-88`)
-  - [BattleScreen.kt](C:\codex_3dgame_android\project_air_defense\core\src\main\kotlin\com\airdefense\game\BattleScreen.kt): `266 -> 140` (`-126`)
+  - core detekt: `212 -> 194` (`-18`)
+  - [BattleScreen.kt](C:\codex_3dgame_android\project_air_defense\core\src\main\kotlin\com\airdefense\game\BattleScreen.kt): `140 -> 132` (`-8`)
 - Measured reduction from the original baseline:
-  - core detekt: `1929 -> 212` (`-1717`)
-  - [BattleScreen.kt](C:\codex_3dgame_android\project_air_defense\core\src\main\kotlin\com\airdefense\game\BattleScreen.kt): `1362 -> 140` (`-1222`)
+  - core detekt: `1929 -> 194` (`-1735`)
+  - [BattleScreen.kt](C:\codex_3dgame_android\project_air_defense\core\src\main\kotlin\com\airdefense\game\BattleScreen.kt): `1362 -> 132` (`-1230`)
 
 ## Baseline
 
@@ -517,8 +516,6 @@ Highest-impact remaining debt:
   still owns the largest remaining integration surface and most of the surviving `MagicNumber` debt
 - [BattleEffectsController.kt](C:\codex_3dgame_android\project_air_defense\core\src\main\kotlin\com\airdefense\game\BattleEffectsController.kt)
   now isolates the effects domain, making it the right place for the next constants-and-shaping cleanup instead of keeping that debt in `BattleScreen`
-- [BattleSceneRenderer.kt](C:\codex_3dgame_android\project_air_defense\core\src\main\kotlin\com\airdefense\game\BattleSceneRenderer.kt)
-  still carries a `TooManyFunctions` finding and most of the surviving renderer-only line-length debt
 - [BattleTerrainAssetFactory.kt](C:\codex_3dgame_android\project_air_defense\core\src\main\kotlin\com\airdefense\game\BattleTerrainAssetFactory.kt)
   is down to one `TooManyFunctions` finding and a few formatting issues, making it the safest next mechanical cleanup
 
@@ -529,7 +526,53 @@ P2 remains active, but the highest-value remaining slice is now narrower:
 - [BattleScreen.kt](C:\codex_3dgame_android\project_air_defense\core\src\main\kotlin\com\airdefense\game\BattleScreen.kt) is now dominated by scene constants and orchestration glue rather than long-method debt
 - [BattleEffectsController.kt](C:\codex_3dgame_android\project_air_defense\core\src\main\kotlin\com\airdefense\game\BattleEffectsController.kt) is the new isolated home for the remaining effects-domain `MagicNumber` cleanup
 - class-level `LargeClass` and `TooManyFunctions` remain concentrated in `BattleScreen`
-- the next safe reduction is to keep moving renderer/effects constants and renderer-owned formatting debt out of `BattleScreen` and `BattleSceneRenderer`
+- the next safe reduction is to keep moving scene-state and remaining effects constants out of `BattleScreen`
+
+## P2 telemetry and radar overlay split
+
+Status: complete on `2026-04-12`.
+
+Measured result after extracting frame telemetry out of [BattleScreen.kt](C:\codex_3dgame_android\project_air_defense\core\src\main\kotlin\com\airdefense\game\BattleScreen.kt) and radar/threat overlay rendering out of [BattleSceneRenderer.kt](C:\codex_3dgame_android\project_air_defense\core\src\main\kotlin\com\airdefense\game\BattleSceneRenderer.kt):
+
+- core detekt findings: `212 -> 194` (`-18`)
+- [BattleScreen.kt](C:\codex_3dgame_android\project_air_defense\core\src\main\kotlin\com\airdefense\game\BattleScreen.kt): `140 -> 132` (`-8`)
+- [BattleSceneRenderer.kt](C:\codex_3dgame_android\project_air_defense\core\src\main\kotlin\com\airdefense\game\BattleSceneRenderer.kt): `10 -> 0`
+- new collaborators:
+  - [BattleFrameTelemetry.kt](C:\codex_3dgame_android\project_air_defense\core\src\main\kotlin\com\airdefense\game\BattleFrameTelemetry.kt)
+  - [BattleRadarOverlayRenderer.kt](C:\codex_3dgame_android\project_air_defense\core\src\main\kotlin\com\airdefense\game\BattleRadarOverlayRenderer.kt)
+  - [BattleFrameTelemetryTest.kt](C:\codex_3dgame_android\project_air_defense\core\src\test\kotlin\com\airdefense\game\BattleFrameTelemetryTest.kt)
+
+Root-cause corrections in this slice:
+
+- battle frame timing, rolling summary generation, and log cadence no longer live in `BattleScreen`
+- the radar panel, threat markers, and tracked-threat label overlay no longer live in `BattleSceneRenderer`
+- `BattleSceneRenderer` is back to owning backdrop, atmosphere, and status-screen composition only
+
+Verification after the split:
+
+- `ktlintCheck` succeeded
+- `:core:test` succeeded
+- `:core:detekt` succeeded
+- `:android:installDebug` succeeded
+- deterministic seeded Monte Carlo remained exact at `88%` city integrity, `89%` intercept rate, `1200` score, `1.00` hostile impacts, `0.00` destroyed buildings
+- isolated debug-package emulator QA confirmed:
+  - menu OCR found `ENTER AIRSPACE`
+  - OCR-driven tap hit `ENTER AIRSPACE`
+  - battle OCR found `BATTLESPACE`, `CONTROL`, `CITY 100%`, and live `WAVE 1 ACTIVE`
+  - post-tap logcat contained `StartScreen`, `BattleInit`, and live `BattleFrame` telemetry
+  - debug process stayed alive
+  - crash buffer was empty
+
+Artifacts:
+
+- [menu capture](C:\codex_3dgame_android\project_air_defense\benchmark-results\visual-qa\telemetry-pass-menu.png)
+- [menu OCR](C:\codex_3dgame_android\project_air_defense\benchmark-results\visual-qa\telemetry-pass-menu-ocr.json)
+- [tap proof](C:\codex_3dgame_android\project_air_defense\benchmark-results\visual-qa\telemetry-pass-tap.json)
+- [battle capture](C:\codex_3dgame_android\project_air_defense\benchmark-results\visual-qa\telemetry-pass-battle.png)
+- [battle OCR](C:\codex_3dgame_android\project_air_defense\benchmark-results\visual-qa\telemetry-pass-battle-ocr.json)
+- [post-tap logcat](C:\codex_3dgame_android\project_air_defense\benchmark-results\visual-qa\telemetry-pass-logcat.txt)
+- [crash buffer](C:\codex_3dgame_android\project_air_defense\benchmark-results\visual-qa\telemetry-pass-crash.txt)
+- [process proof](C:\codex_3dgame_android\project_air_defense\benchmark-results\visual-qa\telemetry-pass-process.txt)
 
 ## Refactor rule
 

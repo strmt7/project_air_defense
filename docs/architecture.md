@@ -15,8 +15,12 @@
   Owns translation of shared simulation step events into live render-entity/effect/audio updates.
 - `BattleEffectsController`
   Owns battle effect pressure rules, trail throttling, explosions, smoke, sparks, debris, and impact-light updates.
+- `BattleFrameTelemetry`
+  Owns rolling battle frame timing, FPS summary generation, and telemetry log cadence.
+- `BattleRadarOverlayRenderer`
+  Owns radar panel drawing, radar contacts, and tracked-threat overlay labels.
 - `BattleSceneRenderer`
-  Owns backdrop composition, atmosphere passes, loading/game-over screens, and radar/threat overlay rendering.
+  Owns backdrop composition, atmosphere passes, and loading/game-over screens.
 - `BattleTextureFactory`
   Coordinates the generated texture pipeline and shared texture registration.
 - `BattleSurfaceTextureFactory`
@@ -62,7 +66,8 @@
 - Imported textures:
   sky panorama and skyline backdrop.
 - Frame composition:
-  `BattleSceneRenderer` draws backdrop bands, reflection/horizon layers, atmosphere fog, radar contacts, and tracked-threat labels after the 3D world pass.
+- `BattleSceneRenderer` draws backdrop bands, reflection/horizon layers, atmosphere fog, and status overlays around the 3D world pass.
+- `BattleRadarOverlayRenderer` draws radar contacts, launcher sweep, and tracked-threat labels after HUD rendering.
 - Effects lifecycle:
   `BattleEffectsController` owns the visual-effect and debris arrays, including budget scaling and per-frame effect updates.
 - Shader:
@@ -91,6 +96,8 @@
   [BattleHudStateTest.kt](C:\codex_3dgame_android\project_air_defense\core\src\test\kotlin\com\airdefense\game\BattleHudStateTest.kt) covers wave-state, summary, and button-state formatting.
 - Effects budget math:
   [BattleEffectsControllerTest.kt](C:\codex_3dgame_android\project_air_defense\core\src\test\kotlin\com\airdefense\game\BattleEffectsControllerTest.kt) covers effect-budget scaling, trail-stride escalation, and bounded effect-count reduction.
+- Frame telemetry:
+  [BattleFrameTelemetryTest.kt](C:\codex_3dgame_android\project_air_defense\core\src\test\kotlin\com\airdefense\game\BattleFrameTelemetryTest.kt) covers rolling summary formatting and log-interval behavior.
 - Headless balance:
   `.\gradlew.bat :core:runBattleMonteCarlo -Pruns=300 -Pwaves=1 -Pseconds=48 -Pstep=0.05`
 - Windows shortcut:
