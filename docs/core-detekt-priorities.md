@@ -110,6 +110,97 @@ Why it moves to the top:
 - it still owns the biggest runtime integration risk: simulation application, renderer state, HUD, effects, and asset generation
 - structural debt there is now the clearest remaining blocker to safer graphics and gameplay work
 
+## P2 partial outcome
+
+Status: partially complete on `2026-04-12`.
+
+Measured result after the first `BattleScreen` structural pass:
+
+- core detekt findings: `1899 -> 1886` (`-13`)
+- [BattleScreen.kt](C:\codex_3dgame_android\project_air_defense\core\src\main\kotlin\com\airdefense\game\BattleScreen.kt): `1362 -> 1349`
+
+Structural hotspots removed in this pass:
+
+- `applySimulationStep()` long-method path extracted into `SimulationStepApplier`
+- `setupHud()` extracted into `BattleHudBuilder`
+- `canSpawnTrail()` simplified to a single-rule helper path
+
+Real Android runtime failure found during the pass:
+
+- tapping `ENTER AIRSPACE` crashed on the emulator with a `NullPointerException` in `BattleHudBuilder`
+- root cause: `Label`, `Slider`, and `TextButton` creation inside `Table().apply { ... }` resolved `skin` against the `Table` receiver instead of the outer [BattleScreen.kt](C:\codex_3dgame_android\project_air_defense\core\src\main\kotlin\com\airdefense\game\BattleScreen.kt) `Skin`
+- correction: every HUD builder path now uses `this@BattleScreen.skin` or a local `uiSkin` bound to the outer screen
+
+Android live-path verification after the correction:
+
+- `:core:test` succeeded
+- `:core:detekt` succeeded
+- `:android:installDebug` succeeded
+- menu OCR confirmed `ENTER AIRSPACE`
+- battle OCR confirmed `BATTLESPACE`, `CONTROL`, `CITY 100%`, and live `WAVE 1` text after the tap
+- crash buffer was empty
+- emulator process stayed alive
+
+Artifacts:
+
+- [menu capture](C:\codex_3dgame_android\project_air_defense\benchmark-results\visual-qa\battle-screen-pass2-menu.png)
+- [battle capture](C:\codex_3dgame_android\project_air_defense\benchmark-results\visual-qa\battle-screen-pass2-battle.png)
+- [post-tap logcat](C:\codex_3dgame_android\project_air_defense\benchmark-results\visual-qa\battle-screen-pass2-posttap-logcat.txt)
+- [crash buffer after fix](C:\codex_3dgame_android\project_air_defense\benchmark-results\visual-qa\battle-screen-pass2-crash.txt)
+
+Remaining `BattleScreen` structural targets after this pass:
+
+- `generateWorldModels()`
+- `generateTerrainModels()`
+- `generateProjectileModels()`
+- `render()`
+- `spawnBlast()`
+- `updateEffects()`
+- class-level `LargeClass`
+- class-level `TooManyFunctions`
+
+## P2 follow-up slice
+
+Status: complete for the effects/explosions path on `2026-04-12`.
+
+Measured result after the second `BattleScreen` structural pass:
+
+- core detekt findings: `1886 -> 1884` (`-2`)
+- [BattleScreen.kt](C:\codex_3dgame_android\project_air_defense\core\src\main\kotlin\com\airdefense\game\BattleScreen.kt): `1349 -> 1347`
+
+Structural hotspots removed in this slice:
+
+- `spawnBlast()` long-method path extracted into dedicated blast, shockwave, spark, smoke, and impact-light helpers
+- `updateEffects()` long-method path extracted into per-effect update helpers and a dedicated impact-light update path
+
+Verification after the effects refactor:
+
+- `:core:test` succeeded
+- `:core:detekt` succeeded
+- `:android:installDebug` succeeded
+- menu OCR confirmed `ENTER AIRSPACE`
+- battle OCR confirmed `CONTROL`, `CITY 100%`, and live `WAVE 1` text after the tap
+- crash buffer was empty
+- emulator process stayed alive
+- deterministic seeded simulation guardrail remained unchanged at `88%` city integrity, `89%` intercept rate, `1200` score, `1.00` hostile impacts, `0.00` destroyed buildings
+
+Artifacts:
+
+- [menu capture](C:\codex_3dgame_android\project_air_defense\benchmark-results\visual-qa\battle-screen-pass3-menu.png)
+- [battle capture](C:\codex_3dgame_android\project_air_defense\benchmark-results\visual-qa\battle-screen-pass3-battle.png)
+- [post-tap logcat](C:\codex_3dgame_android\project_air_defense\benchmark-results\visual-qa\battle-screen-pass3-posttap-logcat.txt)
+- [crash buffer after fix](C:\codex_3dgame_android\project_air_defense\benchmark-results\visual-qa\battle-screen-pass3-crash.txt)
+- [deterministic Monte Carlo guardrail](C:\codex_3dgame_android\project_air_defense\benchmark-results\visual-qa\battle-screen-pass3-montecarlo.txt)
+
+Remaining `BattleScreen` structural targets after the second slice:
+
+- `generateWorldModels()`
+- `generateTerrainModels()`
+- `generateProjectileModels()`
+- `render()`
+- class-level `LargeClass`
+- class-level `TooManyFunctions`
+
 ## Refactor rule
 
 Do not suppress the findings first.
