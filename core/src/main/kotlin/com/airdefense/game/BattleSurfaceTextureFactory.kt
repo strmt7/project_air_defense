@@ -107,19 +107,19 @@ private const val CONCRETE_ROUGHNESS_BASE = 0.88f
 private const val CONCRETE_ROUGHNESS_MIN = -0.06f
 private const val CONCRETE_ROUGHNESS_MAX = 0.04f
 
+internal fun createTiledDiffuseAttribute(
+    texture: Texture,
+    scaleU: Float,
+    scaleV: Float,
+): TextureAttribute =
+    TextureAttribute.createDiffuse(texture).apply {
+        this.scaleU = scaleU
+        this.scaleV = scaleV
+    }
+
 internal class BattleSurfaceTextureFactory(
     private val context: BattleTextureContext,
 ) {
-    fun createTiledAttribute(
-        texture: Texture,
-        scaleU: Float,
-        scaleV: Float,
-    ): TextureAttribute =
-        TextureAttribute.createDiffuse(texture).apply {
-            this.scaleU = scaleU
-            this.scaleV = scaleV
-        }
-
     fun createSolidTextureSet(
         color: Color,
         roughnessValue: Float,
@@ -168,11 +168,19 @@ internal class BattleSurfaceTextureFactory(
     }
 
     fun createGroundTextureSet(): SurfaceTextureSet =
-        context.buildSquareTextureSet(GROUND_TEXTURE_BASE, GROUND_TEXTURE_MINIMUM) { diffuse, roughness, textureSize ->
+        context.buildSquareTextureSet(
+            GROUND_TEXTURE_BASE,
+            GROUND_TEXTURE_MINIMUM,
+        ) { diffuse, roughness, textureSize ->
             for (x in 0 until textureSize) {
                 for (y in 0 until textureSize) {
                     val noise = MathUtils.random(GROUND_NOISE_MIN, GROUND_NOISE_MAX)
-                    val striping = if ((x / GROUND_STRIP_TILE + y / GROUND_STRIP_TILE) % 2 == 0) GROUND_STRIP_HIGH else GROUND_STRIP_LOW
+                    val striping =
+                        if ((x / GROUND_STRIP_TILE + y / GROUND_STRIP_TILE) % 2 == 0) {
+                            GROUND_STRIP_HIGH
+                        } else {
+                            GROUND_STRIP_LOW
+                        }
                     diffuse.setColor(
                         (GROUND_BASE_COLOR.r + noise + striping).coerceIn(0f, 1f),
                         (GROUND_BASE_COLOR.g + noise).coerceIn(0f, 1f),
@@ -246,7 +254,12 @@ internal class BattleSurfaceTextureFactory(
         context.buildSquareTextureSet(GROUND_TEXTURE_BASE, GROUND_TEXTURE_MINIMUM) { diffuse, roughness, textureSize ->
             for (x in 0 until textureSize) {
                 for (y in 0 until textureSize) {
-                    val strip = if ((x / PARK_STRIP_X_TILE + y / PARK_STRIP_Y_TILE) % 2 == 0) PARK_STRIP_HIGH else PARK_STRIP_LOW
+                    val strip =
+                        if ((x / PARK_STRIP_X_TILE + y / PARK_STRIP_Y_TILE) % 2 == 0) {
+                            PARK_STRIP_HIGH
+                        } else {
+                            PARK_STRIP_LOW
+                        }
                     val noise = MathUtils.random(PARK_NOISE_MIN, PARK_NOISE_MAX)
                     diffuse.setColor(
                         (PARK_BASE_COLOR.r + strip + noise).coerceIn(0f, 1f),
@@ -270,7 +283,12 @@ internal class BattleSurfaceTextureFactory(
         context.buildSquareTextureSet(GROUND_TEXTURE_BASE, GROUND_TEXTURE_MINIMUM) { diffuse, roughness, textureSize ->
             for (x in 0 until textureSize) {
                 for (y in 0 until textureSize) {
-                    val tile = if ((x / PROMENADE_TILE_SIZE + y / PROMENADE_TILE_SIZE) % 2 == 0) PROMENADE_TILE_HIGH else PROMENADE_TILE_LOW
+                    val tile =
+                        if ((x / PROMENADE_TILE_SIZE + y / PROMENADE_TILE_SIZE) % 2 == 0) {
+                            PROMENADE_TILE_HIGH
+                        } else {
+                            PROMENADE_TILE_LOW
+                        }
                     val noise = MathUtils.random(PROMENADE_NOISE_MIN, PROMENADE_NOISE_MAX)
                     diffuse.setColor(
                         (PROMENADE_BASE_COLOR.r + tile + noise).coerceIn(0f, 1f),

@@ -106,6 +106,23 @@ private const val DEFENSE_PAD_TILE_SCALE_U = 4f
 private const val DEFENSE_PAD_TILE_SCALE_V = 2f
 private const val DEFENSE_PAD_SHININESS = 26f
 
+private fun buildTerrainRoadBox(
+    part: com.badlogic.gdx.graphics.g3d.utils.MeshPartBuilder,
+    width: Float,
+    depth: Float,
+    centerX: Float,
+    centerZ: Float,
+) {
+    BoxShapeBuilder.build(part, width, ROAD_HEIGHT, depth, centerX, PROMENADE_CENTER_Y, centerZ)
+}
+
+private fun terrainVertexAttributes(): Long =
+    (
+        VertexAttributes.Usage.Position or
+            VertexAttributes.Usage.Normal or
+            VertexAttributes.Usage.TextureCoordinates
+    ).toLong()
+
 private data class TerrainTextures(
     val ground: SurfaceTextureSet,
     val sea: SurfaceTextureSet,
@@ -128,7 +145,7 @@ internal class BattleTerrainAssetFactory(
     fun build(): BattleTerrainAssetBundle {
         val textures = createTerrainTextures()
         val modelBuilder = ModelBuilder()
-        val attr = defaultVertexAttributes()
+        val attr = terrainVertexAttributes()
         modelBuilder.begin()
         createInlandGround(modelBuilder, attr, textures)
         createSea(modelBuilder, attr, textures)
@@ -160,7 +177,12 @@ internal class BattleTerrainAssetFactory(
             horizonTexture = backdropTextures.loadTexture(HORIZON_TEXTURE_PATH, HORIZON_FALLBACK_COLOR),
             fogTexture = if (qualityProfile.showAtmosphereLayers) backdropTextures.createFogTexture() else null,
             glowTexture = if (qualityProfile.showGlowLayer) backdropTextures.createGlowTexture() else null,
-            reflectionTexture = if (qualityProfile.showReflectionLayer) backdropTextures.createReflectionTexture() else null,
+            reflectionTexture =
+                if (qualityProfile.showReflectionLayer) {
+                    backdropTextures.createReflectionTexture()
+                } else {
+                    null
+                },
         )
 
     private fun createInlandGround(
@@ -174,7 +196,11 @@ internal class BattleTerrainAssetFactory(
                 GL20.GL_TRIANGLES,
                 attr,
                 Material(
-                    surfaceTextures.createTiledAttribute(textures.ground.diffuse, GROUND_TILE_SCALE, GROUND_TILE_SCALE),
+                    createTiledDiffuseAttribute(
+                        textures.ground.diffuse,
+                        GROUND_TILE_SCALE,
+                        GROUND_TILE_SCALE,
+                    ),
                     TextureAttribute.createSpecular(textures.ground.roughness),
                     ColorAttribute.createDiffuse(INLAND_GROUND_DIFFUSE_COLOR),
                     ColorAttribute.createSpecular(INLAND_GROUND_SPECULAR_COLOR),
@@ -270,7 +296,7 @@ internal class BattleTerrainAssetFactory(
                 GL20.GL_TRIANGLES,
                 attr,
                 Material(
-                    surfaceTextures.createTiledAttribute(
+                    createTiledDiffuseAttribute(
                         textures.promenade.diffuse,
                         PROMENADE_TILE_SCALE_U,
                         PROMENADE_TILE_SCALE_V,
@@ -332,7 +358,7 @@ internal class BattleTerrainAssetFactory(
                 GL20.GL_TRIANGLES,
                 attr,
                 Material(
-                    surfaceTextures.createTiledAttribute(
+                    createTiledDiffuseAttribute(
                         textures.road.diffuse,
                         ROAD_COASTAL_TILE_SCALE_U,
                         ROAD_COASTAL_TILE_SCALE_V,
@@ -343,12 +369,42 @@ internal class BattleTerrainAssetFactory(
                     FloatAttribute.createShininess(ROAD_SHININESS),
                 ),
             )
-        buildRoadBox(part, ROAD_WIDTH, ROAD_COASTAL_DEPTH, INLAND_GROUND_CENTER_X, ROAD_COASTAL_CENTER_Z)
-        buildRoadBox(part, ROAD_SECONDARY_WIDTH, ROAD_SECONDARY_DEPTH, INLAND_GROUND_CENTER_X, ROAD_SECONDARY_CENTER_Z)
-        buildRoadBox(part, ROAD_TERTIARY_WIDTH, ROAD_TERTIARY_DEPTH, ROAD_TERTIARY_CENTER_X, ROAD_TERTIARY_CENTER_Z)
-        buildRoadBox(part, VERTICAL_ROAD_ONE_WIDTH, VERTICAL_ROAD_ONE_DEPTH, VERTICAL_ROAD_ONE_CENTER_X, VERTICAL_ROAD_ONE_CENTER_Z)
-        buildRoadBox(part, VERTICAL_ROAD_TWO_WIDTH, VERTICAL_ROAD_TWO_DEPTH, VERTICAL_ROAD_TWO_CENTER_X, VERTICAL_ROAD_TWO_CENTER_Z)
-        buildRoadBox(part, VERTICAL_ROAD_THREE_WIDTH, VERTICAL_ROAD_THREE_DEPTH, VERTICAL_ROAD_THREE_CENTER_X, VERTICAL_ROAD_THREE_CENTER_Z)
+        buildTerrainRoadBox(part, ROAD_WIDTH, ROAD_COASTAL_DEPTH, INLAND_GROUND_CENTER_X, ROAD_COASTAL_CENTER_Z)
+        buildTerrainRoadBox(
+            part,
+            ROAD_SECONDARY_WIDTH,
+            ROAD_SECONDARY_DEPTH,
+            INLAND_GROUND_CENTER_X,
+            ROAD_SECONDARY_CENTER_Z,
+        )
+        buildTerrainRoadBox(
+            part,
+            ROAD_TERTIARY_WIDTH,
+            ROAD_TERTIARY_DEPTH,
+            ROAD_TERTIARY_CENTER_X,
+            ROAD_TERTIARY_CENTER_Z,
+        )
+        buildTerrainRoadBox(
+            part,
+            VERTICAL_ROAD_ONE_WIDTH,
+            VERTICAL_ROAD_ONE_DEPTH,
+            VERTICAL_ROAD_ONE_CENTER_X,
+            VERTICAL_ROAD_ONE_CENTER_Z,
+        )
+        buildTerrainRoadBox(
+            part,
+            VERTICAL_ROAD_TWO_WIDTH,
+            VERTICAL_ROAD_TWO_DEPTH,
+            VERTICAL_ROAD_TWO_CENTER_X,
+            VERTICAL_ROAD_TWO_CENTER_Z,
+        )
+        buildTerrainRoadBox(
+            part,
+            VERTICAL_ROAD_THREE_WIDTH,
+            VERTICAL_ROAD_THREE_DEPTH,
+            VERTICAL_ROAD_THREE_CENTER_X,
+            VERTICAL_ROAD_THREE_CENTER_Z,
+        )
     }
 
     private fun createGlowBand(
@@ -396,7 +452,7 @@ internal class BattleTerrainAssetFactory(
                 GL20.GL_TRIANGLES,
                 attr,
                 Material(
-                    surfaceTextures.createTiledAttribute(
+                    createTiledDiffuseAttribute(
                         textures.ground.diffuse,
                         DEFENSE_PAD_TILE_SCALE_U,
                         DEFENSE_PAD_TILE_SCALE_V,
@@ -417,23 +473,6 @@ internal class BattleTerrainAssetFactory(
             DEFENSE_PAD_CENTER_Z,
         )
     }
-
-    private fun buildRoadBox(
-        part: com.badlogic.gdx.graphics.g3d.utils.MeshPartBuilder,
-        width: Float,
-        depth: Float,
-        centerX: Float,
-        centerZ: Float,
-    ) {
-        BoxShapeBuilder.build(part, width, ROAD_HEIGHT, depth, centerX, PROMENADE_CENTER_Y, centerZ)
-    }
-
-    private fun defaultVertexAttributes(): Long =
-        (
-            VertexAttributes.Usage.Position or
-                VertexAttributes.Usage.Normal or
-                VertexAttributes.Usage.TextureCoordinates
-        ).toLong()
 
     companion object {
         const val HORIZON_TEXTURE_PATH = "textures/city_backdrop_telaviv.jpg"

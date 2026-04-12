@@ -19,6 +19,18 @@ Project Air Defense mixes native Android chrome with a libGDX `SurfaceView`. Tha
 - It keeps one deterministic repo-local path instead of mixing several mobile automation frameworks.
 - It is simple to verify with saved screenshots and JSON output.
 
+## Preferred device lane
+
+- active smoke-test AVD: Android 15 / API 35 / Google APIs / Pixel 9 Pro
+- local verified AVD name: `airdefense_android15_pixel9pro`
+- active smoke-test package after `:android:installDebug`: `com.airdefense.game.debug`
+- benchmark package exists and remains valid for the benchmark build type: `com.airdefense.game.benchmark`
+
+Known bad lane:
+
+- the legacy `airdefense_api36` AVD has already stalled at the Android logo with `adb offline`
+- do not use it as proof of game health until it is fixed
+
 ## Commands
 
 Bootstrap on Windows:
@@ -33,10 +45,22 @@ Probe the installed stack:
 py -3 .\tools\android_visual_qa\visual_qa.py probe
 ```
 
+Verify emulator health before app claims:
+
+```powershell
+adb devices
+adb shell getprop sys.boot_completed
+```
+
+Expected result:
+
+- device state is `device`, not `offline`
+- boot property is `1`
+
 Launch the exact installed variant without guessing the activity:
 
 ```powershell
-py -3 .\tools\android_visual_qa\visual_qa.py launch --device emulator-5554 --package com.airdefense.game.benchmark
+py -3 .\tools\android_visual_qa\visual_qa.py launch --device emulator-5554 --package com.airdefense.game.debug
 ```
 
 Read live text from the emulator:
@@ -68,5 +92,16 @@ py -3 .\tools\android_visual_qa\visual_qa.py match-template --device emulator-55
 
 1. `py -3 .\tools\android_visual_qa\test_visual_qa.py`
 2. `py -3 .\tools\android_visual_qa\visual_qa.py selftest`
-3. live emulator proof with `find-text`, `tap-text`, or `match-template`
-4. keep screenshot, OCR/template JSON, and logcat together when reporting a navigation result
+3. verify emulator health with `adb devices` and `adb shell getprop sys.boot_completed`
+4. capture the pre-tap menu state with screenshot + OCR
+5. tap through with `tap-text` or `tap-template`
+6. capture the post-tap battle state with screenshot + OCR
+7. keep screenshot, OCR/template JSON, logcat, and crash buffer together when reporting a navigation result
+
+## Rules that prevent false positives
+
+- Do not call a flow verified from process survival alone.
+- Do not call a flow verified from logcat alone.
+- Do not call a flow verified from a single screenshot alone.
+- A navigation claim is only valid when the pre-tap target exists on screen, the tap tool reports a hit, and the post-tap screen contains battle-only text.
+- Fresh Android emulator boots can show the system `Viewing full screen` education overlay. Clear it before OCR-based menu claims.

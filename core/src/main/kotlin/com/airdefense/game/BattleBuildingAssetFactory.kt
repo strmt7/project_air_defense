@@ -106,10 +106,38 @@ private val BUILDING_SPECS =
         BuildingSpec("tower_e", TOWER_E_WIDTH, TOWER_E_HEIGHT, TOWER_E_DEPTH, "e", TOWER_E_TINT),
         BuildingSpec("podium", PODIUM_WIDTH, PODIUM_HEIGHT, PODIUM_DEPTH, "b", PODIUM_TINT),
         BuildingSpec("hotel", HOTEL_WIDTH, HOTEL_HEIGHT, HOTEL_DEPTH, "c", HOTEL_TINT),
-        BuildingSpec("coastal_slab", COASTAL_SLAB_WIDTH, COASTAL_SLAB_HEIGHT, COASTAL_SLAB_DEPTH, "e", COASTAL_SLAB_TINT),
-        BuildingSpec("office_slab", OFFICE_SLAB_WIDTH, OFFICE_SLAB_HEIGHT, OFFICE_SLAB_DEPTH, "a", OFFICE_SLAB_TINT),
-        BuildingSpec("needle_tower", NEEDLE_TOWER_WIDTH, NEEDLE_TOWER_HEIGHT, NEEDLE_TOWER_DEPTH, "d", NEEDLE_TOWER_TINT),
-        BuildingSpec("setback_tower", SETBACK_TOWER_WIDTH, SETBACK_TOWER_HEIGHT, SETBACK_TOWER_DEPTH, "b", SETBACK_TOWER_TINT),
+        BuildingSpec(
+            "coastal_slab",
+            COASTAL_SLAB_WIDTH,
+            COASTAL_SLAB_HEIGHT,
+            COASTAL_SLAB_DEPTH,
+            "e",
+            COASTAL_SLAB_TINT,
+        ),
+        BuildingSpec(
+            "office_slab",
+            OFFICE_SLAB_WIDTH,
+            OFFICE_SLAB_HEIGHT,
+            OFFICE_SLAB_DEPTH,
+            "a",
+            OFFICE_SLAB_TINT,
+        ),
+        BuildingSpec(
+            "needle_tower",
+            NEEDLE_TOWER_WIDTH,
+            NEEDLE_TOWER_HEIGHT,
+            NEEDLE_TOWER_DEPTH,
+            "d",
+            NEEDLE_TOWER_TINT,
+        ),
+        BuildingSpec(
+            "setback_tower",
+            SETBACK_TOWER_WIDTH,
+            SETBACK_TOWER_HEIGHT,
+            SETBACK_TOWER_DEPTH,
+            "b",
+            SETBACK_TOWER_TINT,
+        ),
     )
 
 internal class BattleBuildingAssetFactory(

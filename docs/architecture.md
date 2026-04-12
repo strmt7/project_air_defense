@@ -6,13 +6,25 @@
 - `StartScreen`
   Draws the textured menu scene and transitions into `BattleScreen`.
 - `BattleScreen`
-  Owns battle orchestration, live entity state, audio/effects hooks, and delegates rendering/asset work to specialized collaborators.
+  Owns battle orchestration, lifecycle, live entity state, and composition of the specialized battle collaborators.
+- `BattleInitializationController`
+  Owns staged battle startup progress, step timing, and initialization diagnostics.
+- `BattleAssetBootstrapper`
+  Owns texture/model factory coordination and delegates world creation to the world bootstrapper.
+- `BattleWorldBootstrapper`
+  Owns base world instances, launchers, radar, city-block placement, imported-landmark loading, and simulation construction.
+- `BattleSceneController`
+  Owns environment setup, camera shake, camera framing, launcher light pulses, and per-frame scene lighting updates.
+- `BattleProjectileVisualController`
+  Owns projectile instance transforms, launcher pulses, and synchronization of threat/interceptor render entities.
+- `BattleBuildingVisualController`
+  Owns building transform sync, lean/collapse animation, and building damage visuals.
+- `BattleAudioController`
+  Owns battle sound-effect loading and playback.
 - `BattleHudController`
   Owns battle HUD widget construction and snapshot-driven widget updates.
 - `BattleHudState`
   Owns pure HUD text/button-state shaping for the battle screen.
-- `BattleSimulationStepApplier`
-  Owns translation of shared simulation step events into live render-entity/effect/audio updates.
 - `BattleEffectsController`
   Owns battle effect pressure rules, trail throttling, explosions, smoke, sparks, debris, and impact-light updates.
 - `BattleFrameTelemetry`
@@ -21,6 +33,8 @@
   Owns radar panel drawing, radar contacts, and tracked-threat overlay labels.
 - `BattleSceneRenderer`
   Owns backdrop composition, atmosphere passes, and loading/game-over screens.
+- `BattleWorldRenderPass`
+  Owns the 3D world draw pass for terrain, buildings, projectiles, debris, and effects after camera/environment setup.
 - `BattleTextureFactory`
   Coordinates the generated texture pipeline and shared texture registration.
 - `BattleSurfaceTextureFactory`
@@ -37,6 +51,8 @@
   Owns threat, interceptor, blast, trail, debris, and moon model generation.
 - `BattleSimulation`
   Owns the live battle math used by both the GUI and the headless runner.
+- `BattleRuntimeSnapshot`
+  Owns the lightweight runtime state handed to HUD and frame-telemetry formatting.
 - `BattleSimulationStepApplier`
   Applies `BattleStepEvents` from the shared simulation to render entities, launcher pulses, damage visuals, blasts, and status/HUD updates.
 - `BattleWorldLayout`
@@ -66,10 +82,12 @@
 - Imported textures:
   sky panorama and skyline backdrop.
 - Frame composition:
-- `BattleSceneRenderer` draws backdrop bands, reflection/horizon layers, atmosphere fog, and status overlays around the 3D world pass.
-- `BattleRadarOverlayRenderer` draws radar contacts, launcher sweep, and tracked-threat labels after HUD rendering.
+  `BattleSceneRenderer` draws backdrop bands, reflection/horizon layers, atmosphere fog, and status overlays around the 3D world pass.
+  `BattleRadarOverlayRenderer` draws radar contacts, launcher sweep, and tracked-threat labels after HUD rendering.
 - Effects lifecycle:
   `BattleEffectsController` owns the visual-effect and debris arrays, including budget scaling and per-frame effect updates.
+  `BattleEffectFactory` owns effect entity creation.
+  `BattleEffectUpdate` owns per-frame effect aging and transform updates.
 - Shader:
   `NightShader` combines diffuse textures, roughness textures, emissive glow, directional moon/fill light, impact point light, specular response, fresnel rim, and fog.
 
@@ -98,6 +116,10 @@
   [BattleEffectsControllerTest.kt](C:\codex_3dgame_android\project_air_defense\core\src\test\kotlin\com\airdefense\game\BattleEffectsControllerTest.kt) covers effect-budget scaling, trail-stride escalation, and bounded effect-count reduction.
 - Frame telemetry:
   [BattleFrameTelemetryTest.kt](C:\codex_3dgame_android\project_air_defense\core\src\test\kotlin\com\airdefense\game\BattleFrameTelemetryTest.kt) covers rolling summary formatting and log-interval behavior.
+- Scene controller:
+  [BattleSceneControllerTest.kt](C:\codex_3dgame_android\project_air_defense\core\src\test\kotlin\com\airdefense\game\BattleSceneControllerTest.kt) covers camera and scene-behavior invariants.
+- Building visuals:
+  [BattleBuildingVisualControllerTest.kt](C:\codex_3dgame_android\project_air_defense\core\src\test\kotlin\com\airdefense\game\BattleBuildingVisualControllerTest.kt) covers transform sync and damage-visual rules.
 - Headless balance:
   `.\gradlew.bat :core:runBattleMonteCarlo -Pruns=300 -Pwaves=1 -Pseconds=48 -Pstep=0.05`
 - Windows shortcut:
@@ -106,5 +128,7 @@
   emulator-verified for menu flow, battle entry, HUD state, and projectile readability.
 - Visual QA tooling:
   `tools/android_visual_qa/visual_qa.py` drives OCR-backed launch, tap, capture, and screen-text verification on the emulator.
+- Trusted emulator lane:
+  Android 15 / API 35 / Pixel 9 Pro is the active smoke-test device; claims from stale or offline emulators are not valid QA evidence.
 - Android packaging:
   debug install verified on emulator; production channel still requires a stable release keystore for update-safe release builds.

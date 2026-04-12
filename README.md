@@ -11,8 +11,11 @@ A high-fidelity libGDX + Kotlin Android prototype where you command a Patriot-in
 
 ## AI-Friendly Docs
 - Agent operating guide: `AGENTS.md`
+- Docs index: `docs/index.md`
 - Agent routing: `docs/reference/ai-agent-context-routing.md`
 - Agent skills: `docs/reference/ai-agent-skills.md`
+- Agent integrations: `docs/reference/ai-agent-integrations.md`
+- Agent web research stack: `docs/reference/ai-agent-web-research-stack.md`
 - Agent upstream sources: `docs/reference/ai-agent-upstream-sources.md`
 - Architecture reference: `docs/architecture.md`
 - Release/install behavior: `docs/release-and-install.md`
@@ -78,11 +81,13 @@ A high-fidelity libGDX + Kotlin Android prototype where you command a Patriot-in
 8. Or use `.\scripts\run-battle-monte-carlo.cmd 300 1 48 0.05 20260411` on Windows without changing PowerShell execution policy.
 9. Run `.\scripts\run-benchmark-suite.cmd` for the report-oriented benchmark suite.
    It captures build timings, startup macrobenchmarks, runtime frame telemetry, runtime-health artifacts, Monte Carlo balance metrics, and standards reports under `benchmark-results/`.
-10. Run `powershell -ExecutionPolicy Bypass -File .\tools\android_visual_qa\bootstrap.ps1` once on a Windows workstation that will do emulator QA.
-11. Run `py -3 .\tools\android_visual_qa\visual_qa.py probe` before screen-driven emulator checks.
-12. Run `python3 tools/update_readme_badges.py --check` after badge metadata changes.
-13. Run `.\gradlew.bat :android:installDebug` to install the debug package on an emulator or device.
-14. Launch the `android` module and enter a battle from the main menu.
+10. Use a current Android 15 / API 35 Google APIs emulator. The verified repo lane is Pixel 9 Pro (`airdefense_android15_pixel9pro`).
+11. Run `powershell -ExecutionPolicy Bypass -File .\tools\android_visual_qa\bootstrap.ps1` once on a Windows workstation that will do emulator QA.
+12. Run `py -3 .\tools\android_visual_qa\visual_qa.py probe` before screen-driven emulator checks.
+13. Run `python3 tools/update_readme_badges.py --check` after badge metadata changes.
+14. Run `.\gradlew.bat :android:installDebug` to install the debug package on an emulator or device.
+15. Clear any first-boot Android full-screen education overlay before OCR-based menu checks.
+16. Verify navigation with screenshot + OCR before tap, tap-proof JSON, and screenshot + OCR after tap; do not treat a live PID or logcat alone as proof of a usable battle scene.
 
 ## Build Outputs
 - Local side-load build:

@@ -66,6 +66,16 @@ private data class ScreenFrame(
     val height: Float,
 )
 
+private fun clearBattleFrame() {
+    ScreenUtils.clear(
+        BATTLE_CLEAR_COLOR.r,
+        BATTLE_CLEAR_COLOR.g,
+        BATTLE_CLEAR_COLOR.b,
+        BATTLE_CLEAR_COLOR.a,
+        true,
+    )
+}
+
 class BattleSceneRenderer(
     private val stage: Stage,
     private val skin: Skin,
@@ -96,7 +106,7 @@ class BattleSceneRenderer(
         battleLiveTime: Float,
         impactLightIntensity: Float,
     ) {
-        clearFrame()
+        clearBattleFrame()
         val skyTexture = skyRegion ?: return
 
         val batch = stage.batch
@@ -147,7 +157,7 @@ class BattleSceneRenderer(
         diagnosticsLine: String,
         progress: Float,
     ) {
-        clearFrame()
+        clearBattleFrame()
         val batch = stage.batch
         val screenFrame = ScreenFrame(Gdx.graphics.width.toFloat(), Gdx.graphics.height.toFloat())
         val font = skin.getFont("default")
@@ -188,7 +198,7 @@ class BattleSceneRenderer(
     }
 
     fun renderGameOver(score: Int) {
-        clearFrame()
+        clearBattleFrame()
         val batch = stage.batch
         val screenFrame = ScreenFrame(Gdx.graphics.width.toFloat(), Gdx.graphics.height.toFloat())
         val titleFont = skin.getFont("title-font")
@@ -233,16 +243,6 @@ class BattleSceneRenderer(
             ),
         )
         batch.end()
-    }
-
-    private fun clearFrame() {
-        ScreenUtils.clear(
-            BATTLE_CLEAR_COLOR.r,
-            BATTLE_CLEAR_COLOR.g,
-            BATTLE_CLEAR_COLOR.b,
-            BATTLE_CLEAR_COLOR.a,
-            true,
-        )
     }
 
     private fun drawBackdropBands(
