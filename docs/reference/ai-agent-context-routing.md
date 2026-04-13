@@ -1,7 +1,5 @@
 # AI Agent Context Routing
 
-Load the smallest correct slice first.
-
 UE5-only rule: use Unreal Engine 5 planning docs for all new engine/runtime work. Existing Android/libGDX files are legacy migration-reference only.
 
 ## Numeric caps
@@ -31,7 +29,5 @@ UE5-only rule: use Unreal Engine 5 planning docs for all new engine/runtime work
 | Benchmarks and standards | `scripts/run-benchmark-suite.ps1`, `docs/benchmark-suite.md`, `docs/benchmark-sources.md` |
 | Agent docs, badges, workflows, skills | `docs/index.md`, `docs/reference/ai-agent-skills.md`, `docs/reference/ai-agent-integrations.md`, `docs/reference/ai-agent-upstream-sources.md`, `.agents/skills/` |
 
-## Stop conditions
-- You know the exact file to edit.
-- You know the exact command or artifact that will verify the change.
+- You know the exact file to edit and the exact command or artifact that will verify the change.
 - You can explain the license or provenance boundary for any new asset.

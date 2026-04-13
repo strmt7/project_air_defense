@@ -72,8 +72,9 @@ A repo in transition from a legacy Android/libGDX prototype to a UE5-first air-d
 
 ## Verified UE5 Runtime Controls
 - Default runtime city source: local upgraded Helsinki Kalasatama 3D Tiles
-- Runtime camera controls: `W/A/S/D` or arrow keys to pan, `Q/E` to rotate, `PageUp/PageDown` or mouse wheel to zoom, `R/F` to raise/lower, `Home` to reset
-- Runtime graphics settings backend: `UProjectAirDefenseGameUserSettings` now applies AA method, AO, motion blur, and UE scalability groups on startup for both editor-game and packaged runtime lanes
+- Runtime camera controls: `W/A/S/D` or arrow keys to pan, `Q/E` to yaw, `T/G` or `Numpad8/Numpad5` to pitch, `PageUp/PageDown` or mouse wheel to zoom, `R/F` to raise/lower, `Home` to reset
+- Runtime graphics settings backend: `UProjectAirDefenseGameUserSettings` owns AA method, AO, motion blur, and UE scalability groups on startup for both editor-game and packaged runtime lanes; those toggles are no longer hard-forced in `DefaultEngine.ini`
+- Runtime camera settings remain authored in meters in `UProjectAirDefenseRuntimeSettings`, but `AProjectAirDefenseCityCameraPawn` converts them to Unreal units internally. This avoids the 100x framing error that produced roof-level closeups from Cesium tileset bounds.
 
 ## Legacy Android Prototype Snapshot
 These bullets describe the outgoing Android/libGDX prototype that remains in-repo for migration reference.

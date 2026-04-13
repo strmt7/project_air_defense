@@ -10,6 +10,7 @@ from pathlib import Path
 from build_master_tileset import build_master_tileset
 from city_sources import build_manifest, get_source, load_sources, repo_root
 from patch_cesium_for_unreal import (
+    patch_metadata_statistic_semantic_default,
     patch_generate_material_utility_header,
     strip_deprecated_http_keys,
 )
@@ -73,6 +74,20 @@ class UE5CityPipelineTest(unittest.TestCase):
         self.assertIn("GameDefaultMap=/Engine/Maps/Entry", config_text)
         self.assertIn("EditorStartupMap=/Engine/Maps/Entry", config_text)
 
+    def test_graphics_user_settings_own_runtime_toggles(self) -> None:
+        engine_config = (repo_root() / "ue5" / "ProjectAirDefenseUE5" / "Config" / "DefaultEngine.ini").read_text(
+            encoding="utf-8"
+        )
+        user_settings_config = (
+            repo_root() / "ue5" / "ProjectAirDefenseUE5" / "Config" / "DefaultGameUserSettings.ini"
+        ).read_text(encoding="utf-8")
+
+        self.assertNotIn("r.AntiAliasingMethod=", engine_config)
+        self.assertNotIn("r.DefaultFeature.AmbientOcclusion=", engine_config)
+        self.assertIn("PreferredAntiAliasingMethod=TSR", user_settings_config)
+        self.assertIn("bAmbientOcclusionEnabled=True", user_settings_config)
+        self.assertIn("bMotionBlurEnabled=False", user_settings_config)
+
     def test_default_game_stages_external_data(self) -> None:
         config_path = repo_root() / "ue5" / "ProjectAirDefenseUE5" / "Config" / "DefaultGame.ini"
         config_text = config_path.read_text(encoding="utf-8")
@@ -99,8 +114,10 @@ class UE5CityPipelineTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             plugin_root = Path(temp_dir) / "CesiumForUnreal"
             config_dir = plugin_root / "Config"
+            public_dir = plugin_root / "Source" / "CesiumRuntime" / "Public"
             source_dir = plugin_root / "Source" / "CesiumRuntime" / "Private"
             config_dir.mkdir(parents=True, exist_ok=True)
+            public_dir.mkdir(parents=True, exist_ok=True)
             source_dir.mkdir(parents=True, exist_ok=True)
 
             (config_dir / "Engine.ini").write_text(
@@ -121,9 +138,17 @@ class UE5CityPipelineTest(unittest.TestCase):
                 "#endif\n",
                 encoding="utf-8",
             )
+            metadata_header = public_dir / "CesiumFeaturesMetadataDescription.h"
+            metadata_header.write_text(
+                "struct FCesiumMetadataPropertyStatisticValue {\n"
+                "  ECesiumMetadataStatisticSemantic Semantic;\n"
+                "};\n",
+                encoding="utf-8",
+            )
 
             self.assertEqual(strip_deprecated_http_keys(plugin_root), 2)
             self.assertTrue(patch_generate_material_utility_header(plugin_root))
+            self.assertTrue(patch_metadata_statistic_semantic_default(plugin_root))
 
             self.assertNotIn(
                 "RunningThreadedRequestLimit",
@@ -135,6 +160,10 @@ class UE5CityPipelineTest(unittest.TestCase):
             self.assertIn('#include "CesiumMetadataValueType.h"', patched_header)
             self.assertNotIn("ECesiumMetadataStatisticSemantic", patched_header)
             self.assertNotIn("struct FCesiumMetadataValue;", patched_header)
+            self.assertIn(
+                "ECesiumMetadataStatisticSemantic Semantic = ECesiumMetadataStatisticSemantic::None;",
+                metadata_header.read_text(encoding="utf-8"),
+            )
 
     @staticmethod
     def _write_root_tile(root: Path, directory_name: str, sphere: list[float], geometric_error: float) -> None:

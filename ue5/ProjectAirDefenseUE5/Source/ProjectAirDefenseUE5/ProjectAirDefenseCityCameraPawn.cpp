@@ -14,8 +14,14 @@
 #include "GameFramework/PlayerController.h"
 
 namespace {
+constexpr float UnrealUnitsPerMeter = 100.0f;
+
 const UProjectAirDefenseRuntimeSettings* GetRuntimeSettings() {
   return GetDefault<UProjectAirDefenseRuntimeSettings>();
+}
+
+float MetersToUnrealUnits(float ValueInMeters) {
+  return ValueInMeters * UnrealUnitsPerMeter;
 }
 } // namespace
 
@@ -40,17 +46,18 @@ void AProjectAirDefenseCityCameraPawn::ApplyRuntimeDefaults() {
 
   this->Camera->SetFieldOfView(Settings->CameraFieldOfViewDegrees);
   this->FocusPoint = FVector::ZeroVector;
-  this->DistanceMeters = Settings->CameraDefaultDistanceMeters;
-  this->MinDistanceMeters = Settings->CameraMinDistanceMeters;
-  this->MaxDistanceMeters = Settings->CameraMaxDistanceMeters;
+  this->DistanceUnrealUnits = MetersToUnrealUnits(Settings->CameraDefaultDistanceMeters);
+  this->MinDistanceUnrealUnits = MetersToUnrealUnits(Settings->CameraMinDistanceMeters);
+  this->MaxDistanceUnrealUnits = MetersToUnrealUnits(Settings->CameraMaxDistanceMeters);
   this->OrbitYawDegrees = Settings->CameraDefaultYawDegrees;
   this->OrbitPitchDegrees = Settings->CameraDefaultPitchDegrees;
   this->MinPitchDegrees = Settings->CameraMinPitchDegrees;
   this->MaxPitchDegrees = Settings->CameraMaxPitchDegrees;
-  this->PanSpeedMetersPerSecond = Settings->CameraPanSpeedMetersPerSecond;
-  this->VerticalSpeedMetersPerSecond = Settings->CameraVerticalSpeedMetersPerSecond;
+  this->PanSpeedUnrealUnitsPerSecond = MetersToUnrealUnits(Settings->CameraPanSpeedMetersPerSecond);
+  this->VerticalSpeedUnrealUnitsPerSecond =
+      MetersToUnrealUnits(Settings->CameraVerticalSpeedMetersPerSecond);
   this->RotationSpeedDegreesPerSecond = Settings->CameraRotationSpeedDegreesPerSecond;
-  this->ZoomSpeedMetersPerSecond = Settings->CameraZoomSpeedMetersPerSecond;
+  this->ZoomSpeedUnrealUnitsPerSecond = MetersToUnrealUnits(Settings->CameraZoomSpeedMetersPerSecond);
 }
 
 void AProjectAirDefenseCityCameraPawn::BeginPlay() {
@@ -96,6 +103,13 @@ void AProjectAirDefenseCityCameraPawn::SetupPlayerInputComponent(UInputComponent
         this,
         &AProjectAirDefenseCityCameraPawn::RotateYaw);
   }
+  if (this->RotatePitchAction != nullptr) {
+    EnhancedInputComponent->BindAction(
+        this->RotatePitchAction,
+        ETriggerEvent::Triggered,
+        this,
+        &AProjectAirDefenseCityCameraPawn::RotatePitch);
+  }
   if (this->ZoomAction != nullptr) {
     EnhancedInputComponent->BindAction(
         this->ZoomAction,
@@ -135,13 +149,15 @@ void AProjectAirDefenseCityCameraPawn::FrameFocusPoint(
   const UProjectAirDefenseRuntimeSettings* Settings = GetRuntimeSettings();
   const float VerticalOffsetRatio = Settings != nullptr ? Settings->CameraFocusVerticalOffsetRatio : 0.1f;
   const float DistanceMultiplier = Settings != nullptr ? Settings->CameraFramedDistanceMultiplier : 1.9f;
+  const float SuggestedRadiusUnrealUnits = MetersToUnrealUnits(SuggestedRadiusMeters);
 
-  this->FocusPoint = NewFocusPoint - FVector(0.0f, 0.0f, SuggestedRadiusMeters * VerticalOffsetRatio);
+  this->FocusPoint =
+      NewFocusPoint - FVector(0.0f, 0.0f, SuggestedRadiusUnrealUnits * VerticalOffsetRatio);
   const float FramedDistance = FMath::Clamp(
-      SuggestedRadiusMeters * DistanceMultiplier,
-      this->MinDistanceMeters,
-      this->MaxDistanceMeters);
-  this->DistanceMeters = FMath::Max(this->DistanceMeters, FramedDistance);
+      SuggestedRadiusUnrealUnits * DistanceMultiplier,
+      this->MinDistanceUnrealUnits,
+      this->MaxDistanceUnrealUnits);
+  this->DistanceUnrealUnits = FMath::Max(this->DistanceUnrealUnits, FramedDistance);
   this->UpdateCameraTransform();
 }
 
@@ -173,6 +189,7 @@ void AProjectAirDefenseCityCameraPawn::InitializeInputMappingContext() {
   this->MoveForwardAction = NewObject<UInputAction>(this, TEXT("MoveForwardAction"));
   this->MoveRightAction = NewObject<UInputAction>(this, TEXT("MoveRightAction"));
   this->RotateYawAction = NewObject<UInputAction>(this, TEXT("RotateYawAction"));
+  this->RotatePitchAction = NewObject<UInputAction>(this, TEXT("RotatePitchAction"));
   this->ZoomAction = NewObject<UInputAction>(this, TEXT("ZoomAction"));
   this->RaiseCameraAction = NewObject<UInputAction>(this, TEXT("RaiseCameraAction"));
   this->ResetAction = NewObject<UInputAction>(this, TEXT("ResetAction"));
@@ -180,6 +197,7 @@ void AProjectAirDefenseCityCameraPawn::InitializeInputMappingContext() {
   this->MoveForwardAction->ValueType = EInputActionValueType::Axis1D;
   this->MoveRightAction->ValueType = EInputActionValueType::Axis1D;
   this->RotateYawAction->ValueType = EInputActionValueType::Axis1D;
+  this->RotatePitchAction->ValueType = EInputActionValueType::Axis1D;
   this->ZoomAction->ValueType = EInputActionValueType::Axis1D;
   this->RaiseCameraAction->ValueType = EInputActionValueType::Axis1D;
   this->ResetAction->ValueType = EInputActionValueType::Boolean;
@@ -203,6 +221,11 @@ void AProjectAirDefenseCityCameraPawn::InitializeInputMappingContext() {
   this->InputMappingContext->MapKey(this->RotateYawAction, EKeys::E);
   AddNegatedKey(this->RotateYawAction, EKeys::Q);
 
+  this->InputMappingContext->MapKey(this->RotatePitchAction, EKeys::T);
+  this->InputMappingContext->MapKey(this->RotatePitchAction, EKeys::NumPadEight);
+  AddNegatedKey(this->RotatePitchAction, EKeys::G);
+  AddNegatedKey(this->RotatePitchAction, EKeys::NumPadFive);
+
   this->InputMappingContext->MapKey(this->ZoomAction, EKeys::PageUp);
   this->InputMappingContext->MapKey(this->ZoomAction, EKeys::MouseScrollUp);
   AddNegatedKey(this->ZoomAction, EKeys::PageDown);
@@ -219,7 +242,7 @@ void AProjectAirDefenseCityCameraPawn::InitializeInputMappingContext() {
 
 void AProjectAirDefenseCityCameraPawn::UpdateCameraTransform() {
   const FRotator OrbitRotation(this->OrbitPitchDegrees, this->OrbitYawDegrees, 0.0f);
-  const FVector Offset = OrbitRotation.Vector() * -this->DistanceMeters;
+  const FVector Offset = OrbitRotation.Vector() * -this->DistanceUnrealUnits;
   const FVector CameraLocation = this->FocusPoint + Offset;
 
   this->SetActorLocation(this->FocusPoint);
@@ -235,7 +258,8 @@ void AProjectAirDefenseCityCameraPawn::MoveForward(const FInputActionValue& Valu
 
   const FRotator YawRotation(0.0f, this->OrbitYawDegrees, 0.0f);
   const FVector Forward = FRotationMatrix(YawRotation).GetUnitAxis(EAxis::X);
-  this->FocusPoint += Forward * AxisValue * this->PanSpeedMetersPerSecond * this->GetWorld()->GetDeltaSeconds();
+  this->FocusPoint +=
+      Forward * AxisValue * this->PanSpeedUnrealUnitsPerSecond * this->GetWorld()->GetDeltaSeconds();
 }
 
 void AProjectAirDefenseCityCameraPawn::MoveRight(const FInputActionValue& Value) {
@@ -246,7 +270,8 @@ void AProjectAirDefenseCityCameraPawn::MoveRight(const FInputActionValue& Value)
 
   const FRotator YawRotation(0.0f, this->OrbitYawDegrees, 0.0f);
   const FVector Right = FRotationMatrix(YawRotation).GetUnitAxis(EAxis::Y);
-  this->FocusPoint += Right * AxisValue * this->PanSpeedMetersPerSecond * this->GetWorld()->GetDeltaSeconds();
+  this->FocusPoint +=
+      Right * AxisValue * this->PanSpeedUnrealUnitsPerSecond * this->GetWorld()->GetDeltaSeconds();
 }
 
 void AProjectAirDefenseCityCameraPawn::RotateYaw(const FInputActionValue& Value) {
@@ -258,16 +283,30 @@ void AProjectAirDefenseCityCameraPawn::RotateYaw(const FInputActionValue& Value)
   this->OrbitYawDegrees += AxisValue * this->RotationSpeedDegreesPerSecond * this->GetWorld()->GetDeltaSeconds();
 }
 
+void AProjectAirDefenseCityCameraPawn::RotatePitch(const FInputActionValue& Value) {
+  const float AxisValue = Value.Get<float>();
+  if (FMath::IsNearlyZero(AxisValue)) {
+    return;
+  }
+
+  this->OrbitPitchDegrees = FMath::Clamp(
+      this->OrbitPitchDegrees +
+          AxisValue * this->RotationSpeedDegreesPerSecond * this->GetWorld()->GetDeltaSeconds(),
+      this->MinPitchDegrees,
+      this->MaxPitchDegrees);
+}
+
 void AProjectAirDefenseCityCameraPawn::ZoomCamera(const FInputActionValue& Value) {
   const float AxisValue = Value.Get<float>();
   if (FMath::IsNearlyZero(AxisValue)) {
     return;
   }
 
-  this->DistanceMeters = FMath::Clamp(
-      this->DistanceMeters - AxisValue * this->ZoomSpeedMetersPerSecond * this->GetWorld()->GetDeltaSeconds(),
-      this->MinDistanceMeters,
-      this->MaxDistanceMeters);
+  this->DistanceUnrealUnits = FMath::Clamp(
+      this->DistanceUnrealUnits -
+          AxisValue * this->ZoomSpeedUnrealUnitsPerSecond * this->GetWorld()->GetDeltaSeconds(),
+      this->MinDistanceUnrealUnits,
+      this->MaxDistanceUnrealUnits);
 }
 
 void AProjectAirDefenseCityCameraPawn::RaiseCamera(const FInputActionValue& Value) {
@@ -276,7 +315,8 @@ void AProjectAirDefenseCityCameraPawn::RaiseCamera(const FInputActionValue& Valu
     return;
   }
 
-  this->FocusPoint.Z += AxisValue * this->VerticalSpeedMetersPerSecond * this->GetWorld()->GetDeltaSeconds();
+  this->FocusPoint.Z +=
+      AxisValue * this->VerticalSpeedUnrealUnitsPerSecond * this->GetWorld()->GetDeltaSeconds();
 }
 
 void AProjectAirDefenseCityCameraPawn::ResetCameraAction(const FInputActionValue& Value) {

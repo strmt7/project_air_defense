@@ -6,7 +6,7 @@ namespace {
 constexpr int32 DefaultQualityLevel = 3;
 constexpr int32 MinQualityLevel = 0;
 constexpr int32 MaxQualityLevel = 4;
-constexpr EConsoleVariableFlags GameSettingSetBy = ECVF_SetByGameSetting;
+constexpr EConsoleVariableFlags GameSettingSetBy = ECVF_SetByGameOverride;
 
 void SetConsoleVariableValue(const TCHAR* Name, int32 Value) {
   if (IConsoleVariable* ConsoleVariable = IConsoleManager::Get().FindConsoleVariable(Name)) {

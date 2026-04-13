@@ -36,6 +36,7 @@ private:
   void MoveForward(const FInputActionValue& Value);
   void MoveRight(const FInputActionValue& Value);
   void RotateYaw(const FInputActionValue& Value);
+  void RotatePitch(const FInputActionValue& Value);
   void ZoomCamera(const FInputActionValue& Value);
   void RaiseCamera(const FInputActionValue& Value);
   void ResetCameraAction(const FInputActionValue& Value);
@@ -59,6 +60,9 @@ private:
   UInputAction* RotateYawAction;
 
   UPROPERTY(Transient)
+  UInputAction* RotatePitchAction;
+
+  UPROPERTY(Transient)
   UInputAction* ZoomAction;
 
   UPROPERTY(Transient)
@@ -71,13 +75,13 @@ private:
   FVector FocusPoint;
 
   UPROPERTY(EditAnywhere, Category = "Camera")
-  float DistanceMeters;
+  float DistanceUnrealUnits;
 
   UPROPERTY(EditAnywhere, Category = "Camera")
-  float MinDistanceMeters;
+  float MinDistanceUnrealUnits;
 
   UPROPERTY(EditAnywhere, Category = "Camera")
-  float MaxDistanceMeters;
+  float MaxDistanceUnrealUnits;
 
   UPROPERTY(EditAnywhere, Category = "Camera")
   float OrbitYawDegrees;
@@ -92,14 +96,14 @@ private:
   float MaxPitchDegrees;
 
   UPROPERTY(EditAnywhere, Category = "Camera")
-  float PanSpeedMetersPerSecond;
+  float PanSpeedUnrealUnitsPerSecond;
 
   UPROPERTY(EditAnywhere, Category = "Camera")
-  float VerticalSpeedMetersPerSecond;
+  float VerticalSpeedUnrealUnitsPerSecond;
 
   UPROPERTY(EditAnywhere, Category = "Camera")
   float RotationSpeedDegreesPerSecond;
 
   UPROPERTY(EditAnywhere, Category = "Camera")
-  float ZoomSpeedMetersPerSecond;
+  float ZoomSpeedUnrealUnitsPerSecond;
 };
