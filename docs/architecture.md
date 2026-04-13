@@ -4,11 +4,12 @@
 - `ProjectAirDefenseGameMode`
   Owns bootstrapping of the active UE5 pilot scene, including local 3D Tiles path resolution, Cesium georeference setup, SunSky setup, camera focus framing, and runtime logging.
 - `ProjectAirDefenseCityCameraPawn`
-  Owns the in-game inspection camera, including pan, rotate, zoom, vertical motion, reset, and focus framing around the live district bounds.
+  Owns the in-game inspection camera, including pan, yaw rotation, pitch rotation, zoom, vertical motion, reset, and focus framing around the live district bounds.
+  Stores camera distances and speeds in Unreal units internally even though config authors them in meters. This is required because Cesium focus points arrive in Unreal world space, not raw meters.
 - `ProjectAirDefenseRuntimeSettings`
   Owns project-configurable runtime defaults for lighting, camera pose, camera motion, and local tileset location. These are tuned through config instead of hardcoded rebuild-only constants.
 - `ProjectAirDefenseGameUserSettings`
-  Owns persistent runtime graphics settings such as AA method, AO enablement, motion blur policy, and UE scalability groups. This is the authoritative graphics-settings backend for future menus.
+  Owns persistent runtime graphics settings such as AA method, AO enablement, motion blur policy, and UE scalability groups. These toggles are applied with `ECVF_SetByGameOverride`, and `DefaultEngine.ini` no longer hard-forces AA or AO above the user-settings layer.
 
 ## Scene Bootstrap
 - UE5 boots through `/Engine/Maps/Entry`.
