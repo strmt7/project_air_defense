@@ -99,8 +99,10 @@ def build_manifest(source: CitySource) -> dict[str, Any]:
     if source.preferred_pipeline == "3d_tiles_to_cesium_for_unreal":
         manifest["runtime_strategy"] = {
             "renderer": "Cesium for Unreal",
-            "entry_tileset_relative_path": "data/external/helsinki_kalasatama_3dtiles/tileset.json",
-            "requires_generated_master_tileset": True
+            "entry_tileset_relative_path": "ue5/ProjectAirDefenseUE5/ExternalData/helsinki_kalasatama_3dtiles/tileset.json",
+            "requires_generated_master_tileset": True,
+            "requires_legacy_b3dm_upgrade": True,
+            "upgrade_tool": "CesiumGS/3d-tiles-tools upgrade"
         }
     else:
         manifest["blender_cleanup_steps"] = [

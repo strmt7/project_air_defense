@@ -3,10 +3,15 @@
 #include "Cesium3DTileset.h"
 #include "CesiumGeoreference.h"
 #include "CesiumSunSky.h"
+#include "GameFramework/WorldSettings.h"
+#include "Dom/JsonObject.h"
 #include "HAL/FileManager.h"
 #include "Misc/Paths.h"
+#include "Misc/FileHelper.h"
 #include "ProjectAirDefenseCityCameraPawn.h"
 #include "ProjectAirDefenseRuntimeSettings.h"
+#include "Serialization/JsonReader.h"
+#include "Serialization/JsonSerializer.h"
 
 namespace {
 constexpr const TCHAR* ProjectCategory = TEXT("ProjectAirDefense");
@@ -30,6 +35,10 @@ void AProjectAirDefenseGameMode::BootstrapPilotScene() {
   UWorld* World = this->GetWorld();
   if (World == nullptr) {
     return;
+  }
+
+  if (AWorldSettings* WorldSettings = World->GetWorldSettings()) {
+    WorldSettings->bEnableWorldBoundsChecks = false;
   }
 
   FString TilesetJson = this->FindTilesetJson();
@@ -61,10 +70,7 @@ void AProjectAirDefenseGameMode::BootstrapPilotScene() {
     SunSky = World->SpawnActor<ACesiumSunSky>();
   }
   if (SunSky != nullptr) {
-    SunSky->SolarTime = Settings->SolarTime;
-    SunSky->Month = Settings->Month;
-    SunSky->Day = Settings->Day;
-    SunSky->UpdateSun();
+    this->ApplyPilotSceneLighting(*SunSky);
   }
 
   ACesium3DTileset* Tileset = this->FindExistingActor<ACesium3DTileset>();
@@ -96,20 +102,51 @@ void AProjectAirDefenseGameMode::BootstrapPilotScene() {
   Tileset->SuspendUpdate = false;
   Tileset->RefreshTileset();
 
+  FVector CameraFocusPoint = FVector::ZeroVector;
+  double TilesetRadiusMeters = 0.0;
+  if (!this->TryResolveTilesetFocusPoint(
+          TilesetJson,
+          *Georeference,
+          CameraFocusPoint,
+          TilesetRadiusMeters)) {
+    CameraFocusPoint = FVector::ZeroVector;
+  }
+
   APlayerController* PlayerController = World->GetFirstPlayerController();
   if (PlayerController != nullptr) {
     if (AProjectAirDefenseCityCameraPawn* CameraPawn =
             Cast<AProjectAirDefenseCityCameraPawn>(PlayerController->GetPawn())) {
-      CameraPawn->SetFocusPoint(FVector::ZeroVector);
+      CameraPawn->FrameFocusPoint(
+          CameraFocusPoint,
+          static_cast<float>(TilesetRadiusMeters));
     }
   }
 
   UE_LOG(
       LogTemp,
       Log,
-      TEXT("[%s] Bootstrapped pilot city scene from %s"),
+      TEXT("[%s] Bootstrapped pilot city scene from %s (focus=%s radius=%.2f m)"),
       ProjectCategory,
-      *TilesetJson);
+      *TilesetJson,
+      *CameraFocusPoint.ToString(),
+      TilesetRadiusMeters);
+}
+
+void AProjectAirDefenseGameMode::ApplyPilotSceneLighting(ACesiumSunSky& SunSky) const {
+  const UProjectAirDefenseRuntimeSettings* Settings = GetDefault<UProjectAirDefenseRuntimeSettings>();
+  if (Settings == nullptr) {
+    return;
+  }
+
+  SunSky.TimeZone = Settings->TimeZone;
+  SunSky.SolarTime = Settings->SolarTime;
+  SunSky.Month = Settings->Month;
+  SunSky.Day = Settings->Day;
+  SunSky.Year = Settings->Year;
+  SunSky.UseDaylightSavingTime = Settings->bUseDaylightSavingTime;
+  SunSky.DirectionalLight->SetIntensity(Settings->DirectionalLightIntensityLux);
+  SunSky.SkyLight->SetIntensity(Settings->SkyLightIntensityScale);
+  SunSky.UpdateSun();
 }
 
 FString AProjectAirDefenseGameMode::ResolveRepoRelativePath(const FString& RelativePath) const {
@@ -148,4 +185,67 @@ FString AProjectAirDefenseGameMode::BuildFileUri(const FString& AbsolutePath) co
     NormalizedPath = TEXT("/") + NormalizedPath;
   }
   return TEXT("file://") + NormalizedPath;
+}
+
+bool AProjectAirDefenseGameMode::TryReadTilesetRootBoundingSphere(
+    const FString& TilesetJsonPath,
+    FVector& OutCenterEarthCenteredEarthFixed,
+    double& OutRadiusMeters) const {
+  FString JsonText;
+  if (!FFileHelper::LoadFileToString(JsonText, *TilesetJsonPath)) {
+    return false;
+  }
+
+  TSharedPtr<FJsonObject> TilesetObject;
+  const TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(JsonText);
+  if (!FJsonSerializer::Deserialize(Reader, TilesetObject) || !TilesetObject.IsValid()) {
+    return false;
+  }
+
+  const TSharedPtr<FJsonObject>* RootObject = nullptr;
+  if (!TilesetObject->TryGetObjectField(TEXT("root"), RootObject) ||
+      RootObject == nullptr ||
+      !RootObject->IsValid()) {
+    return false;
+  }
+
+  const TSharedPtr<FJsonObject>* BoundingVolumeObject = nullptr;
+  if (!(*RootObject)->TryGetObjectField(TEXT("boundingVolume"), BoundingVolumeObject) ||
+      BoundingVolumeObject == nullptr ||
+      !BoundingVolumeObject->IsValid()) {
+    return false;
+  }
+
+  const TArray<TSharedPtr<FJsonValue>>* SphereValues = nullptr;
+  if (!(*BoundingVolumeObject)->TryGetArrayField(TEXT("sphere"), SphereValues) ||
+      SphereValues == nullptr ||
+      SphereValues->Num() != 4) {
+    return false;
+  }
+
+  OutCenterEarthCenteredEarthFixed = FVector(
+      static_cast<float>((*SphereValues)[0]->AsNumber()),
+      static_cast<float>((*SphereValues)[1]->AsNumber()),
+      static_cast<float>((*SphereValues)[2]->AsNumber()));
+  OutRadiusMeters = (*SphereValues)[3]->AsNumber();
+  return OutRadiusMeters > 0.0;
+}
+
+bool AProjectAirDefenseGameMode::TryResolveTilesetFocusPoint(
+    const FString& TilesetJsonPath,
+    const ACesiumGeoreference& Georeference,
+    FVector& OutFocusPoint,
+    double& OutRadiusMeters) const {
+  FVector EarthCenteredEarthFixedCenter = FVector::ZeroVector;
+  if (!this->TryReadTilesetRootBoundingSphere(
+          TilesetJsonPath,
+          EarthCenteredEarthFixedCenter,
+          OutRadiusMeters)) {
+    return false;
+  }
+
+  OutFocusPoint =
+      Georeference.TransformEarthCenteredEarthFixedPositionToUnreal(
+          EarthCenteredEarthFixedCenter);
+  return !OutFocusPoint.ContainsNaN();
 }
