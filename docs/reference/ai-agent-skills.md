@@ -9,6 +9,8 @@ These repo-local skills are mandatory guidance surfaces for external agents.
 4. matching skill in `.agents/skills/`
 5. adapter files such as `CLAUDE.md`
 
+Engine rule: Unreal Engine 5 is the only permitted engine for new runtime/editor/tooling work. Existing Android/libGDX skills remain only for migration inventory, behavioral comparison, and asset extraction until removed.
+
 ## Skills
 | Skill | Use when | Outcome |
 | --- | --- | --- |
@@ -26,6 +28,7 @@ These repo-local skills are mandatory guidance surfaces for external agents.
 | `android-3d-air-defense` | modifying gameplay, graphics, UI, Android behavior, or benchmarks | repo-specific game workflow is reused instead of re-derived |
 
 ## Rules
+- Use UE5 planning docs before any new engine decision or city-data ingestion decision.
 - `caveman` is mandatory here by default, not opt-in.
 - Repo-local default maps to `lite` behavior from upstream `v1.5.0`, even though upstream falls back to `full` when `CAVEMAN_DEFAULT_MODE` and config are unset.
 - Upstream `off` mode exists, but this repo does not read env/config state or auto-write mode state.
