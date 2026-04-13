@@ -1,6 +1,6 @@
 {
   "FileVersion": 3,
-  "EngineAssociation": "5.6",
+  "EngineAssociation": "5.7",
   "Category": "Games",
   "Description": "UE5 migration target for Project Air Defense.",
   "Modules": [
@@ -9,5 +9,16 @@
       "Type": "Runtime",
       "LoadingPhase": "Default"
     }
+  ],
+  "Plugins": [
+    {
+      "Name": "CesiumForUnreal",
+      "Enabled": true
+    },
+    {
+      "Name": "EnhancedInput",
+      "Enabled": true
+    }
   ]
 }
+

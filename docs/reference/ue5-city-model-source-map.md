@@ -18,6 +18,7 @@ Compact evidence list for the UE5 city-model plan. Official sources come first. 
 | Source | Type | Why it matters |
 | --- | --- | --- |
 | [Helsinki 3D](https://www.hel.fi/en/decision-making/information-on-helsinki/maps-and-geospatial-data/helsinki-3d) | official city data portal | open 3D mesh and semantic city models exist |
+| [Helsinki Kalasatama 3D Tiles](https://3d.hel.ninja/data/mesh/Kalasatama/Helsinki3D_MESH_Kalasatama_2017_3D_Tiles_ZIP.zip) | official tiles download | direct local UE5 runtime proof path exists |
 | [Helsinki Kalasatama OBJ mesh](https://3d.hel.ninja/data/mesh/Kalasatama/Helsinki3D_MESH_Kalasatama_2017_OBJ_ZIP.zip) | official mesh download | district-sized textured mesh candidate exists now |
 | [Berlin 3D download portal](https://www.businesslocationcenter.de/en/economic-atlas/download-portal) | official city portal | official textured OBJ city mesh downloads exist |
 | [3DBAG OBJ delivery](https://docs.3dbag.nl/en/delivery/obj/) | official dataset docs | open OBJ exports are available |
@@ -25,6 +26,7 @@ Compact evidence list for the UE5 city-model plan. Official sources come first. 
 | [3DBAG web services](https://docs.3dbag.nl/en/delivery/webservices/) | official dataset docs | 3D Tiles and web-service path exists |
 | [3DBAG copyright](https://docs.3dbag.nl/en/copyright/) | official dataset docs | licensing boundary is explicit |
 | [Cesium for Unreal](https://cesium.com/learn/unreal/) | official SDK docs | direct 3D Tiles rendering path inside UE5 |
+| [Cesium for Unreal releases](https://github.com/CesiumGS/cesium-unreal/releases) | official plugin releases | version-pinned local plugin installation path |
 | [Cesium OSM Buildings](https://cesium.com/platform/cesium-ion/content/cesium-osm-buildings/) | official Cesium content page | quick building truth-check layer exists |
 | [ArcGIS Maps SDK for Unreal layers](https://developers.arcgis.com/unreal-engine/layers/) | official SDK docs | supports local or online scene layers, integrated mesh, building layers, and 3D Tiles |
 | [ArcGIS 3D Tiles layers](https://developers.arcgis.com/unreal-engine/layers/data-layers/3d-tiles/) | official SDK docs | explicit 3D Tiles path inside UE5 |

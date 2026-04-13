@@ -12,7 +12,12 @@ public class ProjectAirDefenseUE5 : ModuleRules
                 "Core",
                 "CoreUObject",
                 "Engine",
-                "InputCore"
+                "InputCore",
+                "EnhancedInput",
+                "DeveloperSettings",
+                "Json",
+                "JsonUtilities",
+                "CesiumRuntime"
             });
     }
 }

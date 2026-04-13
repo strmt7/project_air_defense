@@ -18,6 +18,8 @@ class CitySource:
     kind: str
     recommended_area_sqkm: float
     preferred_pipeline: str
+    pilot_slug: str
+    camera_origin: dict[str, float] | None
     notes: tuple[str, ...]
 
     @classmethod
@@ -33,6 +35,8 @@ class CitySource:
             kind=payload["kind"],
             recommended_area_sqkm=float(payload["recommended_area_sqkm"]),
             preferred_pipeline=payload["preferred_pipeline"],
+            pilot_slug=payload.get("pilot_slug", payload["id"]),
+            camera_origin=payload.get("camera_origin"),
             notes=tuple(payload["notes"]),
         )
 
@@ -62,9 +66,9 @@ def build_manifest(source: CitySource) -> dict[str, Any]:
         repo_root()
         / "data"
         / "ue5_city_pilot"
-        / source.id.replace("_mesh", "").replace("_official_city", "")
+        / source.pilot_slug
     )
-    return {
+    manifest = {
         "source_id": source.id,
         "title": source.title,
         "official_page": source.official_page,
@@ -90,12 +94,22 @@ def build_manifest(source: CitySource) -> dict[str, Any]:
                 "reset"
             ]
         },
-        "blender_cleanup_steps": [
+        "notes": list(source.notes),
+    }
+    if source.preferred_pipeline == "3d_tiles_to_cesium_for_unreal":
+        manifest["runtime_strategy"] = {
+            "renderer": "Cesium for Unreal",
+            "entry_tileset_relative_path": "data/external/helsinki_kalasatama_3dtiles/tileset.json",
+            "requires_generated_master_tileset": True
+        }
+    else:
+        manifest["blender_cleanup_steps"] = [
             "recenter district near local origin",
             "split geometry into streamable blocks",
             "separate buildings, terrain, shoreline, and roads into logical collections",
             "remove broken triangles and duplicate faces",
             "preserve the real skyline silhouette"
-        ],
-        "notes": list(source.notes),
-    }
+        ]
+    if source.camera_origin is not None:
+        manifest["camera_origin"] = source.camera_origin
+    return manifest

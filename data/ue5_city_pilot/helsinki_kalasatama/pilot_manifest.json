@@ -1,14 +1,14 @@
 {
-  "source_id": "helsinki_kalasatama_mesh",
-  "title": "Helsinki Kalasatama official mesh",
+  "source_id": "helsinki_kalasatama_3dtiles",
+  "title": "Helsinki Kalasatama official 3D Tiles",
   "official_page": "https://www.hel.fi/en/decision-making/information-on-helsinki/maps-and-geospatial-data/helsinki-3d",
-  "download_url": "https://3d.hel.ninja/data/mesh/Kalasatama/Helsinki3D_MESH_Kalasatama_2017_OBJ_ZIP.zip",
+  "download_url": "https://3d.hel.ninja/data/mesh/Kalasatama/Helsinki3D_MESH_Kalasatama_2017_3D_Tiles_ZIP.zip",
   "license_url": "https://www.hel.fi/en/decision-making/information-on-helsinki/maps-and-geospatial-data/helsinki-3d",
   "license_summary": "Use the official Helsinki 3D terms on the source page before shipping.",
-  "format": "obj_zip",
-  "kind": "official_textured_mesh",
+  "format": "3d_tiles_zip",
+  "kind": "official_geospatial_tileset",
   "target_area_sqkm": 1.0,
-  "preferred_pipeline": "mesh_to_blender_to_ue5",
+  "preferred_pipeline": "3d_tiles_to_cesium_for_unreal",
   "raw_download_root": "data/external",
   "pilot_output_root": "data/ue5_city_pilot/helsinki_kalasatama",
   "ue5_project_root": "ue5/ProjectAirDefenseUE5",
@@ -24,15 +24,18 @@
       "reset"
     ]
   },
-  "blender_cleanup_steps": [
-    "recenter district near local origin",
-    "split geometry into streamable blocks",
-    "separate buildings, terrain, shoreline, and roads into logical collections",
-    "remove broken triangles and duplicate faces",
-    "preserve the real skyline silhouette"
-  ],
   "notes": [
-    "Primary photoreal pilot district.",
-    "Waterfront high-rise district suited to Nanite and World Partition."
-  ]
+    "Primary runtime pilot for a direct UE5 geospatial renderer.",
+    "Use Cesium for Unreal with a generated master tileset entry point."
+  ],
+  "runtime_strategy": {
+    "renderer": "Cesium for Unreal",
+    "entry_tileset_relative_path": "data/external/helsinki_kalasatama_3dtiles/tileset.json",
+    "requires_generated_master_tileset": true
+  },
+  "camera_origin": {
+    "latitude": 60.1875,
+    "longitude": 24.9769,
+    "height_meters": 0.0
+  }
 }

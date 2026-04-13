@@ -46,8 +46,14 @@ Use this path for:
 - scouting candidate districts
 - checking scale, camera, skyline shape, and horizon truth
 - temporary in-editor visualization
+- first-pass runtime proof before a later Nanite shipping bake
 
-Do not treat this as the default shipping path unless licensing, offline behavior, and performance are proven.
+Current repo state:
+
+- the active Helsinki pilot uses this strategy first, with a local official 3D Tiles package, a generated master `tileset.json`, and Cesium for Unreal
+- the later shipping-quality district path still moves toward cleaned mesh assets and UE5-native scene ownership
+
+Do not treat this as the default final shipping path unless licensing, offline behavior, packaging, and performance are proven.
 
 ## Strategy 3: Open Semantic Data -> DCC -> UE5
 
@@ -100,4 +106,4 @@ These links are not the plan. They are the warning label for the plan.
 
 ## Immediate Next Step After This Plan
 
-Select one district-sized pilot source and build a UE5-only ingest plan around that single dataset. Do not resume libGDX city rendering work.
+Keep the current Helsinki pilot truthful with Strategy 2, then graduate the same district into Strategy 1 when the mesh-bake path is ready. Do not resume libGDX city rendering work.
