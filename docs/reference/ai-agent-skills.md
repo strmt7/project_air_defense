@@ -23,12 +23,16 @@ Engine rule: Unreal Engine 5 is the only permitted engine for new runtime/editor
 | `browser-fallback` | a page is JS-heavy or stateful and simple fetch is not enough | browser work stays deterministic and limited |
 | `source-audit` | a web-backed claim or recommendation needs trust weighting | confirmed facts, inference, and gaps stay separate |
 | `compliance-and-rate-limit` | repeated requests or larger-scope collection could create policy or load risk | collection stays cache-aware, paced, and non-evasive |
+| `ue5-city-pipeline` | a real district needs a UE5-native source, manifest, and ingest plan | source choice, preprocessing, and import staging stay deterministic |
+| `ue5-photoreal-city-scene` | the city scene, lighting, materials, or camera policy needs UE5-level visual direction | no flat-card regressions and no fake skyline shortcuts |
 | `android-visual-qa` | emulator navigation, screenshots, OCR, or template-driven tapping on libGDX surfaces | screen verification stops depending on guessed taps |
 | `level-asset-curation` | importing city, structure, terrain, or texture assets | asset sourcing stays legal, documented, and mobile-safe |
 | `android-3d-air-defense` | modifying gameplay, graphics, UI, Android behavior, or benchmarks | repo-specific game workflow is reused instead of re-derived |
 
 ## Rules
 - Use UE5 planning docs before any new engine decision or city-data ingestion decision.
+- Load `ue5-city-pipeline` before changing the pilot source, ingest manifest, or UE5 source catalog.
+- Load `ue5-photoreal-city-scene` before changing camera policy, skyline composition, lighting direction, or photoreal quality targets.
 - `caveman` is mandatory here by default, not opt-in.
 - Repo-local default maps to `lite` behavior from upstream `v1.5.0`, even though upstream falls back to `full` when `CAVEMAN_DEFAULT_MODE` and config are unset.
 - Upstream `off` mode exists, but this repo does not read env/config state or auto-write mode state.

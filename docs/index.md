@@ -6,6 +6,8 @@ Central navigation hub for Project Air Defense documentation. Start here, then l
 
 - `planning/ue5-engine-mandate.md` -- authoritative UE5-only engine rule and world-systems baseline
 - `planning/ue5-city-model-strategies.md` -- ranked city-model acquisition strategies for UE5
+- `planning/ue5-city-pilot-helsinki-kalasatama.md` -- first photoreal district pilot with source, preprocessing, and UE5 ingest contract
+- `planning/ue5-visual-acceptance.md` -- non-negotiable visual and camera acceptance criteria for the UE5 city scene
 - `reference/ue5-city-model-source-map.md` -- official docs, datasets, and forum/community evidence behind the UE5 city plan
 
 ## 2. Architecture And Gameplay

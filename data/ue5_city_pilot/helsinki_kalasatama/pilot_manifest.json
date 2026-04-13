@@ -1,0 +1,38 @@
+{
+  "source_id": "helsinki_kalasatama_mesh",
+  "title": "Helsinki Kalasatama official mesh",
+  "official_page": "https://www.hel.fi/en/decision-making/information-on-helsinki/maps-and-geospatial-data/helsinki-3d",
+  "download_url": "https://3d.hel.ninja/data/mesh/Kalasatama/Helsinki3D_MESH_Kalasatama_2017_OBJ_ZIP.zip",
+  "license_url": "https://www.hel.fi/en/decision-making/information-on-helsinki/maps-and-geospatial-data/helsinki-3d",
+  "license_summary": "Use the official Helsinki 3D terms on the source page before shipping.",
+  "format": "obj_zip",
+  "kind": "official_textured_mesh",
+  "target_area_sqkm": 1.0,
+  "preferred_pipeline": "mesh_to_blender_to_ue5",
+  "raw_download_root": "data/external",
+  "pilot_output_root": "data/ue5_city_pilot/helsinki_kalasatama",
+  "ue5_project_root": "ue5/ProjectAirDefenseUE5",
+  "required_scene_policy": {
+    "engine": "Unreal Engine 5",
+    "nanite": true,
+    "world_partition": true,
+    "static_gameplay_backdrops_allowed": false,
+    "camera_controls_required": [
+      "orbit_or_rotate",
+      "pan",
+      "zoom",
+      "reset"
+    ]
+  },
+  "blender_cleanup_steps": [
+    "recenter district near local origin",
+    "split geometry into streamable blocks",
+    "separate buildings, terrain, shoreline, and roads into logical collections",
+    "remove broken triangles and duplicate faces",
+    "preserve the real skyline silhouette"
+  ],
+  "notes": [
+    "Primary photoreal pilot district.",
+    "Waterfront high-rise district suited to Nanite and World Partition."
+  ]
+}

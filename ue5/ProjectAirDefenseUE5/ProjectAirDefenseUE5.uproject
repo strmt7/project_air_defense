@@ -1,0 +1,13 @@
+{
+  "FileVersion": 3,
+  "EngineAssociation": "5.6",
+  "Category": "Games",
+  "Description": "UE5 migration target for Project Air Defense.",
+  "Modules": [
+    {
+      "Name": "ProjectAirDefenseUE5",
+      "Type": "Runtime",
+      "LoadingPhase": "Default"
+    }
+  ]
+}

@@ -10,3 +10,8 @@ local.properties
 .DS_Store
 __pycache__/
 *.pyc
+data/external/
+ue5/**/Binaries/
+ue5/**/DerivedDataCache/
+ue5/**/Intermediate/
+ue5/**/Saved/
