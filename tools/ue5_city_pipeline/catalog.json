@@ -1,0 +1,52 @@
+{
+  "sources": [
+    {
+      "id": "helsinki_kalasatama_mesh",
+      "title": "Helsinki Kalasatama official mesh",
+      "official_page": "https://www.hel.fi/en/decision-making/information-on-helsinki/maps-and-geospatial-data/helsinki-3d",
+      "download_url": "https://3d.hel.ninja/data/mesh/Kalasatama/Helsinki3D_MESH_Kalasatama_2017_OBJ_ZIP.zip",
+      "license_url": "https://www.hel.fi/en/decision-making/information-on-helsinki/maps-and-geospatial-data/helsinki-3d",
+      "license_summary": "Use the official Helsinki 3D terms on the source page before shipping.",
+      "format": "obj_zip",
+      "kind": "official_textured_mesh",
+      "recommended_area_sqkm": 1.0,
+      "preferred_pipeline": "mesh_to_blender_to_ue5",
+      "notes": [
+        "Primary photoreal pilot district.",
+        "Waterfront high-rise district suited to Nanite and World Partition."
+      ]
+    },
+    {
+      "id": "berlin_official_city_mesh",
+      "title": "Berlin official 3D city model portal",
+      "official_page": "https://www.businesslocationcenter.de/en/economic-atlas/download-portal",
+      "download_url": "https://www.businesslocationcenter.de/en/economic-atlas/download-portal",
+      "license_url": "https://www.businesslocationcenter.de/en/economic-atlas/download-portal",
+      "license_summary": "Verify the portal terms and selected tile package before shipping.",
+      "format": "portal_obj_textures",
+      "kind": "official_textured_mesh",
+      "recommended_area_sqkm": 1.0,
+      "preferred_pipeline": "mesh_to_blender_to_ue5",
+      "notes": [
+        "Strong fallback pilot when Helsinki is unsuitable.",
+        "Use a bounded district, not the full city."
+      ]
+    },
+    {
+      "id": "rotterdam_3dbag_obj",
+      "title": "3DBAG OBJ delivery",
+      "official_page": "https://docs.3dbag.nl/en/delivery/obj/",
+      "download_url": "https://docs.3dbag.nl/en/delivery/obj/",
+      "license_url": "https://docs.3dbag.nl/en/copyright/",
+      "license_summary": "Verify current 3DBAG terms on the copyright page before shipping.",
+      "format": "obj_tiles",
+      "kind": "open_obj_tiles",
+      "recommended_area_sqkm": 1.0,
+      "preferred_pipeline": "obj_tiles_to_blender_to_ue5",
+      "notes": [
+        "Useful when the workflow needs open tiling and geometry control.",
+        "Expect more preprocessing than with an official integrated mesh."
+      ]
+    }
+  ]
+}

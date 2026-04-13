@@ -1,4 +1,4 @@
-# Project Air Defense (Android 3D)
+# Project Air Defense
 
 <!-- BEGIN GENERATED BADGES -->
 [![Android APK](https://img.shields.io/github/actions/workflow/status/strmt7/project_air_defense/android-release-apk.yml?branch=main&label=android-apk)](https://github.com/strmt7/project_air_defense/actions/workflows/android-release-apk.yml)
@@ -7,7 +7,7 @@
 [![caveman](https://img.shields.io/badge/caveman-555?logo=github&labelColor=555)](https://github.com/JuliusBrussee/caveman)
 <!-- END GENERATED BADGES -->
 
-A high-fidelity libGDX + Kotlin Android prototype where you command a Patriot-inspired battery in a living 3D battlespace.
+A repo in transition from a legacy Android/libGDX prototype to a UE5-first air-defense game with real 3D city ingestion, photoreal material targets, and no static gameplay backdrops.
 
 ## AI-Friendly Docs
 - Agent operating guide: `AGENTS.md`
@@ -17,6 +17,10 @@ A high-fidelity libGDX + Kotlin Android prototype where you command a Patriot-in
 - Agent integrations: `docs/reference/ai-agent-integrations.md`
 - Agent web research stack: `docs/reference/ai-agent-web-research-stack.md`
 - Agent upstream sources: `docs/reference/ai-agent-upstream-sources.md`
+- UE5 engine mandate: `docs/planning/ue5-engine-mandate.md`
+- UE5 city sourcing plan: `docs/planning/ue5-city-model-strategies.md`
+- UE5 pilot district: `docs/planning/ue5-city-pilot-helsinki-kalasatama.md`
+- UE5 visual acceptance: `docs/planning/ue5-visual-acceptance.md`
 - Architecture reference: `docs/architecture.md`
 - Release/install behavior: `docs/release-and-install.md`
 - Benchmark suite: `docs/benchmark-suite.md`
@@ -28,17 +32,37 @@ A high-fidelity libGDX + Kotlin Android prototype where you command a Patriot-in
 - Level asset pipeline: `docs/level-asset-pipeline.md`
 - Level asset source map: `docs/level-asset-source-map.md`
 - Runtime asset attribution: `android/assets/ATTRIBUTION.md`
-- Project skill: `skills/android-3d-air-defense/SKILL.md`
+- UE5 city pipeline skill: `.agents/skills/ue5-city-pipeline/SKILL.md`
+- UE5 photoreal scene skill: `.agents/skills/ue5-photoreal-city-scene/SKILL.md`
 
-## Major Gameplay Upgrades
+## Current Direction
+- UE5 is the only permitted engine for new runtime, rendering, tooling, editor, prototype, and shipping work.
+- The Android/libGDX codebase remains in-repo only as migration input and gameplay reference.
+- The first photoreal district pilot is Helsinki Kalasatama using official mesh data and a Blender -> UE5 ingest path.
+- Direct geospatial runtime rendering via Cesium or ArcGIS is allowed for truth-checking and editor validation, not as the default shipping path.
+
+## UE5 Pilot Tooling
+1. Generate the checked-in pilot manifest:
+   `.\scripts\generate-ue5-city-pilot.cmd`
+2. Dry-run the official source download:
+   `.\scripts\download-ue5-city-source.cmd`
+3. Validate the UE5 pipeline:
+   `py -3 .\tools\ue5_city_pipeline\test_ue5_city_pipeline.py`
+4. Open the UE5 scaffold under `ue5\ProjectAirDefenseUE5\`.
+
+## Legacy Android Prototype Snapshot
+These bullets describe the outgoing Android/libGDX prototype that remains in-repo for migration reference.
+
 - **Fire-control loop, not point-and-shoot**: scan -> track table -> prioritize -> salvo engage -> terminal intercept.
 - **Live doctrine tuning**: engagement range, interceptor speed, launch cooldown, radar refresh interval, blast radius, and salvo size are adjustable while fighting.
 - **Mixed raids**: ballistic, cruise-like, decoy, and anti-radiation missile profiles.
 - **Counter-battery pressure**: about 1 in 20 threat missiles is anti-radiation and can directly damage radar / ECS / launcher capacity.
 - **Shared simulation core**: the GUI battle and the headless Monte Carlo runner now use the same missile, interceptor, damage, and wave logic.
 
-## Full 3D Battlespace
-- Textured night skyline backdrop and downscaled night-sky panorama for a more believable urban atmosphere.
+## Legacy Android Visual Snapshot
+These bullets describe the outgoing renderer only. They are not the target UE5 city scene.
+
+- The old Android renderer uses a textured skyline backdrop and night panorama. That path is deprecated and not permitted in the future UE5 gameplay view.
 - Procedural surface materials with diffuse texture detail and roughness response for buildings, roads, metal equipment, debris, and projectiles.
 - Dynamic trails, blasts, camera shake, and persistent damage: buildings darken, lean, collapse in height, and emit debris when hit.
 - Gameplay-first projectile readability: hostile missiles and interceptors are intentionally oversized and color-separated so they stay legible on mobile screens.
@@ -71,6 +95,8 @@ A high-fidelity libGDX + Kotlin Android prototype where you command a Patriot-in
 - Compile / target SDK `36`
 
 ## Local Development
+Android steps below are legacy maintenance and migration-reference only until the UE5 runtime replaces them.
+
 1. Open the project in the latest stable Android Studio.
 2. Make sure Java 21 and Android SDK 36 are installed.
 3. Sync Gradle.
@@ -115,6 +141,7 @@ Production signing variables can be set in `~/.gradle/gradle.properties`, CI sec
 
 ## Notes
 - This is still a gameplay prototype, not a military simulator.
+- Static background images are not allowed in the gameplay battlespace going forward.
 - The current renderer targets a high-quality mobile approximation of premium night lighting; it does not use true hardware ray tracing.
 - Waterfront building placement and radar orientation are now validated in tests so the city stays inland and the radar reads top-down toward the horizon.
 - Android is intentionally wide-only. `AndroidLauncher` stays on `sensorLandscape`, and the manifest carries a targeted `DiscouragedApi` lint suppression on that activity because the game is not intended to support portrait operation.

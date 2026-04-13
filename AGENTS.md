@@ -33,6 +33,9 @@ Do not broad-read the repo on first pass.
 
 ## Repository map
 - `docs/planning/ue5-engine-mandate.md`, `docs/planning/ue5-city-model-strategies.md`, and `docs/reference/ue5-city-model-source-map.md`: active engine and city-data planning surface
+- `docs/planning/ue5-city-pilot-helsinki-kalasatama.md` and `docs/planning/ue5-visual-acceptance.md`: active photoreal pilot and visual acceptance criteria
+- `ue5/ProjectAirDefenseUE5/`: active UE5 migration scaffold
+- `tools/ue5_city_pipeline/` and `data/ue5_city_pilot/`: deterministic source catalog, ingest manifest generation, and pilot outputs
 - `core/src/main/kotlin/com/airdefense/game/StartScreen.kt`: menu flow and touch targets
 - `core/src/main/kotlin/com/airdefense/game/BattleScreen.kt`: battle composition root for the 3D scene, HUD, and collaborators
 - `core/src/main/kotlin/com/airdefense/game/BattleSimulation.kt` and `BattleLogic.kt`: shared simulation core and pure gameplay math
@@ -45,6 +48,8 @@ Do not broad-read the repo on first pass.
 
 ## Verification minimum
 - `./gradlew ktlintCheck`, `./gradlew :android:testDebugUnitTest`, `./gradlew :core:test`, `./gradlew :core:runBattleMonteCarlo -Pruns=300 -Pwaves=1 -Pseconds=48 -Pstep=0.05`, `./gradlew :android:installDebug`, `python3 tools/update_readme_badges.py --check`
+- `python3 tools/ue5_city_pipeline/test_ue5_city_pipeline.py`
+- `python3 tools/ue5_city_pipeline/generate_import_manifest.py --source helsinki_kalasatama_mesh --output data/ue5_city_pilot/helsinki_kalasatama/pilot_manifest.json`
 - Android screen-flow proof requires one menu screenshot + OCR, one tap-proof JSON, one post-tap screenshot + OCR, plus logcat and crash buffer.
 - The trusted emulator lane is documented in `docs/android-visual-qa.md`: Android 15 / Pixel 9 Pro, landscape only, `adb devices` must show `device`, and `adb shell getprop sys.boot_completed` must return `1`.
 
