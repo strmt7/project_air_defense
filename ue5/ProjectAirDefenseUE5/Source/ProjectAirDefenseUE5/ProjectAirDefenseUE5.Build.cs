@@ -17,7 +17,10 @@ public class ProjectAirDefenseUE5 : ModuleRules
                 "DeveloperSettings",
                 "Json",
                 "JsonUtilities",
-                "CesiumRuntime"
+                "CesiumRuntime",
+                "UMG",
+                "Slate",
+                "SlateCore"
             });
     }
 }

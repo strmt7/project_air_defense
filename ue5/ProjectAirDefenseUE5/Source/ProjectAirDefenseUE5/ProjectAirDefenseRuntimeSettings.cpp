@@ -56,7 +56,7 @@ UProjectAirDefenseRuntimeSettings::UProjectAirDefenseRuntimeSettings() {
   this->MaximumCachedBytes = 4LL * 1024LL * 1024LL * 1024LL;
   this->MaximumSimultaneousTileLoads = 96;
   this->LoadingDescendantLimit = 192;
-  this->bAutoStartFirstWave = true;
+  this->bAutoStartFirstWave = false;
   this->AutoStartFirstWaveDelaySeconds = 1.6;
   this->SimulationFixedStepSeconds = 0.05;
   this->DistrictHalfExtentMeters = 1600.0;

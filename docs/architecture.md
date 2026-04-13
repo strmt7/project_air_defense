@@ -14,10 +14,14 @@
   Owns the deterministic air-defense simulation ported from the legacy runtime: hostile launch profiles, wave accounting, doctrine behavior, interceptor solve, fuse checks, and city-damage outcomes.
 - `ProjectAirDefenseBattleManager`
   Owns the live gameplay bridge between the deterministic simulation and the active city scene. It ticks the simulation, exposes runtime snapshots to the HUD, and applies graphics-setting changes through `ProjectAirDefenseGameUserSettings`.
-- `ProjectAirDefenseBattleHud`
-  Owns the player-facing battle HUD. The visible surface is landscape-smartphone-first: compact top corner segments, three bottom action buttons, and a floating systems drawer for touch controls.
 - `ProjectAirDefensePlayerController`
-  Owns systems-drawer visibility and the hidden debug-only keyboard fallback. Keyboard bindings remain available for verification and editor debugging, but are not part of the player-facing UI contract.
+  Owns menu-to-battle state, widget visibility, systems-drawer visibility, and the hidden debug-only keyboard fallback. Keyboard bindings remain available for verification and editor debugging, but are not part of the player-facing UI contract.
+- `ProjectAirDefenseMainMenuWidget`
+  Owns the active player-facing front-end menu surface: one compact touch-first action card, render summary, and city-source summary without blocking most of the view.
+- `ProjectAirDefenseBattleWidget`
+  Owns the active player-facing battle HUD: compact top corner status cards, a bottom-left radar cluster, bottom-right doctrine and wave actions, and a floating systems drawer for touch controls.
+- `ProjectAirDefenseRadarWidget`
+  Owns the touch-safe radar surface fed by `ProjectAirDefenseBattleManager::BuildRadarSnapshot()`.
 
 ## Scene Bootstrap
 - UE5 boots through `/Engine/Maps/Entry`.
@@ -58,7 +62,10 @@
   Builds one packaged runtime and removes duplicate `Saved/StagedBuilds` after archiving.
 - Packaged runtime capture:
   `scripts/capture-ue5-runtime-screenshot.ps1 -Exe packaged/Win64/ProjectAirDefenseUE5.exe`
-  Supports battle-frame proof and systems-drawer proof through serial launches.
+  Supports battle-frame proof and systems-drawer proof.
+- Packaged mobile UI proof set:
+  `scripts/run-ue5-mobile-ui-proof.ps1`
+  Captures packaged menu, battle, and systems surfaces serially and prevents overlapping verification launches against the same packaged build.
 
 ## Storage Policy
 - Keep one raw upstream archive.

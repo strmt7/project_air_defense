@@ -1,11 +1,16 @@
 #include "ProjectAirDefensePlayerController.h"
 
+#include "Containers/Ticker.h"
 #include "EngineUtils.h"
 #include "HighResScreenshot.h"
 #include "InputCoreTypes.h"
 #include "Kismet/KismetSystemLibrary.h"
+#include "Misc/Parse.h"
 #include "Misc/Paths.h"
 #include "ProjectAirDefenseBattleManager.h"
+#include "ProjectAirDefenseBattleWidget.h"
+#include "ProjectAirDefenseCityCameraPawn.h"
+#include "ProjectAirDefenseMainMenuWidget.h"
 
 namespace {
 FString VerificationScreenshotPath() {
@@ -23,6 +28,13 @@ AProjectAirDefensePlayerController::AProjectAirDefensePlayerController() {
   this->bEnableTouchEvents = true;
   this->bEnableMouseOverEvents = false;
   this->bShowMouseCursor = false;
+}
+
+void AProjectAirDefensePlayerController::BeginPlay() {
+  Super::BeginPlay();
+  this->BuildWidgets();
+  this->RefreshVisibleUi();
+  this->ApplyVerificationLaunchFlags();
 }
 
 void AProjectAirDefensePlayerController::SetupInputComponent() {
@@ -47,15 +59,6 @@ void AProjectAirDefensePlayerController::SetupInputComponent() {
   this->InputComponent->BindKey(EKeys::F12, IE_Pressed, this, &AProjectAirDefensePlayerController::HandleRequestGracefulQuit);
 }
 
-bool AProjectAirDefensePlayerController::IsSystemsMenuVisible() const {
-  return this->bSystemsMenuVisible;
-}
-
-void AProjectAirDefensePlayerController::SetSystemsMenuVisible(bool bVisible) {
-  this->bSystemsMenuVisible = bVisible;
-  this->ApplyInteractionMode();
-}
-
 AProjectAirDefenseBattleManager* AProjectAirDefensePlayerController::FindBattleManager() const {
   UWorld* World = this->GetWorld();
   if (World == nullptr) {
@@ -67,79 +70,295 @@ AProjectAirDefenseBattleManager* AProjectAirDefensePlayerController::FindBattleM
   return nullptr;
 }
 
-void AProjectAirDefensePlayerController::HandleToggleSystemsMenu() {
-  this->SetSystemsMenuVisible(!this->bSystemsMenuVisible);
+AProjectAirDefenseCityCameraPawn* AProjectAirDefensePlayerController::FindCameraPawn() const {
+  return Cast<AProjectAirDefenseCityCameraPawn>(this->GetPawn());
 }
 
-void AProjectAirDefensePlayerController::HandlePrimaryMenuAction() {
-  if (this->bSystemsMenuVisible) {
-    this->SetSystemsMenuVisible(false);
-  }
-  if (AProjectAirDefenseBattleManager* BattleManager = this->FindBattleManager()) {
-    if (!BattleManager->BuildRuntimeSnapshot().bWaveInProgress) {
-      BattleManager->StartNextWave();
-    }
+bool AProjectAirDefensePlayerController::IsSystemsMenuVisible() const {
+  return this->bSystemsMenuVisible;
+}
+
+bool AProjectAirDefensePlayerController::IsBattleStarted() const {
+  return this->bBattleStarted;
+}
+
+void AProjectAirDefensePlayerController::SetSystemsMenuVisible(bool bVisible) {
+  this->bSystemsMenuVisible = this->bBattleStarted && bVisible;
+  this->RefreshVisibleUi();
+}
+
+void AProjectAirDefensePlayerController::StartBattleExperience(
+    bool bStartWaveImmediately,
+    bool bOpenSystemsImmediately) {
+  this->bBattleStarted = true;
+  this->bSystemsMenuVisible = bOpenSystemsImmediately;
+  this->RefreshVisibleUi();
+
+  if (bStartWaveImmediately) {
+    this->RequestStartWave();
   }
 }
 
-void AProjectAirDefensePlayerController::HandleStartWave() {
+void AProjectAirDefensePlayerController::RequestStartWave() {
   if (AProjectAirDefenseBattleManager* BattleManager = this->FindBattleManager()) {
     BattleManager->StartNextWave();
   }
 }
 
-void AProjectAirDefensePlayerController::HandleCycleDoctrine() {
+void AProjectAirDefensePlayerController::RequestCycleDoctrine() {
   if (AProjectAirDefenseBattleManager* BattleManager = this->FindBattleManager()) {
     BattleManager->CycleDoctrine();
   }
 }
 
-void AProjectAirDefensePlayerController::HandleIncreaseQuality() {
+void AProjectAirDefensePlayerController::RequestIncreaseQuality() {
   if (AProjectAirDefenseBattleManager* BattleManager = this->FindBattleManager()) {
     BattleManager->IncreaseOverallQuality();
   }
 }
 
-void AProjectAirDefensePlayerController::HandleDecreaseQuality() {
+void AProjectAirDefensePlayerController::RequestDecreaseQuality() {
   if (AProjectAirDefenseBattleManager* BattleManager = this->FindBattleManager()) {
     BattleManager->DecreaseOverallQuality();
   }
 }
 
-void AProjectAirDefensePlayerController::HandleCycleAntiAliasing() {
+void AProjectAirDefensePlayerController::RequestCycleAntiAliasing() {
   if (AProjectAirDefenseBattleManager* BattleManager = this->FindBattleManager()) {
     BattleManager->CycleAntiAliasingMethod();
   }
 }
 
-void AProjectAirDefensePlayerController::HandleToggleAmbientOcclusion() {
+void AProjectAirDefensePlayerController::RequestToggleAmbientOcclusion() {
   if (AProjectAirDefenseBattleManager* BattleManager = this->FindBattleManager()) {
     BattleManager->ToggleAmbientOcclusion();
   }
 }
 
-void AProjectAirDefensePlayerController::HandleToggleMotionBlur() {
+void AProjectAirDefensePlayerController::RequestToggleMotionBlur() {
   if (AProjectAirDefenseBattleManager* BattleManager = this->FindBattleManager()) {
     BattleManager->ToggleMotionBlur();
   }
 }
 
-void AProjectAirDefensePlayerController::HandleCycleShadowQuality() {
+void AProjectAirDefensePlayerController::RequestCycleShadowQuality() {
   if (AProjectAirDefenseBattleManager* BattleManager = this->FindBattleManager()) {
     BattleManager->CycleShadowQuality();
   }
 }
 
-void AProjectAirDefensePlayerController::HandleCycleReflectionQuality() {
+void AProjectAirDefensePlayerController::RequestCycleReflectionQuality() {
   if (AProjectAirDefenseBattleManager* BattleManager = this->FindBattleManager()) {
     BattleManager->CycleReflectionQuality();
   }
 }
 
-void AProjectAirDefensePlayerController::HandleCyclePostProcessingQuality() {
+void AProjectAirDefensePlayerController::RequestCyclePostProcessingQuality() {
   if (AProjectAirDefenseBattleManager* BattleManager = this->FindBattleManager()) {
     BattleManager->CyclePostProcessingQuality();
   }
+}
+
+void AProjectAirDefensePlayerController::RequestCameraPan(float ForwardMeters, float RightMeters) {
+  if (AProjectAirDefenseCityCameraPawn* CameraPawn = this->FindCameraPawn()) {
+    CameraPawn->StepPan(ForwardMeters, RightMeters);
+  }
+}
+
+void AProjectAirDefensePlayerController::RequestCameraYaw(float DeltaDegrees) {
+  if (AProjectAirDefenseCityCameraPawn* CameraPawn = this->FindCameraPawn()) {
+    CameraPawn->StepYaw(DeltaDegrees);
+  }
+}
+
+void AProjectAirDefensePlayerController::RequestCameraPitch(float DeltaDegrees) {
+  if (AProjectAirDefenseCityCameraPawn* CameraPawn = this->FindCameraPawn()) {
+    CameraPawn->StepPitch(DeltaDegrees);
+  }
+}
+
+void AProjectAirDefensePlayerController::RequestCameraZoom(float DeltaMeters) {
+  if (AProjectAirDefenseCityCameraPawn* CameraPawn = this->FindCameraPawn()) {
+    CameraPawn->StepZoom(DeltaMeters);
+  }
+}
+
+void AProjectAirDefensePlayerController::RequestCameraAltitude(float DeltaMeters) {
+  if (AProjectAirDefenseCityCameraPawn* CameraPawn = this->FindCameraPawn()) {
+    CameraPawn->StepAltitude(DeltaMeters);
+  }
+}
+
+void AProjectAirDefensePlayerController::RequestCameraReset() {
+  if (AProjectAirDefenseCityCameraPawn* CameraPawn = this->FindCameraPawn()) {
+    CameraPawn->ResetCamera();
+  }
+}
+
+void AProjectAirDefensePlayerController::BuildWidgets() {
+  if (!this->IsLocalController()) {
+    return;
+  }
+
+  if (this->MainMenuWidget == nullptr) {
+    this->MainMenuWidget =
+        CreateWidget<UProjectAirDefenseMainMenuWidget>(this, UProjectAirDefenseMainMenuWidget::StaticClass());
+    if (this->MainMenuWidget != nullptr) {
+      this->MainMenuWidget->BindController(this);
+      this->MainMenuWidget->AddToViewport(200);
+    }
+  }
+
+  if (this->BattleWidget == nullptr) {
+    this->BattleWidget =
+        CreateWidget<UProjectAirDefenseBattleWidget>(this, UProjectAirDefenseBattleWidget::StaticClass());
+    if (this->BattleWidget != nullptr) {
+      this->BattleWidget->BindController(this);
+      this->BattleWidget->AddToViewport(150);
+    }
+  }
+}
+
+void AProjectAirDefensePlayerController::RefreshVisibleUi() {
+  if (this->MainMenuWidget != nullptr) {
+    this->MainMenuWidget->SetVisibility(this->bBattleStarted ? ESlateVisibility::Collapsed : ESlateVisibility::Visible);
+    this->MainMenuWidget->RefreshGraphicsSummary();
+  }
+  if (this->BattleWidget != nullptr) {
+    this->BattleWidget->SetVisibility(this->bBattleStarted ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
+    if (this->bBattleStarted) {
+      this->BattleWidget->RefreshFromRuntime();
+    }
+  }
+  this->ApplyInteractionMode();
+}
+
+void AProjectAirDefensePlayerController::ApplyVerificationLaunchFlags() {
+  if (this->bVerificationFlagsApplied) {
+    return;
+  }
+  this->bVerificationFlagsApplied = true;
+
+  const bool bAutoStartBattle =
+      FParse::Param(FCommandLine::Get(), TEXT("ProjectAirDefenseAutoStartBattle"));
+  const bool bShowSystemsMenu =
+      FParse::Param(FCommandLine::Get(), TEXT("ProjectAirDefenseShowSystemsMenu"));
+  if (!bAutoStartBattle && !bShowSystemsMenu) {
+    return;
+  }
+
+  FTSTicker::GetCoreTicker().AddTicker(
+      FTickerDelegate::CreateWeakLambda(this, [this, bAutoStartBattle, bShowSystemsMenu](float) {
+        this->StartBattleExperience(!bShowSystemsMenu && bAutoStartBattle, bShowSystemsMenu);
+        return false;
+      }),
+      0.25f);
+}
+
+void AProjectAirDefensePlayerController::HandleToggleSystemsMenu() {
+  if (!this->bBattleStarted) {
+    this->StartBattleExperience(false, true);
+    return;
+  }
+  this->SetSystemsMenuVisible(!this->bSystemsMenuVisible);
+}
+
+void AProjectAirDefensePlayerController::HandlePrimaryMenuAction() {
+  if (!this->bBattleStarted) {
+    this->StartBattleExperience(true, false);
+    return;
+  }
+
+  if (this->bSystemsMenuVisible) {
+    this->SetSystemsMenuVisible(false);
+    return;
+  }
+
+  if (AProjectAirDefenseBattleManager* BattleManager = this->FindBattleManager()) {
+    if (!BattleManager->BuildRuntimeSnapshot().bWaveInProgress) {
+      this->RequestStartWave();
+    }
+  }
+}
+
+void AProjectAirDefensePlayerController::HandleStartWave() {
+  if (!this->bBattleStarted) {
+    this->StartBattleExperience(true, false);
+    return;
+  }
+  this->RequestStartWave();
+}
+
+void AProjectAirDefensePlayerController::HandleCycleDoctrine() {
+  if (!this->bBattleStarted) {
+    this->StartBattleExperience(false, true);
+    return;
+  }
+  this->RequestCycleDoctrine();
+}
+
+void AProjectAirDefensePlayerController::HandleIncreaseQuality() {
+  if (!this->bBattleStarted) {
+    this->StartBattleExperience(false, true);
+    return;
+  }
+  this->RequestIncreaseQuality();
+}
+
+void AProjectAirDefensePlayerController::HandleDecreaseQuality() {
+  if (!this->bBattleStarted) {
+    this->StartBattleExperience(false, true);
+    return;
+  }
+  this->RequestDecreaseQuality();
+}
+
+void AProjectAirDefensePlayerController::HandleCycleAntiAliasing() {
+  if (!this->bBattleStarted) {
+    this->StartBattleExperience(false, true);
+    return;
+  }
+  this->RequestCycleAntiAliasing();
+}
+
+void AProjectAirDefensePlayerController::HandleToggleAmbientOcclusion() {
+  if (!this->bBattleStarted) {
+    this->StartBattleExperience(false, true);
+    return;
+  }
+  this->RequestToggleAmbientOcclusion();
+}
+
+void AProjectAirDefensePlayerController::HandleToggleMotionBlur() {
+  if (!this->bBattleStarted) {
+    this->StartBattleExperience(false, true);
+    return;
+  }
+  this->RequestToggleMotionBlur();
+}
+
+void AProjectAirDefensePlayerController::HandleCycleShadowQuality() {
+  if (!this->bBattleStarted) {
+    this->StartBattleExperience(false, true);
+    return;
+  }
+  this->RequestCycleShadowQuality();
+}
+
+void AProjectAirDefensePlayerController::HandleCycleReflectionQuality() {
+  if (!this->bBattleStarted) {
+    this->StartBattleExperience(false, true);
+    return;
+  }
+  this->RequestCycleReflectionQuality();
+}
+
+void AProjectAirDefensePlayerController::HandleCyclePostProcessingQuality() {
+  if (!this->bBattleStarted) {
+    this->StartBattleExperience(false, true);
+    return;
+  }
+  this->RequestCyclePostProcessingQuality();
 }
 
 void AProjectAirDefensePlayerController::HandleCaptureVerificationScreenshot() {
@@ -159,16 +378,17 @@ void AProjectAirDefensePlayerController::HandleRequestGracefulQuit() {
 }
 
 void AProjectAirDefensePlayerController::ApplyInteractionMode() {
-  if (this->bSystemsMenuVisible) {
-    FInputModeGameAndUI InputMode;
-    InputMode.SetHideCursorDuringCapture(false);
+  if (!this->bBattleStarted) {
+    FInputModeUIOnly InputMode;
     InputMode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
     this->SetInputMode(InputMode);
     this->bShowMouseCursor = true;
     return;
   }
 
-  FInputModeGameOnly InputMode;
+  FInputModeGameAndUI InputMode;
+  InputMode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
+  InputMode.SetHideCursorDuringCapture(!this->bSystemsMenuVisible);
   this->SetInputMode(InputMode);
-  this->bShowMouseCursor = false;
+  this->bShowMouseCursor = this->bSystemsMenuVisible;
 }

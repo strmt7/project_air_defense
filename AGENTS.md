@@ -27,7 +27,9 @@ Do not broad-read the repo on first pass.
 - Current Android/libGDX runtime files are legacy migration input only. For real-city work, load `open-gis-city-extraction` before dataset pull decisions and follow `docs/planning/ue5-city-model-strategies.md`.
 - The active UE5 city pilot uses the local Helsinki Kalasatama 3D Tiles dataset plus Cesium for Unreal as the truth-check runtime; the OBJ mesh path is the later photoreal bake path.
 - Player-facing UE5 UI is smartphone-first and landscape-only. Visible HUD, menu, and settings surfaces must be touch-first, safe-zone-aware, and keep the playfield clear. Hidden keyboard bindings may remain only for verification or debugging and must not appear in player-facing copy.
+- Load `ue5-mobile-gameplay` before changing menu-to-battle flow, touch gameplay routing, hidden debug bindings, or deterministic gameplay verification.
 - Load `ue5-mobile-ui` before changing player-facing HUD, menu, pause, settings, or touch-control surfaces.
+- Load `ue5-commonui-menu-systems` before changing a major front-end menu stack, options flow, or routed menu/settings architecture.
 - Load `ue5-mobile-rendering` before exposing graphics options or claiming mobile rendering support for AA, AO, reflections, shadows, or post-process.
 - Prefer focused tests before broad runtime checks. Pin versions intentionally; do not move dependencies or workflows to floating `latest`.
 - For UE5 packaging, keep one archived build only. `Saved/StagedBuilds` is duplicate scratch output and must be removed after a successful archive unless explicitly needed.

@@ -10,12 +10,12 @@
 #include "Engine/ExponentialHeightFog.h"
 #include "Components/ExponentialHeightFogComponent.h"
 #include "Engine/PostProcessVolume.h"
+#include "GameFramework/HUD.h"
 #include "GameFramework/WorldSettings.h"
 #include "Dom/JsonObject.h"
 #include "Misc/Paths.h"
 #include "Misc/Parse.h"
 #include "Misc/FileHelper.h"
-#include "ProjectAirDefenseBattleHud.h"
 #include "ProjectAirDefenseBattleManager.h"
 #include "ProjectAirDefenseCityCameraPawn.h"
 #include "ProjectAirDefensePlayerController.h"
@@ -30,7 +30,7 @@ constexpr const TCHAR* ProjectCategory = TEXT("ProjectAirDefense");
 AProjectAirDefenseGameMode::AProjectAirDefenseGameMode() {
   this->DefaultPawnClass = AProjectAirDefenseCityCameraPawn::StaticClass();
   this->PlayerControllerClass = AProjectAirDefensePlayerController::StaticClass();
-  this->HUDClass = AProjectAirDefenseBattleHud::StaticClass();
+  this->HUDClass = AHUD::StaticClass();
 }
 
 void AProjectAirDefenseGameMode::BeginPlay() {
@@ -172,8 +172,6 @@ void AProjectAirDefenseGameMode::ConfigureVerificationCapture() {
       DelaySeconds);
   DelaySeconds = FMath::Max(DelaySeconds, 0.0);
 
-  const bool bShowSystemsMenu =
-      FParse::Param(FCommandLine::Get(), TEXT("ProjectAirDefenseShowSystemsMenu"));
   const bool bAutoQuitAfterVerification =
       FParse::Param(FCommandLine::Get(), TEXT("ProjectAirDefenseAutoQuitAfterVerification"));
   const FString AbsoluteVerificationPath =
@@ -181,11 +179,6 @@ void AProjectAirDefenseGameMode::ConfigureVerificationCapture() {
   IFileManager::Get().MakeDirectory(
       *FPaths::GetPath(AbsoluteVerificationPath),
       true);
-
-  if (AProjectAirDefensePlayerController* PlayerController =
-          Cast<AProjectAirDefensePlayerController>(World->GetFirstPlayerController())) {
-    PlayerController->SetSystemsMenuVisible(bShowSystemsMenu);
-  }
 
   FTimerDelegate ScreenshotDelegate;
   ScreenshotDelegate.BindLambda([this, AbsoluteVerificationPath, bAutoQuitAfterVerification]() {
