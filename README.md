@@ -61,9 +61,11 @@ A repo in transition from a legacy Android/libGDX prototype to a UE5-first air-d
    `.\scripts\package-ue5-runtime.cmd`
 9. Capture the packaged runtime:
    `.\scripts\capture-ue5-runtime-screenshot.cmd -Exe packaged/Win64/ProjectAirDefenseUE5.exe`
-10. Capture the editor-game runtime without repackaging:
+10. Capture the packaged menu, battle, and systems states serially:
+   `.\scripts\run-ue5-mobile-ui-proof.cmd`
+11. Capture the editor-game runtime without repackaging:
    `.\scripts\capture-ue5-editor-runtime-screenshot.cmd`
-11. Open the UE5 scaffold under `ue5\ProjectAirDefenseUE5\`.
+12. Open the UE5 scaffold under `ue5\ProjectAirDefenseUE5\`.
 
 ## Verified UE5 Toolchain
 - Unreal Engine `5.7`
@@ -172,6 +174,7 @@ Production signing variables can be set in `~/.gradle/gradle.properties`, CI sec
 - The official Helsinki 3D Tiles package requires an explicit Cesium `3d-tiles-tools upgrade` pass before packaged runtime use because the upstream district payload contains legacy `b3dm` content.
 - The upgraded runtime path keeps one canonical raw archive under `data/external/downloads/` and one active runtime dataset under `data/external/helsinki_kalasatama_3dtiles/`. Do not keep a long-lived duplicate legacy backup once the upgraded runtime is verified.
 - `.\scripts\package-ue5-runtime.ps1` removes `ue5/ProjectAirDefenseUE5/Saved/StagedBuilds` after a successful archive by default because it is a duplicate of the packaged build.
+- `.\scripts\run-ue5-mobile-ui-proof.ps1` is the trusted packaged UI proof lane because it runs menu, battle, and systems captures serially under a per-build mutex. Do not launch parallel packaged captures against the same build.
 - `.\scripts\capture-ue5-editor-runtime-screenshot.ps1` is the low-waste iteration lane. Use editor-game capture first; repackage only after a verified scene or runtime change worth shipping.
 - The current pilot uses the native UE5/Cesium exposure path. Do not force a global unbound post-process exposure override unless a measured regression proves the native path is insufficient.
 - The current renderer targets a high-quality mobile approximation of premium night lighting; it does not use true hardware ray tracing.

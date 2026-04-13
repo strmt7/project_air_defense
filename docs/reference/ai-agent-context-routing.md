@@ -22,7 +22,9 @@ UE5-only rule: use Unreal Engine 5 planning docs for all new engine/runtime work
 | --- | --- |
 | UE5 engine migration, city sourcing, geospatial pipeline | `docs/planning/ue5-engine-mandate.md`, `docs/planning/ue5-city-model-strategies.md`, `docs/reference/ue5-city-model-source-map.md` |
 | UE5 photoreal city pilot or camera inspection surface | `docs/planning/ue5-city-pilot-helsinki-kalasatama.md`, `docs/planning/ue5-visual-acceptance.md`, `ue5/ProjectAirDefenseUE5/README.md` |
+| UE5 mobile gameplay flow, touch state, radar, battle start, or deterministic verification | `docs/reference/ue5-mobile-agent-skill-sources.md`, `.agents/skills/ue5-mobile-gameplay/SKILL.md`, `docs/planning/ue5-gameplay-migration-matrix.md` |
 | UE5 mobile HUD, menus, settings, or touch ergonomics | `docs/reference/ue5-mobile-agent-skill-sources.md`, `.agents/skills/ue5-mobile-ui/SKILL.md`, nearest UE5 UI code file |
+| UE5 front-end menu stack, options flow, or CommonUI-routing decision | `docs/reference/ue5-mobile-agent-skill-sources.md`, `.agents/skills/ue5-commonui-menu-systems/SKILL.md`, nearest UE5 UI code file |
 | UE5 mobile rendering, graphics settings, AA, AO, reflections, or device-tier policy | `docs/reference/ue5-mobile-agent-skill-sources.md`, `.agents/skills/ue5-mobile-rendering/SKILL.md`, current runtime settings or user-settings code |
 | Gameplay, balance, radar, interception | `docs/architecture.md`, `core/src/main/kotlin/com/airdefense/game/BattleSimulation.kt`, nearest `core/src/test` module |
 | 3D graphics, lighting, VFX, imported models | `docs/visual-benchmark-tel-aviv-night.md`, `docs/level-asset-pipeline.md`, `BattleScreen.kt`, `android/assets/ATTRIBUTION.md` |

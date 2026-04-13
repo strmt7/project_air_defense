@@ -238,6 +238,48 @@ FProjectAirDefenseRuntimeSnapshot AProjectAirDefenseBattleManager::BuildRuntimeS
                                     : FProjectAirDefenseRuntimeSnapshot{};
 }
 
+FProjectAirDefenseRadarSnapshot AProjectAirDefenseBattleManager::BuildRadarSnapshot() const {
+  FProjectAirDefenseRadarSnapshot Snapshot;
+  Snapshot.ExtentMeters = FMath::Max(this->TilesetRadiusMeters * 0.5, 1.0);
+
+  auto UpdateExtent = [&Snapshot](const FVector2d& PositionMeters, double RadiusMeters = 0.0) {
+    Snapshot.ExtentMeters =
+        FMath::Max(Snapshot.ExtentMeters, PositionMeters.Length() + RadiusMeters + 180.0);
+  };
+
+  for (const FProjectAirDefenseDistrictCell& DistrictCell : this->DistrictCells) {
+    FProjectAirDefenseRadarDistrictSnapshot DistrictSnapshot;
+    DistrictSnapshot.Id = DistrictCell.Id;
+    DistrictSnapshot.LocalPositionMeters =
+        FVector2d(DistrictCell.LocalPositionMeters.X, DistrictCell.LocalPositionMeters.Y);
+    DistrictSnapshot.RadiusMeters = DistrictCell.RadiusMeters;
+    DistrictSnapshot.Integrity = DistrictCell.Integrity;
+    Snapshot.Districts.Add(DistrictSnapshot);
+    UpdateExtent(DistrictSnapshot.LocalPositionMeters, DistrictSnapshot.RadiusMeters);
+  }
+
+  for (const FVector3d& LauncherPosition : this->LauncherPositionsMeters) {
+    FProjectAirDefenseRadarLauncherSnapshot LauncherSnapshot;
+    LauncherSnapshot.LocalPositionMeters = FVector2d(LauncherPosition.X, LauncherPosition.Y);
+    Snapshot.Launchers.Add(LauncherSnapshot);
+    UpdateExtent(LauncherSnapshot.LocalPositionMeters);
+  }
+
+  if (this->Simulation) {
+    for (const FProjectAirDefenseThreatState& Threat : this->Simulation->GetThreats()) {
+      FProjectAirDefenseRadarThreatSnapshot ThreatSnapshot;
+      ThreatSnapshot.LocalPositionMeters = FVector2d(Threat.PositionMeters.X, Threat.PositionMeters.Y);
+      ThreatSnapshot.ThreatType = Threat.ThreatType;
+      ThreatSnapshot.bIsTracked = Threat.bIsTracked;
+      Snapshot.Threats.Add(ThreatSnapshot);
+      UpdateExtent(ThreatSnapshot.LocalPositionMeters);
+    }
+  }
+
+  Snapshot.ExtentMeters = FMath::Max(Snapshot.ExtentMeters, 1400.0);
+  return Snapshot;
+}
+
 FString AProjectAirDefenseBattleManager::BuildGraphicsSummaryText() const {
   if (const UProjectAirDefenseGameUserSettings* Settings =
           UProjectAirDefenseGameUserSettings::GetProjectAirDefenseGameUserSettings()) {

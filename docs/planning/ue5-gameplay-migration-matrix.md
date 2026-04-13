@@ -34,17 +34,17 @@ This file is the authoritative checklist for porting the actual game from the le
 | --- | --- | --- | --- | --- |
 | Battle manager that ticks the simulation | `BattleScreen.kt` | `ProjectAirDefenseBattleManager.*` | implemented, verified | editor and packaged runtime |
 | Live threat / interceptor visuals | `BattleProjectileVisualController.kt` | `ProjectAirDefenseBattleManager.*` | implemented, verified | gameplay runtime capture |
-| Battle HUD with compact side segments | `BattleHudController.kt` | `ProjectAirDefenseBattleHud.*` | implemented, verified | gameplay runtime capture |
-| Touch-first systems drawer and camera controls | `BattleHudController.kt` + `BattleSceneController.kt` | `ProjectAirDefenseBattleHud.*` + `ProjectAirDefenseCityCameraPawn.*` | implemented, verified | systems-menu runtime capture |
+| Battle HUD with compact side segments | `BattleHudController.kt` | `ProjectAirDefenseBattleWidget.*` | implemented, verified | packaged runtime capture |
+| Touch-first systems drawer and camera controls | `BattleHudController.kt` + `BattleSceneController.kt` | `ProjectAirDefenseBattleWidget.*` + `ProjectAirDefenseCityCameraPawn.*` | implemented, verified | packaged systems runtime capture |
 | Gameplay input: start wave, doctrine, graphics toggles | `BattleHudController.kt` + `StartScreen.kt` | `ProjectAirDefensePlayerController.*` | implemented, verified | runtime input exercise |
-| Radar / tactical overlay | `BattleRadarOverlayRenderer.kt` | UE overlay path | pending | runtime capture |
+| Radar / tactical overlay | `BattleRadarOverlayRenderer.kt` | `ProjectAirDefenseRadarWidget.*` + `ProjectAirDefenseBattleManager::BuildRadarSnapshot()` | implemented, verified | packaged runtime capture |
 | Battle VFX and blast readability | `BattleEffectsController.kt` | UE VFX path | pending | runtime capture |
 
 ## Menus And UX
 
 | System | Legacy source | UE5 target | Status | Verification |
 | --- | --- | --- | --- | --- |
-| Main menu | `StartScreen.kt` | UE menu scene / widget | pending | editor and packaged runtime |
+| Main menu | `StartScreen.kt` | `ProjectAirDefenseMainMenuWidget.*` | implemented, verified | packaged runtime capture |
 | In-game settings surface | `BattleHudController.kt` | UE HUD/menu settings panel | implemented, verified | runtime capture + settings persistence |
 | Graphics controls for AA / AO / quality | `GameGraphicsSettings.kt` | `ProjectAirDefenseGameUserSettings` + runtime UI | implemented, verified | packaged log + runtime UI proof |
 
@@ -57,7 +57,7 @@ This file is the authoritative checklist for porting the actual game from the le
 
 ## Immediate Order
 
-1. Add the missing main menu scene / widget in UE5.
-2. Port radar and tactical overlay semantics without blocking the playfield.
-3. Add battle VFX and blast readability improvements.
-4. Add a headless Monte Carlo lane for UE5 balance work.
+1. Add battle VFX and blast readability improvements.
+2. Add a headless Monte Carlo lane for UE5 balance work.
+3. Move the front-end menu stack toward CommonUI only if the current UMG menu flow starts fragmenting.
+4. Replace the direct `UButton::IsFocusable` construction workaround with a stable UE5.7-safe non-focus path when Epic exposes one publicly.

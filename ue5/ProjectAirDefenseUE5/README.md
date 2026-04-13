@@ -31,11 +31,13 @@ This is the UE5 migration scaffold for Project Air Defense.
 
 ## Player-Facing Controls
 
+- front-end `START DEFENSE`: enter battle and start the first wave
+- front-end `SYSTEMS`: enter battle with the systems drawer open
 - bottom-left `SYSTEMS`: open or close the floating systems drawer
 - bottom-right doctrine button: cycle the active defense doctrine
 - bottom-right action button: start the next wave or confirm the battle is live
 - systems drawer `TACTICS`: battle state and doctrine controls
-- systems drawer `CAMERA`: pan, yaw, tilt, zoom, altitude, and reset
+- systems drawer `VIEW`: hold-touch pan, turn, look, zoom, and reset
 - systems drawer `GRAPHICS`: overall quality plus AA, AO, blur, shadow, reflection, and post-process controls
 
 ## Debug-Only Keyboard Fallback

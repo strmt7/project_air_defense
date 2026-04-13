@@ -35,6 +35,7 @@ public:
 
   bool IsBattlefieldInitialized() const;
   FProjectAirDefenseRuntimeSnapshot BuildRuntimeSnapshot() const;
+  FProjectAirDefenseRadarSnapshot BuildRadarSnapshot() const;
   FString BuildGraphicsSummaryText() const;
 
 private:

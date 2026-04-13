@@ -13,7 +13,10 @@ param(
     [string[]]$SendKeys = @(),
     [string]$SendKeysCsv = "",
     [int]$KeyDelayMilliseconds = 500,
-    [int]$PostKeyDelaySeconds = 3
+    [int]$PostKeyDelaySeconds = 3,
+    [int]$MutexWaitSeconds = 180,
+    [switch]$AutoStartBattle,
+    [switch]$ShowSystemsMenu
 )
 
 $ErrorActionPreference = "Stop"
@@ -33,6 +36,21 @@ function Resolve-SavedRoot([string]$ResolvedExePath, [string]$ResolvedProjectPat
     $exeDirectory = Split-Path -Parent $ResolvedExePath
     $projectName = [System.IO.Path]::GetFileNameWithoutExtension($ResolvedExePath)
     return Join-Path (Join-Path $exeDirectory $projectName) "Saved"
+}
+
+function New-CaptureMutex([string]$ResolvedExePath) {
+    $normalizedPath = [System.IO.Path]::GetFullPath($ResolvedExePath).ToLowerInvariant()
+    $pathBytes = [System.Text.Encoding]::UTF8.GetBytes($normalizedPath)
+    $sha256 = [System.Security.Cryptography.SHA256]::Create()
+    try {
+        $hash = $sha256.ComputeHash($pathBytes)
+    }
+    finally {
+        $sha256.Dispose()
+    }
+
+    $hashText = ([System.BitConverter]::ToString($hash)).Replace("-", "")
+    return New-Object System.Threading.Mutex($false, "Local\ProjectAirDefenseUE5RuntimeCapture_$hashText")
 }
 
 $exePath = Resolve-AbsolutePath $Exe
@@ -68,11 +86,15 @@ if (-not [string]::IsNullOrWhiteSpace($SendKeysCsv)) {
     $SendKeys = $SendKeysCsv.Split(',') | ForEach-Object { $_.Trim() } | Where-Object { $_ -ne "" }
 }
 
-$showSystemsMenu = $false
+$showSystemsMenu = $ShowSystemsMenu.IsPresent
+$autoStartBattle = $AutoStartBattle.IsPresent
 foreach ($keyStroke in $SendKeys) {
     if ($keyStroke -eq "{ESC}") {
         $showSystemsMenu = $true
-        break
+        $autoStartBattle = $false
+    }
+    elseif ($keyStroke -eq "{ENTER}" -or $keyStroke -eq "{SPACE}") {
+        $autoStartBattle = $true
     }
 }
 
@@ -96,13 +118,24 @@ $arguments += @(
 if ($showSystemsMenu) {
     $arguments += "-ProjectAirDefenseShowSystemsMenu"
 }
+elseif ($autoStartBattle) {
+    $arguments += "-ProjectAirDefenseAutoStartBattle"
+}
 if (-not [string]::IsNullOrWhiteSpace($ExtraArgs)) {
     $arguments += $ExtraArgs
 }
 
-$process = Start-Process -FilePath $exePath -ArgumentList $arguments -PassThru
+$captureMutex = New-CaptureMutex $exePath
+$lockAcquired = $false
+$process = $null
 
 try {
+    $lockAcquired = $captureMutex.WaitOne([TimeSpan]::FromSeconds($MutexWaitSeconds))
+    if (-not $lockAcquired) {
+        throw "Timed out waiting for the UE5 runtime capture lock for $exePath. Another packaged/editor verification run is still active."
+    }
+
+    $process = Start-Process -FilePath $exePath -ArgumentList $arguments -PassThru
     $processExited = $false
     $screenshotFound = $false
 
@@ -149,6 +182,12 @@ try {
 finally {
     if ($process -ne $null -and -not $process.HasExited) {
         Stop-Process -Id $process.Id -Force
+    }
+    if ($lockAcquired -and $captureMutex -ne $null) {
+        $captureMutex.ReleaseMutex() | Out-Null
+    }
+    if ($captureMutex -ne $null) {
+        $captureMutex.Dispose()
     }
 }
 

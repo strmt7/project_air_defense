@@ -137,6 +137,30 @@ struct FProjectAirDefenseThreatSnapshot {
   FVector3d TargetPositionMeters = FVector3d::ZeroVector;
 };
 
+struct FProjectAirDefenseRadarDistrictSnapshot {
+  FString Id;
+  FVector2d LocalPositionMeters = FVector2d::ZeroVector;
+  double RadiusMeters = 0.0;
+  double Integrity = 100.0;
+};
+
+struct FProjectAirDefenseRadarLauncherSnapshot {
+  FVector2d LocalPositionMeters = FVector2d::ZeroVector;
+};
+
+struct FProjectAirDefenseRadarThreatSnapshot {
+  FVector2d LocalPositionMeters = FVector2d::ZeroVector;
+  EProjectAirDefenseThreatType ThreatType = EProjectAirDefenseThreatType::Ballistic;
+  bool bIsTracked = false;
+};
+
+struct FProjectAirDefenseRadarSnapshot {
+  TArray<FProjectAirDefenseRadarDistrictSnapshot> Districts;
+  TArray<FProjectAirDefenseRadarLauncherSnapshot> Launchers;
+  TArray<FProjectAirDefenseRadarThreatSnapshot> Threats;
+  double ExtentMeters = 1.0;
+};
+
 FString ProjectAirDefenseDoctrineLabel(EProjectAirDefenseDefenseDoctrine Doctrine);
 FString ProjectAirDefenseDoctrineSummary(EProjectAirDefenseDefenseDoctrine Doctrine);
 FString ProjectAirDefenseThreatTypeLabel(EProjectAirDefenseThreatType ThreatType);
