@@ -59,6 +59,69 @@ public:
   UPROPERTY(EditAnywhere, Config, Category = "Lighting")
   double SkyLightIntensityScale;
 
+  UPROPERTY(EditAnywhere, Config, Category = "Atmosphere")
+  FLinearColor FogInscatteringColor;
+
+  UPROPERTY(EditAnywhere, Config, Category = "Atmosphere")
+  FLinearColor DirectionalInscatteringColor;
+
+  UPROPERTY(EditAnywhere, Config, Category = "Atmosphere")
+  FLinearColor SkyAtmosphereContributionColor;
+
+  UPROPERTY(EditAnywhere, Config, Category = "Atmosphere")
+  float FogDensity;
+
+  UPROPERTY(EditAnywhere, Config, Category = "Atmosphere")
+  float FogHeightFalloff;
+
+  UPROPERTY(EditAnywhere, Config, Category = "Atmosphere")
+  float FogMaxOpacity;
+
+  UPROPERTY(EditAnywhere, Config, Category = "Atmosphere")
+  float FogStartDistanceMeters;
+
+  UPROPERTY(EditAnywhere, Config, Category = "Atmosphere")
+  float FogCutoffDistanceMeters;
+
+  UPROPERTY(EditAnywhere, Config, Category = "Atmosphere")
+  float DirectionalInscatteringExponent;
+
+  UPROPERTY(EditAnywhere, Config, Category = "Atmosphere")
+  float DirectionalInscatteringStartDistanceMeters;
+
+  UPROPERTY(EditAnywhere, Config, Category = "Atmosphere")
+  bool bEnableVolumetricFog;
+
+  UPROPERTY(EditAnywhere, Config, Category = "Atmosphere")
+  float VolumetricFogScatteringDistribution;
+
+  UPROPERTY(EditAnywhere, Config, Category = "Atmosphere")
+  float VolumetricFogExtinctionScale;
+
+  UPROPERTY(EditAnywhere, Config, Category = "Atmosphere")
+  float VolumetricFogViewDistanceMeters;
+
+  UPROPERTY(EditAnywhere, Config, Category = "Atmosphere")
+  float VolumetricFogStartDistanceMeters;
+
+  UPROPERTY(EditAnywhere, Config, Category = "Atmosphere")
+  float VolumetricFogNearFadeInDistanceMeters;
+
+  UPROPERTY(EditAnywhere, Config, Category = "Post Process")
+  float PostExposureBias;
+
+  UPROPERTY(EditAnywhere, Config, Category = "Post Process")
+  float PostBloomIntensity;
+
+  UPROPERTY(EditAnywhere, Config, Category = "Post Process")
+  float PostVignetteIntensity;
+
+  UPROPERTY(EditAnywhere, Config, Category = "Post Process")
+  float PostSaturation;
+
+  UPROPERTY(EditAnywhere, Config, Category = "Post Process")
+  float PostContrast;
+
   UPROPERTY(EditAnywhere, Config, Category = "Camera")
   float CameraFieldOfViewDegrees;
 
@@ -112,4 +175,25 @@ public:
 
   UPROPERTY(EditAnywhere, Config, Category = "Tileset Quality")
   int32 LoadingDescendantLimit;
+
+  UPROPERTY(EditAnywhere, Config, Category = "Gameplay")
+  bool bAutoStartFirstWave;
+
+  UPROPERTY(EditAnywhere, Config, Category = "Gameplay")
+  double AutoStartFirstWaveDelaySeconds;
+
+  UPROPERTY(EditAnywhere, Config, Category = "Gameplay")
+  double SimulationFixedStepSeconds;
+
+  UPROPERTY(EditAnywhere, Config, Category = "Gameplay")
+  double DistrictHalfExtentMeters;
+
+  UPROPERTY(EditAnywhere, Config, Category = "Gameplay")
+  double DistrictCellRadiusMeters;
+
+  UPROPERTY(EditAnywhere, Config, Category = "Gameplay")
+  double LauncherRingDistanceMeters;
+
+  UPROPERTY(EditAnywhere, Config, Category = "Gameplay")
+  double LauncherLateralSpacingMeters;
 };

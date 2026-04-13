@@ -25,6 +25,8 @@ Engine rule: Unreal Engine 5 is the only permitted engine for new runtime/editor
 | `compliance-and-rate-limit` | repeated requests or larger-scope collection could create policy or load risk | collection stays cache-aware, paced, and non-evasive |
 | `ue5-city-pipeline` | a real district needs a UE5-native source, manifest, and ingest plan | source choice, preprocessing, and import staging stay deterministic |
 | `ue5-photoreal-city-scene` | the city scene, lighting, materials, or camera policy needs UE5-level visual direction | no flat-card regressions and no fake skyline shortcuts |
+| `ue5-mobile-ui` | a UE5 menu, HUD, pause screen, settings surface, or touch-control layout must work as a real smartphone game UI | visible UI stays touch-first, safe-zone-aware, and playfield-friendly |
+| `ue5-mobile-rendering` | a UE5 mobile graphics path, graphics setting, or visual-support claim needs to be truthful | mobile rendering claims stay feature-backed and non-placebo |
 | `android-visual-qa` | emulator navigation, screenshots, OCR, or template-driven tapping on libGDX surfaces | screen verification stops depending on guessed taps |
 | `level-asset-curation` | importing city, structure, terrain, or texture assets | asset sourcing stays legal, documented, and mobile-safe |
 | `android-3d-air-defense` | modifying gameplay, graphics, UI, Android behavior, or benchmarks | repo-specific game workflow is reused instead of re-derived |
@@ -33,6 +35,8 @@ Engine rule: Unreal Engine 5 is the only permitted engine for new runtime/editor
 - Use UE5 planning docs before any new engine decision or city-data ingestion decision.
 - Load `ue5-city-pipeline` before changing the pilot source, ingest manifest, or UE5 source catalog.
 - Load `ue5-photoreal-city-scene` before changing camera policy, skyline composition, lighting direction, or photoreal quality targets.
+- Load `ue5-mobile-ui` before changing any visible UE5 player-facing HUD, menu, settings, or touch-control surface.
+- Load `ue5-mobile-rendering` before changing UE5 mobile graphics settings or mobile render-support claims.
 - `caveman` is mandatory here by default, not opt-in.
 - Repo-local default maps to `lite` behavior from upstream `v1.5.0`, even though upstream falls back to `full` when `CAVEMAN_DEFAULT_MODE` and config are unset.
 - Upstream `off` mode exists, but this repo does not read env/config state or auto-write mode state.
