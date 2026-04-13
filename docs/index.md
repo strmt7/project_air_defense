@@ -2,12 +2,18 @@
 
 Central navigation hub for Project Air Defense documentation. Start here, then load the smallest matching section.
 
-## 1. Architecture And Gameplay
+## 1. Planning And Engine Direction
+
+- `planning/ue5-engine-mandate.md` -- authoritative UE5-only engine rule and world-systems baseline
+- `planning/ue5-city-model-strategies.md` -- ranked city-model acquisition strategies for UE5
+- `reference/ue5-city-model-source-map.md` -- official docs, datasets, and forum/community evidence behind the UE5 city plan
+
+## 2. Architecture And Gameplay
 
 - `architecture.md` -- repo architecture, gameplay modules, and system boundaries
-- `popular-3d-android-game-workflows.md` -- upstream workflow patterns and references for libGDX and mobile 3D game work
+- `popular-3d-android-game-workflows.md` -- legacy mobile/libGDX workflow references retained for migration context
 
-## 2. Benchmarks And Quality
+## 3. Benchmarks And Quality
 
 - `benchmark-suite.md` -- benchmark runner scope, command surface, and report expectations
 - `benchmark-sources.md` -- benchmark provenance and external comparison sources
@@ -15,17 +21,17 @@ Central navigation hub for Project Air Defense documentation. Start here, then l
 - `visual-benchmark-tel-aviv-night.md` -- visual benchmark target and scene quality expectations
 - `core-detekt-priorities.md` -- Kotlin static-analysis priorities and cleanup targets
 
-## 3. Assets And Visual Pipeline
+## 4. Assets And Visual Pipeline
 
 - `level-asset-pipeline.md` -- import pipeline, optimization flow, and asset-processing rules
 - `level-asset-source-map.md` -- asset provenance map, candidate sources, and shipping-license boundaries
 - `android-visual-qa.md` -- emulator-driven visual QA workflow and tooling
 
-## 4. Release And Operations
+## 5. Release And Operations
 
 - `release-and-install.md` -- build, install, and release workflow
 
-## 5. Reference
+## 6. Reference
 
 - `reference/ai-agent-context-routing.md` -- smallest-correct-context router for AI agents
 - `reference/ai-agent-skills.md` -- repo-local AI skill catalog
