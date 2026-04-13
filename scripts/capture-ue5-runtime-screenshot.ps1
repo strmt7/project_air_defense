@@ -25,35 +25,21 @@ function Resolve-AbsolutePath([string]$PathValue) {
     return Join-Path (Get-Location) $PathValue
 }
 
-Add-Type -AssemblyName System.Drawing
-Add-Type -AssemblyName System.Windows.Forms
-Add-Type @"
-using System;
-using System.Runtime.InteropServices;
-public static class Win32WindowCapture {
-    [StructLayout(LayoutKind.Sequential)]
-    public struct RECT {
-        public int Left;
-        public int Top;
-        public int Right;
-        public int Bottom;
+function Resolve-SavedRoot([string]$ResolvedExePath, [string]$ResolvedProjectPath) {
+    if (-not [string]::IsNullOrWhiteSpace($ResolvedProjectPath)) {
+        return Join-Path (Split-Path -Parent $ResolvedProjectPath) "Saved"
     }
 
-    [DllImport("user32.dll")]
-    public static extern bool GetWindowRect(IntPtr hWnd, out RECT rect);
-
-    [DllImport("user32.dll")]
-    public static extern bool SetForegroundWindow(IntPtr hWnd);
-
-    [DllImport("user32.dll")]
-    public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+    $exeDirectory = Split-Path -Parent $ResolvedExePath
+    $projectName = [System.IO.Path]::GetFileNameWithoutExtension($ResolvedExePath)
+    return Join-Path (Join-Path $exeDirectory $projectName) "Saved"
 }
-"@
 
 $exePath = Resolve-AbsolutePath $Exe
 $projectPath = if ([string]::IsNullOrWhiteSpace($Project)) { "" } else { Resolve-AbsolutePath $Project }
 $logFilePath = Resolve-AbsolutePath $LogPath
 $screenshotFilePath = Resolve-AbsolutePath $ScreenshotPath
+$savedRoot = Resolve-SavedRoot $exePath $projectPath
 $resolvedProcessName = if ([string]::IsNullOrWhiteSpace($ProcessName)) {
     [System.IO.Path]::GetFileNameWithoutExtension($exePath)
 }
@@ -82,6 +68,14 @@ if (-not [string]::IsNullOrWhiteSpace($SendKeysCsv)) {
     $SendKeys = $SendKeysCsv.Split(',') | ForEach-Object { $_.Trim() } | Where-Object { $_ -ne "" }
 }
 
+$showSystemsMenu = $false
+foreach ($keyStroke in $SendKeys) {
+    if ($keyStroke -eq "{ESC}") {
+        $showSystemsMenu = $true
+        break
+    }
+}
+
 $arguments = @()
 if (-not [string]::IsNullOrWhiteSpace($projectPath)) {
     $arguments += $projectPath
@@ -94,8 +88,14 @@ $arguments += @(
     "-WinY=$WindowY",
     "-NoSplash",
     "-log",
-    "-abslog=$logFilePath"
+    "-abslog=$logFilePath",
+    "-ProjectAirDefenseVerificationPath=$screenshotFilePath",
+    "-ProjectAirDefenseVerificationDelay=$DelaySeconds",
+    "-ProjectAirDefenseAutoQuitAfterVerification"
 )
+if ($showSystemsMenu) {
+    $arguments += "-ProjectAirDefenseShowSystemsMenu"
+}
 if (-not [string]::IsNullOrWhiteSpace($ExtraArgs)) {
     $arguments += $ExtraArgs
 }
@@ -103,86 +103,52 @@ if (-not [string]::IsNullOrWhiteSpace($ExtraArgs)) {
 $process = Start-Process -FilePath $exePath -ArgumentList $arguments -PassThru
 
 try {
-    $windowHandle = [IntPtr]::Zero
-    $windowProcess = $process
-    for ($i = 0; $i -lt 120; $i++) {
-        Start-Sleep -Milliseconds 500
-        $process.Refresh()
-        $candidateProcess = Get-Process -Name $resolvedProcessName -ErrorAction SilentlyContinue |
-            Where-Object { $_.MainWindowHandle -ne 0 } |
-            Sort-Object StartTime -Descending |
-            Select-Object -First 1
+    $processExited = $false
+    $screenshotFound = $false
 
-        if ($null -ne $candidateProcess) {
-            $windowProcess = $candidateProcess
-            $windowHandle = [IntPtr]$candidateProcess.MainWindowHandle
+    for ($i = 0; $i -lt 240; $i++) {
+        Start-Sleep -Milliseconds 500
+
+        if (Test-Path $screenshotFilePath) {
+            $file = Get-Item -LiteralPath $screenshotFilePath -ErrorAction SilentlyContinue
+            if ($null -ne $file -and $file.Length -gt 0) {
+                $screenshotFound = $true
+            }
+        }
+
+        $process.Refresh()
+        if ($process.HasExited) {
+            $processExited = $true
+            if ($screenshotFound) {
+                break
+            }
+            throw "Game process exited before writing the verification screenshot. Exit code: $($process.ExitCode)"
+        }
+
+        if ($screenshotFound) {
+            for ($j = 0; $j -lt 40; $j++) {
+                Start-Sleep -Milliseconds 500
+                $process.Refresh()
+                if ($process.HasExited) {
+                    $processExited = $true
+                    break
+                }
+            }
             break
         }
-
-        if ($process.HasExited -and $null -eq $candidateProcess) {
-            throw "Game process exited early with code $($process.ExitCode)"
-        }
     }
 
-    if ($windowHandle -eq [IntPtr]::Zero) {
-        throw "Timed out waiting for the game window"
+    if (-not $screenshotFound) {
+        throw "Timed out waiting for the verification screenshot: $screenshotFilePath"
     }
 
-    [Win32WindowCapture]::ShowWindow($windowHandle, 9) | Out-Null
-    [Win32WindowCapture]::SetForegroundWindow($windowHandle) | Out-Null
-
-    Start-Sleep -Seconds $DelaySeconds
-    foreach ($keyStroke in $SendKeys) {
-        if (-not [string]::IsNullOrWhiteSpace($keyStroke)) {
-            [System.Windows.Forms.SendKeys]::SendWait($keyStroke)
-            Start-Sleep -Milliseconds $KeyDelayMilliseconds
-        }
+    if (-not $processExited) {
+        Write-Warning "Game stayed alive after writing the verification screenshot; forcing process shutdown."
     }
-    if ($SendKeys.Count -gt 0 -and $PostKeyDelaySeconds -gt 0) {
-        Start-Sleep -Seconds $PostKeyDelaySeconds
-    }
-
-    $rect = New-Object Win32WindowCapture+RECT
-    $usePrimaryScreenFallback = -not [Win32WindowCapture]::GetWindowRect($windowHandle, [ref]$rect)
-    if (-not $usePrimaryScreenFallback) {
-        $captureWidth = $rect.Right - $rect.Left
-        $captureHeight = $rect.Bottom - $rect.Top
-        $usePrimaryScreenFallback = ($captureWidth -le 0 -or $captureHeight -le 0)
-    }
-
-    if ($usePrimaryScreenFallback) {
-        $screenBounds = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
-        $captureLeft = $screenBounds.Left
-        $captureTop = $screenBounds.Top
-        $captureWidth = $screenBounds.Width
-        $captureHeight = $screenBounds.Height
-    }
-    else {
-        $captureLeft = $rect.Left
-        $captureTop = $rect.Top
-    }
-
-    $bitmap = New-Object System.Drawing.Bitmap $captureWidth, $captureHeight
-    $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
-    try {
-        $graphics.CopyFromScreen($captureLeft, $captureTop, 0, 0, $bitmap.Size)
-    }
-    finally {
-        $graphics.Dispose()
-    }
-
-    $bitmap.Save($screenshotFilePath, [System.Drawing.Imaging.ImageFormat]::Png)
-    $bitmap.Dispose()
 }
 finally {
-    $allProcesses = @($process)
-    if ($null -ne $windowProcess -and $windowProcess.Id -ne $process.Id) {
-        $allProcesses += $windowProcess
-    }
-    foreach ($ownedProcess in $allProcesses | Sort-Object Id -Unique) {
-        if ($ownedProcess -ne $null -and -not $ownedProcess.HasExited) {
-            Stop-Process -Id $ownedProcess.Id -Force
-        }
+    if ($process -ne $null -and -not $process.HasExited) {
+        Stop-Process -Id $process.Id -Force
     }
 }
 

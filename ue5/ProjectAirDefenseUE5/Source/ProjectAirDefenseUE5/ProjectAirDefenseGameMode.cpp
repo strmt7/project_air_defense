@@ -3,12 +3,22 @@
 #include "Cesium3DTileset.h"
 #include "CesiumGeoreference.h"
 #include "CesiumSunSky.h"
+#include "HighResScreenshot.h"
+#include "HAL/FileManager.h"
+#include "Kismet/KismetSystemLibrary.h"
+#include "Misc/CommandLine.h"
+#include "Engine/ExponentialHeightFog.h"
+#include "Components/ExponentialHeightFogComponent.h"
+#include "Engine/PostProcessVolume.h"
 #include "GameFramework/WorldSettings.h"
 #include "Dom/JsonObject.h"
-#include "HAL/FileManager.h"
 #include "Misc/Paths.h"
+#include "Misc/Parse.h"
 #include "Misc/FileHelper.h"
+#include "ProjectAirDefenseBattleHud.h"
+#include "ProjectAirDefenseBattleManager.h"
 #include "ProjectAirDefenseCityCameraPawn.h"
+#include "ProjectAirDefensePlayerController.h"
 #include "ProjectAirDefenseRuntimeSettings.h"
 #include "Serialization/JsonReader.h"
 #include "Serialization/JsonSerializer.h"
@@ -19,11 +29,14 @@ constexpr const TCHAR* ProjectCategory = TEXT("ProjectAirDefense");
 
 AProjectAirDefenseGameMode::AProjectAirDefenseGameMode() {
   this->DefaultPawnClass = AProjectAirDefenseCityCameraPawn::StaticClass();
+  this->PlayerControllerClass = AProjectAirDefensePlayerController::StaticClass();
+  this->HUDClass = AProjectAirDefenseBattleHud::StaticClass();
 }
 
 void AProjectAirDefenseGameMode::BeginPlay() {
   Super::BeginPlay();
   this->BootstrapPilotScene();
+  this->ConfigureVerificationCapture();
 }
 
 void AProjectAirDefenseGameMode::BootstrapPilotScene() {
@@ -72,6 +85,7 @@ void AProjectAirDefenseGameMode::BootstrapPilotScene() {
   if (SunSky != nullptr) {
     this->ApplyPilotSceneLighting(*SunSky);
   }
+  this->ApplyPilotSceneAtmosphere();
 
   ACesium3DTileset* Tileset = this->FindExistingActor<ACesium3DTileset>();
   if (Tileset == nullptr) {
@@ -122,6 +136,10 @@ void AProjectAirDefenseGameMode::BootstrapPilotScene() {
     }
   }
 
+  if (AProjectAirDefenseBattleManager* RuntimeBattleManager = this->EnsureBattleManager()) {
+    RuntimeBattleManager->InitializeBattlefield(CameraFocusPoint, TilesetRadiusMeters);
+  }
+
   UE_LOG(
       LogTemp,
       Log,
@@ -130,6 +148,109 @@ void AProjectAirDefenseGameMode::BootstrapPilotScene() {
       *TilesetJson,
       *CameraFocusPoint.ToString(),
       TilesetRadiusMeters);
+}
+
+void AProjectAirDefenseGameMode::ConfigureVerificationCapture() {
+  UWorld* World = this->GetWorld();
+  if (World == nullptr) {
+    return;
+  }
+
+  FString VerificationPath;
+  if (!FParse::Value(
+          FCommandLine::Get(),
+          TEXT("ProjectAirDefenseVerificationPath="),
+          VerificationPath) ||
+      VerificationPath.IsEmpty()) {
+    return;
+  }
+
+  double DelaySeconds = 0.0;
+  FParse::Value(
+      FCommandLine::Get(),
+      TEXT("ProjectAirDefenseVerificationDelay="),
+      DelaySeconds);
+  DelaySeconds = FMath::Max(DelaySeconds, 0.0);
+
+  const bool bShowSystemsMenu =
+      FParse::Param(FCommandLine::Get(), TEXT("ProjectAirDefenseShowSystemsMenu"));
+  const bool bAutoQuitAfterVerification =
+      FParse::Param(FCommandLine::Get(), TEXT("ProjectAirDefenseAutoQuitAfterVerification"));
+  const FString AbsoluteVerificationPath =
+      FPaths::ConvertRelativePathToFull(VerificationPath);
+  IFileManager::Get().MakeDirectory(
+      *FPaths::GetPath(AbsoluteVerificationPath),
+      true);
+
+  if (AProjectAirDefensePlayerController* PlayerController =
+          Cast<AProjectAirDefensePlayerController>(World->GetFirstPlayerController())) {
+    PlayerController->SetSystemsMenuVisible(bShowSystemsMenu);
+  }
+
+  FTimerDelegate ScreenshotDelegate;
+  ScreenshotDelegate.BindLambda([this, AbsoluteVerificationPath, bAutoQuitAfterVerification]() {
+    FScreenshotRequest::RequestScreenshot(
+        AbsoluteVerificationPath,
+        true,
+        false,
+        false);
+
+    if (!bAutoQuitAfterVerification) {
+      return;
+    }
+
+    UWorld* InnerWorld = this->GetWorld();
+    if (InnerWorld == nullptr) {
+      return;
+    }
+
+    FTimerDelegate QuitDelegate;
+    QuitDelegate.BindLambda([this]() {
+      if (APlayerController* PlayerController = this->GetWorld() != nullptr
+                                                    ? this->GetWorld()->GetFirstPlayerController()
+                                                    : nullptr) {
+        UKismetSystemLibrary::QuitGame(
+            PlayerController,
+            PlayerController,
+            EQuitPreference::Quit,
+            false);
+      }
+    });
+    FTimerHandle QuitTimerHandle;
+    InnerWorld->GetTimerManager().SetTimer(
+        QuitTimerHandle,
+        QuitDelegate,
+        1.0f,
+        false);
+  });
+
+  FTimerHandle ScreenshotTimerHandle;
+  World->GetTimerManager().SetTimer(
+      ScreenshotTimerHandle,
+      ScreenshotDelegate,
+      static_cast<float>(DelaySeconds),
+      false);
+}
+
+AProjectAirDefenseBattleManager* AProjectAirDefenseGameMode::EnsureBattleManager() {
+  if (this->BattleManager != nullptr) {
+    return this->BattleManager;
+  }
+
+  UWorld* World = this->GetWorld();
+  if (World == nullptr) {
+    return nullptr;
+  }
+
+  if (AProjectAirDefenseBattleManager* Existing = this->FindExistingActor<AProjectAirDefenseBattleManager>()) {
+    this->BattleManager = Existing;
+    return Existing;
+  }
+
+  FActorSpawnParameters SpawnParameters;
+  SpawnParameters.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+  this->BattleManager = World->SpawnActor<AProjectAirDefenseBattleManager>(SpawnParameters);
+  return this->BattleManager;
 }
 
 void AProjectAirDefenseGameMode::ApplyPilotSceneLighting(ACesiumSunSky& SunSky) const {
@@ -147,6 +268,80 @@ void AProjectAirDefenseGameMode::ApplyPilotSceneLighting(ACesiumSunSky& SunSky) 
   SunSky.DirectionalLight->SetIntensity(Settings->DirectionalLightIntensityLux);
   SunSky.SkyLight->SetIntensity(Settings->SkyLightIntensityScale);
   SunSky.UpdateSun();
+}
+
+void AProjectAirDefenseGameMode::ApplyPilotSceneAtmosphere() const {
+  const UProjectAirDefenseRuntimeSettings* Settings = GetDefault<UProjectAirDefenseRuntimeSettings>();
+  UWorld* World = this->GetWorld();
+  if (Settings == nullptr || World == nullptr) {
+    return;
+  }
+
+  AExponentialHeightFog* HeightFog = this->FindExistingActor<AExponentialHeightFog>();
+  if (HeightFog == nullptr) {
+    HeightFog = World->SpawnActor<AExponentialHeightFog>();
+  }
+  if (HeightFog != nullptr) {
+    if (UExponentialHeightFogComponent* FogComponent = HeightFog->GetComponent()) {
+      FogComponent->SetFogDensity(Settings->FogDensity);
+      FogComponent->SetFogHeightFalloff(Settings->FogHeightFalloff);
+      FogComponent->SetFogInscatteringColor(Settings->FogInscatteringColor);
+      FogComponent->SetDirectionalInscatteringColor(Settings->DirectionalInscatteringColor);
+      FogComponent->SetSkyAtmosphereAmbientContributionColorScale(
+          Settings->SkyAtmosphereContributionColor);
+      FogComponent->SetDirectionalInscatteringExponent(
+          Settings->DirectionalInscatteringExponent);
+      FogComponent->SetDirectionalInscatteringStartDistance(
+          Settings->DirectionalInscatteringStartDistanceMeters * 100.0f);
+      FogComponent->SetFogMaxOpacity(Settings->FogMaxOpacity);
+      FogComponent->SetStartDistance(Settings->FogStartDistanceMeters * 100.0f);
+      FogComponent->SetFogCutoffDistance(Settings->FogCutoffDistanceMeters * 100.0f);
+      FogComponent->SetVolumetricFog(Settings->bEnableVolumetricFog);
+      FogComponent->SetVolumetricFogScatteringDistribution(
+          Settings->VolumetricFogScatteringDistribution);
+      FogComponent->SetVolumetricFogExtinctionScale(
+          Settings->VolumetricFogExtinctionScale);
+      FogComponent->SetVolumetricFogDistance(
+          Settings->VolumetricFogViewDistanceMeters * 100.0f);
+      FogComponent->SetVolumetricFogStartDistance(
+          Settings->VolumetricFogStartDistanceMeters * 100.0f);
+      FogComponent->SetVolumetricFogNearFadeInDistance(
+          Settings->VolumetricFogNearFadeInDistanceMeters * 100.0f);
+    }
+  }
+
+  APostProcessVolume* PostProcessVolume = this->FindExistingActor<APostProcessVolume>();
+  if (PostProcessVolume == nullptr) {
+    PostProcessVolume = World->SpawnActor<APostProcessVolume>();
+  }
+  if (PostProcessVolume == nullptr) {
+    return;
+  }
+
+  PostProcessVolume->bEnabled = true;
+  PostProcessVolume->bUnbound = true;
+  PostProcessVolume->BlendWeight = 1.0f;
+  PostProcessVolume->Priority = 100.0f;
+
+  FPostProcessSettings& PostProcessSettings = PostProcessVolume->Settings;
+  PostProcessSettings.bOverride_AutoExposureBias = true;
+  PostProcessSettings.AutoExposureBias = Settings->PostExposureBias;
+  PostProcessSettings.bOverride_BloomIntensity = true;
+  PostProcessSettings.BloomIntensity = Settings->PostBloomIntensity;
+  PostProcessSettings.bOverride_VignetteIntensity = true;
+  PostProcessSettings.VignetteIntensity = Settings->PostVignetteIntensity;
+  PostProcessSettings.bOverride_ColorSaturation = true;
+  PostProcessSettings.ColorSaturation = FVector4(
+      Settings->PostSaturation,
+      Settings->PostSaturation,
+      Settings->PostSaturation,
+      1.0f);
+  PostProcessSettings.bOverride_ColorContrast = true;
+  PostProcessSettings.ColorContrast = FVector4(
+      Settings->PostContrast,
+      Settings->PostContrast,
+      Settings->PostContrast,
+      1.0f);
 }
 
 FString AProjectAirDefenseGameMode::ResolveRepoRelativePath(const FString& RelativePath) const {

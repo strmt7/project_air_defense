@@ -26,12 +26,19 @@ This is the UE5 migration scaffold for Project Air Defense.
 - UE5 lighting and reflections for the night scene
 - no static background images in the gameplay camera
 - mandatory camera inspection controls in the playable scene
+- player-facing UI is smartphone-first and landscape-only
+- visible controls must be touch-first; keyboard bindings are debug-only fallback
 
-## Verified Controls
+## Player-Facing Controls
 
-- `W/S` or `Up/Down`: pan forward and back
-- `A/D` or `Left/Right`: pan left and right
-- `Q/E`: rotate yaw
-- `PageUp/PageDown` or mouse wheel: zoom
-- `R/F`: raise and lower the focus point
-- `Home`: reset the camera
+- bottom-left `SYSTEMS`: open or close the floating systems drawer
+- bottom-right doctrine button: cycle the active defense doctrine
+- bottom-right action button: start the next wave or confirm the battle is live
+- systems drawer `TACTICS`: battle state and doctrine controls
+- systems drawer `CAMERA`: pan, yaw, tilt, zoom, altitude, and reset
+- systems drawer `GRAPHICS`: overall quality plus AA, AO, blur, shadow, reflection, and post-process controls
+
+## Debug-Only Keyboard Fallback
+
+- hidden keyboard input remains available for verification, automation, and editor debugging only
+- it is not part of the player-facing product contract and must never appear in visible UI copy

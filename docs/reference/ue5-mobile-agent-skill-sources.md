@@ -1,0 +1,25 @@
+# UE5 Mobile Agent Skill Sources
+
+Compact provenance map for the repo-local UE5 smartphone UI and mobile-rendering skills.
+
+| Source | Why it matters here | Local surface |
+| --- | --- | --- |
+| [Epic: Creating User Interfaces with UMG and Slate in Unreal Engine](https://dev.epicgames.com/documentation/en-us/unreal-engine/creating-user-interfaces-with-umg-and-slate-in-unreal-engine) | runtime UI system split between UMG and Slate | `.agents/skills/ue5-mobile-ui/SKILL.md` |
+| [Epic: Common UI Quickstart Guide for Unreal Engine](https://dev.epicgames.com/documentation/en-us/unreal-engine/common-ui-quickstart-guide-for-unreal-engine?application_version=5.6) | activatable-widget stack, viewport client, routed cross-input UI | `.agents/skills/ue5-mobile-ui/SKILL.md` |
+| [Epic: CommonUI Input Technical Guide for Unreal Engine](https://dev.epicgames.com/documentation/en-us/unreal-engine/commonui-input-technical-guide-for-unreal-engine?application_version=5.7) | synthetic cursor and input-routing behavior for layered menus | `.agents/skills/ue5-mobile-ui/SKILL.md` |
+| [Epic: Optimization Guidelines for UMG in Unreal Engine](https://dev.epicgames.com/documentation/en-us/unreal-engine/optimization-guidelines-for-umg-in-unreal-engine) | event-driven UI, invalidation, avoid deep Canvas nesting, lower-cost layout choices | `.agents/skills/ue5-mobile-ui/SKILL.md` |
+| [Epic API: Safe Zone](https://dev.epicgames.com/documentation/en-us/unreal-engine/BlueprintAPI/SafeZone) and [Epic API: UGameViewportClient::CalculateSafeZoneValues](https://dev.epicgames.com/documentation/en-us/unreal-engine/API/Runtime/Engine/Engine/UGameViewportClient/CalculateSafeZoneValues) | notch-safe and edge-safe layout policy | `.agents/skills/ue5-mobile-ui/SKILL.md` |
+| [Epic: Rendering Features for Mobile Games in Unreal Engine](https://dev.epicgames.com/documentation/en-us/unreal-engine/rendering-features-for-mobile-games-in-unreal-engine?application_version=5.6) | authoritative mobile feature-support surface | `.agents/skills/ue5-mobile-rendering/SKILL.md` |
+| [Epic: Performance Guidelines for Mobile Devices in Unreal Engine](https://dev.epicgames.com/documentation/en-us/unreal-engine/performance-guidelines-for-mobile-devices-in-unreal-engine?application_version=5.6) | mobile tiering, feature-budget choices, shader-cost guidance | `.agents/skills/ue5-mobile-rendering/SKILL.md` |
+| [Epic: Using the Mobile Previewer in Unreal Engine](https://dev.epicgames.com/documentation/en-us/unreal-engine/using-the-mobile-previewer-in-unreal-engine?application_version=5.6) | preview-based verification before device claims | `.agents/skills/ue5-mobile-rendering/SKILL.md` |
+| [quodsoler/unreal-engine-skills](https://github.com/quodsoler/unreal-engine-skills) and its `ue-ui-umg-slate`, `ue-input-system`, `ue-materials-rendering`, and `ue-testing-debugging` skills | strongest maintained public UE agent-skill pack found during this pass; useful for scope, trigger wording, and implementation boundaries | `.agents/skills/ue5-mobile-ui/SKILL.md`, `.agents/skills/ue5-mobile-rendering/SKILL.md` |
+| [winyunq/UnrealMotionGraphicsMCP](https://github.com/winyunq/UnrealMotionGraphicsMCP) | focused UMG AI workflow with layout/edit precision and versioned UI iteration | `.agents/skills/ue5-mobile-ui/SKILL.md` |
+| [Epic forum: UE5 Android UMG buttons not responding to touch input](https://forums.unrealengine.com/t/ue5-android-umg-buttons-not-responding-to-touch-input-tried-z-order-inputmode-focus-etc/2681720) | current community touch-debug surface for Android UMG | `.agents/skills/ue5-mobile-ui/SKILL.md` |
+| [Epic forum: Multiple touch buttons on HUD](https://forums.unrealengine.com/t/multiple-touch-buttons-on-hud/1523684) and [Epic forum: UMG Allow multiple button presses at the same time](https://forums.unrealengine.com/t/umg-allow-multiple-button-presses-at-the-same-time/316298) | practical multi-touch guidance around non-focusable buttons | `.agents/skills/ue5-mobile-ui/SKILL.md` |
+| [Epic forum: UMG Precise Click/Tap not functioning as expected](https://forums.unrealengine.com/t/umg-precise-click-tap-not-functioning-as-expected/405680) | caution surface for touch interaction mode choices inside scrollable menus | `.agents/skills/ue5-mobile-ui/SKILL.md` |
+
+## Local synthesis
+
+- This repo treats `quodsoler/unreal-engine-skills` as the strongest public UE skill baseline, but not as a drop-in replacement for repo-local guidance.
+- This repo treats Epic docs as authoritative for feature support and engine behavior.
+- Forum links are used only for practical touch gotchas and should never override measured repo behavior or official docs.

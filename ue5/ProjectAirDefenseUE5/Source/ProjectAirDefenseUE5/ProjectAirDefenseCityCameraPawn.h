@@ -29,10 +29,26 @@ public:
   UFUNCTION(BlueprintCallable, Category = "Project Air Defense|Camera")
   void FrameFocusPoint(const FVector& NewFocusPoint, float SuggestedRadiusMeters);
 
+  UFUNCTION(BlueprintCallable, Category = "Project Air Defense|Camera")
+  void StepPan(float ForwardMeters, float RightMeters);
+
+  UFUNCTION(BlueprintCallable, Category = "Project Air Defense|Camera")
+  void StepYaw(float DeltaDegrees);
+
+  UFUNCTION(BlueprintCallable, Category = "Project Air Defense|Camera")
+  void StepPitch(float DeltaDegrees);
+
+  UFUNCTION(BlueprintCallable, Category = "Project Air Defense|Camera")
+  void StepZoom(float DeltaMeters);
+
+  UFUNCTION(BlueprintCallable, Category = "Project Air Defense|Camera")
+  void StepAltitude(float DeltaMeters);
+
 private:
   void ApplyRuntimeDefaults();
   void InitializeInputMappingContext();
   void UpdateCameraTransform();
+  bool IsCameraControlBlocked() const;
   void MoveForward(const FInputActionValue& Value);
   void MoveRight(const FInputActionValue& Value);
   void RotateYaw(const FInputActionValue& Value);

@@ -37,6 +37,7 @@ Central navigation hub for Project Air Defense documentation. Start here, then l
 
 - `reference/ai-agent-context-routing.md` -- smallest-correct-context router for AI agents
 - `reference/ai-agent-skills.md` -- repo-local AI skill catalog
+- `reference/ue5-mobile-agent-skill-sources.md` -- official and community sources behind UE5 mobile UI and rendering skills
 - `reference/ai-agent-web-research-stack.md` -- safe public-web research, extraction, browser fallback, and source-audit pattern
 - `reference/ai-agent-integrations.md` -- adapter map for AGENTS, Copilot, Claude, Gemini, and repo-local skills
 - `reference/ai-agent-upstream-sources.md` -- provenance map for AI workflow surfaces and selected external references

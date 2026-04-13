@@ -12,6 +12,7 @@
 #include "Components/SceneComponent.h"
 #include "Engine/LocalPlayer.h"
 #include "GameFramework/PlayerController.h"
+#include "ProjectAirDefensePlayerController.h"
 
 namespace {
 constexpr float UnrealUnitsPerMeter = 100.0f;
@@ -161,6 +162,39 @@ void AProjectAirDefenseCityCameraPawn::FrameFocusPoint(
   this->UpdateCameraTransform();
 }
 
+void AProjectAirDefenseCityCameraPawn::StepPan(float ForwardMeters, float RightMeters) {
+  const FRotator YawRotation(0.0f, this->OrbitYawDegrees, 0.0f);
+  const FVector Forward = FRotationMatrix(YawRotation).GetUnitAxis(EAxis::X);
+  const FVector Right = FRotationMatrix(YawRotation).GetUnitAxis(EAxis::Y);
+  this->FocusPoint +=
+      Forward * MetersToUnrealUnits(ForwardMeters) + Right * MetersToUnrealUnits(RightMeters);
+  this->UpdateCameraTransform();
+}
+
+void AProjectAirDefenseCityCameraPawn::StepYaw(float DeltaDegrees) {
+  this->OrbitYawDegrees += DeltaDegrees;
+  this->UpdateCameraTransform();
+}
+
+void AProjectAirDefenseCityCameraPawn::StepPitch(float DeltaDegrees) {
+  this->OrbitPitchDegrees =
+      FMath::Clamp(this->OrbitPitchDegrees + DeltaDegrees, this->MinPitchDegrees, this->MaxPitchDegrees);
+  this->UpdateCameraTransform();
+}
+
+void AProjectAirDefenseCityCameraPawn::StepZoom(float DeltaMeters) {
+  this->DistanceUnrealUnits = FMath::Clamp(
+      this->DistanceUnrealUnits + MetersToUnrealUnits(DeltaMeters),
+      this->MinDistanceUnrealUnits,
+      this->MaxDistanceUnrealUnits);
+  this->UpdateCameraTransform();
+}
+
+void AProjectAirDefenseCityCameraPawn::StepAltitude(float DeltaMeters) {
+  this->FocusPoint.Z += MetersToUnrealUnits(DeltaMeters);
+  this->UpdateCameraTransform();
+}
+
 void AProjectAirDefenseCityCameraPawn::InitializeInputMappingContext() {
   if (this->InputMappingContext != nullptr) {
     return;
@@ -250,7 +284,16 @@ void AProjectAirDefenseCityCameraPawn::UpdateCameraTransform() {
   this->Camera->SetWorldRotation((this->FocusPoint - CameraLocation).Rotation());
 }
 
+bool AProjectAirDefenseCityCameraPawn::IsCameraControlBlocked() const {
+  const AProjectAirDefensePlayerController* PlayerController =
+      Cast<AProjectAirDefensePlayerController>(this->GetController());
+  return PlayerController != nullptr && PlayerController->IsSystemsMenuVisible();
+}
+
 void AProjectAirDefenseCityCameraPawn::MoveForward(const FInputActionValue& Value) {
+  if (this->IsCameraControlBlocked()) {
+    return;
+  }
   const float AxisValue = Value.Get<float>();
   if (FMath::IsNearlyZero(AxisValue)) {
     return;
@@ -263,6 +306,9 @@ void AProjectAirDefenseCityCameraPawn::MoveForward(const FInputActionValue& Valu
 }
 
 void AProjectAirDefenseCityCameraPawn::MoveRight(const FInputActionValue& Value) {
+  if (this->IsCameraControlBlocked()) {
+    return;
+  }
   const float AxisValue = Value.Get<float>();
   if (FMath::IsNearlyZero(AxisValue)) {
     return;
@@ -275,6 +321,9 @@ void AProjectAirDefenseCityCameraPawn::MoveRight(const FInputActionValue& Value)
 }
 
 void AProjectAirDefenseCityCameraPawn::RotateYaw(const FInputActionValue& Value) {
+  if (this->IsCameraControlBlocked()) {
+    return;
+  }
   const float AxisValue = Value.Get<float>();
   if (FMath::IsNearlyZero(AxisValue)) {
     return;
@@ -284,6 +333,9 @@ void AProjectAirDefenseCityCameraPawn::RotateYaw(const FInputActionValue& Value)
 }
 
 void AProjectAirDefenseCityCameraPawn::RotatePitch(const FInputActionValue& Value) {
+  if (this->IsCameraControlBlocked()) {
+    return;
+  }
   const float AxisValue = Value.Get<float>();
   if (FMath::IsNearlyZero(AxisValue)) {
     return;
@@ -297,6 +349,9 @@ void AProjectAirDefenseCityCameraPawn::RotatePitch(const FInputActionValue& Valu
 }
 
 void AProjectAirDefenseCityCameraPawn::ZoomCamera(const FInputActionValue& Value) {
+  if (this->IsCameraControlBlocked()) {
+    return;
+  }
   const float AxisValue = Value.Get<float>();
   if (FMath::IsNearlyZero(AxisValue)) {
     return;
@@ -310,6 +365,9 @@ void AProjectAirDefenseCityCameraPawn::ZoomCamera(const FInputActionValue& Value
 }
 
 void AProjectAirDefenseCityCameraPawn::RaiseCamera(const FInputActionValue& Value) {
+  if (this->IsCameraControlBlocked()) {
+    return;
+  }
   const float AxisValue = Value.Get<float>();
   if (FMath::IsNearlyZero(AxisValue)) {
     return;

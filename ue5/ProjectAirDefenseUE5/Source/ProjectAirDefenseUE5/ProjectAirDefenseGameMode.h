@@ -8,6 +8,7 @@
 class ACesium3DTileset;
 class ACesiumGeoreference;
 class ACesiumSunSky;
+class AProjectAirDefenseBattleManager;
 
 UCLASS()
 class PROJECTAIRDEFENSEUE5_API AProjectAirDefenseGameMode : public AGameModeBase {
@@ -20,6 +21,8 @@ public:
 
 private:
   void BootstrapPilotScene();
+  void ConfigureVerificationCapture();
+  void ApplyPilotSceneAtmosphere() const;
   FString ResolveRepoRelativePath(const FString& RelativePath) const;
   FString FindTilesetJson() const;
   FString BuildFileUri(const FString& AbsolutePath) const;
@@ -33,6 +36,7 @@ private:
       FVector& OutFocusPoint,
       double& OutRadiusMeters) const;
   void ApplyPilotSceneLighting(ACesiumSunSky& SunSky) const;
+  AProjectAirDefenseBattleManager* EnsureBattleManager();
 
   template <typename TActorType>
   TActorType* FindExistingActor() const {
@@ -45,4 +49,7 @@ private:
     }
     return nullptr;
   }
+
+  UPROPERTY(Transient)
+  TObjectPtr<AProjectAirDefenseBattleManager> BattleManager;
 };
