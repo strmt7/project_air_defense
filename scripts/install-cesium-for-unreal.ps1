@@ -34,3 +34,5 @@ if ((Test-Path $pluginPath) -and $Overwrite) {
 if (-not (Test-Path $pluginPath)) {
     Expand-Archive -LiteralPath $archivePath -DestinationPath $pluginRootPath -Force
 }
+
+py -3 .\tools\ue5_city_pipeline\patch_cesium_for_unreal.py --plugin-root $pluginPath

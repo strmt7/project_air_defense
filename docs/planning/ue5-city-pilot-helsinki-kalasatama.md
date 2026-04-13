@@ -25,8 +25,16 @@ Primary sources:
 2. Download or verify the official Kalasatama 3D Tiles archive under `data/external/downloads/`.
 3. Extract it into `data/external/helsinki_kalasatama_3dtiles/`.
 4. Generate the root `tileset.json` with `tools/ue5_city_pipeline/build_master_tileset.py`.
-5. Open or launch `ue5/ProjectAirDefenseUE5` and verify the city boots from the local master `tileset.json`.
-6. Use the in-game inspection camera to validate skyline depth, shoreline geometry, and building credibility from multiple angles.
+5. Upgrade the extracted runtime dataset with `scripts/upgrade-ue5-city-tiles.ps1` before packaged runtime verification. The official Helsinki 3D Tiles package ships legacy `b3dm` payloads with glTF 1 content, which packaged Cesium runtime rejects.
+6. Open or launch `ue5/ProjectAirDefenseUE5` and verify the city boots from the local master `tileset.json`.
+7. Build one packaged runtime through `scripts/package-ue5-runtime.ps1`. This path must keep exactly one archived build and remove `Saved/StagedBuilds` afterward.
+8. Use the in-game inspection camera to validate skyline depth, shoreline geometry, and building credibility from multiple angles.
+
+Storage policy for this pilot:
+- keep the original upstream zip under `data/external/downloads/` as the reproducible source of truth
+- keep one active upgraded runtime dataset under `data/external/helsinki_kalasatama_3dtiles/`
+- do not keep `helsinki_kalasatama_3dtiles_legacy_backup/` after the upgraded runtime is verified
+- do not keep `Saved/StagedBuilds/` after packaging unless a task explicitly requires staged-only inspection
 
 ### Phase B: Photoreal Shipping Bake
 

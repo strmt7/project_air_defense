@@ -26,7 +26,11 @@ public:
   UFUNCTION(BlueprintCallable, Category = "Project Air Defense|Camera")
   void SetFocusPoint(const FVector& NewFocusPoint);
 
+  UFUNCTION(BlueprintCallable, Category = "Project Air Defense|Camera")
+  void FrameFocusPoint(const FVector& NewFocusPoint, float SuggestedRadiusMeters);
+
 private:
+  void ApplyRuntimeDefaults();
   void InitializeInputMappingContext();
   void UpdateCameraTransform();
   void MoveForward(const FInputActionValue& Value);

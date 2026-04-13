@@ -1,6 +1,7 @@
 #include "ProjectAirDefenseCityCameraPawn.h"
 
 #include "Camera/CameraComponent.h"
+#include "ProjectAirDefenseRuntimeSettings.h"
 #include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"
 #include "InputAction.h"
@@ -13,17 +14,9 @@
 #include "GameFramework/PlayerController.h"
 
 namespace {
-constexpr float DefaultDistanceMeters = 3000.0f;
-constexpr float DefaultMinDistanceMeters = 350.0f;
-constexpr float DefaultMaxDistanceMeters = 12000.0f;
-constexpr float DefaultYawDegrees = 18.0f;
-constexpr float DefaultPitchDegrees = -28.0f;
-constexpr float DefaultMinPitchDegrees = -80.0f;
-constexpr float DefaultMaxPitchDegrees = -8.0f;
-constexpr float DefaultPanSpeed = 2200.0f;
-constexpr float DefaultVerticalSpeed = 1500.0f;
-constexpr float DefaultRotationSpeed = 75.0f;
-constexpr float DefaultZoomSpeed = 2200.0f;
+const UProjectAirDefenseRuntimeSettings* GetRuntimeSettings() {
+  return GetDefault<UProjectAirDefenseRuntimeSettings>();
+}
 } // namespace
 
 AProjectAirDefenseCityCameraPawn::AProjectAirDefenseCityCameraPawn() {
@@ -36,24 +29,34 @@ AProjectAirDefenseCityCameraPawn::AProjectAirDefenseCityCameraPawn() {
   this->Camera = CreateDefaultSubobject<UCameraComponent>(TEXT("Camera"));
   this->Camera->SetupAttachment(this->SceneRoot);
   this->Camera->bUsePawnControlRotation = false;
+  this->ApplyRuntimeDefaults();
+}
 
+void AProjectAirDefenseCityCameraPawn::ApplyRuntimeDefaults() {
+  const UProjectAirDefenseRuntimeSettings* Settings = GetRuntimeSettings();
+  if (Settings == nullptr) {
+    return;
+  }
+
+  this->Camera->SetFieldOfView(Settings->CameraFieldOfViewDegrees);
   this->FocusPoint = FVector::ZeroVector;
-  this->DistanceMeters = DefaultDistanceMeters;
-  this->MinDistanceMeters = DefaultMinDistanceMeters;
-  this->MaxDistanceMeters = DefaultMaxDistanceMeters;
-  this->OrbitYawDegrees = DefaultYawDegrees;
-  this->OrbitPitchDegrees = DefaultPitchDegrees;
-  this->MinPitchDegrees = DefaultMinPitchDegrees;
-  this->MaxPitchDegrees = DefaultMaxPitchDegrees;
-  this->PanSpeedMetersPerSecond = DefaultPanSpeed;
-  this->VerticalSpeedMetersPerSecond = DefaultVerticalSpeed;
-  this->RotationSpeedDegreesPerSecond = DefaultRotationSpeed;
-  this->ZoomSpeedMetersPerSecond = DefaultZoomSpeed;
+  this->DistanceMeters = Settings->CameraDefaultDistanceMeters;
+  this->MinDistanceMeters = Settings->CameraMinDistanceMeters;
+  this->MaxDistanceMeters = Settings->CameraMaxDistanceMeters;
+  this->OrbitYawDegrees = Settings->CameraDefaultYawDegrees;
+  this->OrbitPitchDegrees = Settings->CameraDefaultPitchDegrees;
+  this->MinPitchDegrees = Settings->CameraMinPitchDegrees;
+  this->MaxPitchDegrees = Settings->CameraMaxPitchDegrees;
+  this->PanSpeedMetersPerSecond = Settings->CameraPanSpeedMetersPerSecond;
+  this->VerticalSpeedMetersPerSecond = Settings->CameraVerticalSpeedMetersPerSecond;
+  this->RotationSpeedDegreesPerSecond = Settings->CameraRotationSpeedDegreesPerSecond;
+  this->ZoomSpeedMetersPerSecond = Settings->CameraZoomSpeedMetersPerSecond;
 }
 
 void AProjectAirDefenseCityCameraPawn::BeginPlay() {
   Super::BeginPlay();
 
+  this->ApplyRuntimeDefaults();
   this->InitializeInputMappingContext();
   this->UpdateCameraTransform();
 }
@@ -117,15 +120,28 @@ void AProjectAirDefenseCityCameraPawn::SetupPlayerInputComponent(UInputComponent
 }
 
 void AProjectAirDefenseCityCameraPawn::ResetCamera() {
-  this->FocusPoint = FVector::ZeroVector;
-  this->DistanceMeters = DefaultDistanceMeters;
-  this->OrbitYawDegrees = DefaultYawDegrees;
-  this->OrbitPitchDegrees = DefaultPitchDegrees;
+  this->ApplyRuntimeDefaults();
   this->UpdateCameraTransform();
 }
 
 void AProjectAirDefenseCityCameraPawn::SetFocusPoint(const FVector& NewFocusPoint) {
   this->FocusPoint = NewFocusPoint;
+  this->UpdateCameraTransform();
+}
+
+void AProjectAirDefenseCityCameraPawn::FrameFocusPoint(
+    const FVector& NewFocusPoint,
+    float SuggestedRadiusMeters) {
+  const UProjectAirDefenseRuntimeSettings* Settings = GetRuntimeSettings();
+  const float VerticalOffsetRatio = Settings != nullptr ? Settings->CameraFocusVerticalOffsetRatio : 0.1f;
+  const float DistanceMultiplier = Settings != nullptr ? Settings->CameraFramedDistanceMultiplier : 1.9f;
+
+  this->FocusPoint = NewFocusPoint - FVector(0.0f, 0.0f, SuggestedRadiusMeters * VerticalOffsetRatio);
+  const float FramedDistance = FMath::Clamp(
+      SuggestedRadiusMeters * DistanceMultiplier,
+      this->MinDistanceMeters,
+      this->MaxDistanceMeters);
+  this->DistanceMeters = FMath::Max(this->DistanceMeters, FramedDistance);
   this->UpdateCameraTransform();
 }
 

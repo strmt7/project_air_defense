@@ -23,6 +23,16 @@ private:
   FString ResolveRepoRelativePath(const FString& RelativePath) const;
   FString FindTilesetJson() const;
   FString BuildFileUri(const FString& AbsolutePath) const;
+  bool TryReadTilesetRootBoundingSphere(
+      const FString& TilesetJsonPath,
+      FVector& OutCenterEarthCenteredEarthFixed,
+      double& OutRadiusMeters) const;
+  bool TryResolveTilesetFocusPoint(
+      const FString& TilesetJsonPath,
+      const ACesiumGeoreference& Georeference,
+      FVector& OutFocusPoint,
+      double& OutRadiusMeters) const;
+  void ApplyPilotSceneLighting(ACesiumSunSky& SunSky) const;
 
   template <typename TActorType>
   TActorType* FindExistingActor() const {

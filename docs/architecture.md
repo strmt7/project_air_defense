@@ -1,134 +1,53 @@
 # Architecture Reference
 
-## Screen Flow
-- `AirDefenseGame.create()`
-  Starts `StartScreen`.
-- `StartScreen`
-  Draws the textured menu scene and transitions into `BattleScreen`.
-- `BattleScreen`
-  Owns battle orchestration, lifecycle, live entity state, and composition of the specialized battle collaborators.
-- `BattleInitializationController`
-  Owns staged battle startup progress, step timing, and initialization diagnostics.
-- `BattleAssetBootstrapper`
-  Owns texture/model factory coordination and delegates world creation to the world bootstrapper.
-- `BattleWorldBootstrapper`
-  Owns base world instances, launchers, radar, city-block placement, imported-landmark loading, and simulation construction.
-- `BattleSceneController`
-  Owns environment setup, camera shake, camera framing, launcher light pulses, and per-frame scene lighting updates.
-- `BattleProjectileVisualController`
-  Owns projectile instance transforms, launcher pulses, and synchronization of threat/interceptor render entities.
-- `BattleBuildingVisualController`
-  Owns building transform sync, lean/collapse animation, and building damage visuals.
-- `BattleAudioController`
-  Owns battle sound-effect loading and playback.
-- `BattleHudController`
-  Owns battle HUD widget construction and snapshot-driven widget updates.
-- `BattleHudState`
-  Owns pure HUD text/button-state shaping for the battle screen.
-- `BattleEffectsController`
-  Owns battle effect pressure rules, trail throttling, explosions, smoke, sparks, debris, and impact-light updates.
-- `BattleFrameTelemetry`
-  Owns rolling battle frame timing, FPS summary generation, and telemetry log cadence.
-- `BattleRadarOverlayRenderer`
-  Owns radar panel drawing, radar contacts, and tracked-threat overlay labels.
-- `BattleSceneRenderer`
-  Owns backdrop composition, atmosphere passes, and loading/game-over screens.
-- `BattleWorldRenderPass`
-  Owns the 3D world draw pass for terrain, buildings, projectiles, debris, and effects after camera/environment setup.
-- `BattleTextureFactory`
-  Coordinates the generated texture pipeline and shared texture registration.
-- `BattleSurfaceTextureFactory`
-  Owns generated facade, terrain, metal, concrete, and solid material textures plus tiled UV attributes.
-- `BattleBackdropTextureFactory`
-  Owns generated sky, fog, glow, and reflection textures plus horizon image loading.
-- `BattleTerrainAssetFactory`
-  Owns the ground/sea/beach/promenade/road model bundle plus backdrop texture selection.
-- `BattleBuildingAssetFactory`
-  Owns procedural tower/hotel/podium/slab model generation.
-- `BattleDefenseAssetFactory`
-  Owns launcher and radar model generation.
-- `BattleProjectileAssetFactory`
-  Owns threat, interceptor, blast, trail, debris, and moon model generation.
-- `BattleSimulation`
-  Owns the live battle math used by both the GUI and the headless runner.
-- `BattleRuntimeSnapshot`
-  Owns the lightweight runtime state handed to HUD and frame-telemetry formatting.
-- `BattleSimulationStepApplier`
-  Applies `BattleStepEvents` from the shared simulation to render entities, launcher pulses, damage visuals, blasts, and status/HUD updates.
-- `BattleWorldLayout`
-  Owns launcher coordinates, city-building placement, shoreline safety constraints, and radar projection rules.
+## Active Runtime
+- `ProjectAirDefenseGameMode`
+  Owns bootstrapping of the active UE5 pilot scene, including local 3D Tiles path resolution, Cesium georeference setup, SunSky setup, camera focus framing, and runtime logging.
+- `ProjectAirDefenseCityCameraPawn`
+  Owns the in-game inspection camera, including pan, rotate, zoom, vertical motion, reset, and focus framing around the live district bounds.
+- `ProjectAirDefenseRuntimeSettings`
+  Owns project-configurable runtime defaults for lighting, camera pose, camera motion, and local tileset location. These are tuned through config instead of hardcoded rebuild-only constants.
+- `ProjectAirDefenseGameUserSettings`
+  Owns persistent runtime graphics settings such as AA method, AO enablement, motion blur policy, and UE scalability groups. This is the authoritative graphics-settings backend for future menus.
 
-## Gameplay Layers
-- `BattleBalance`
-  Wave size and spawn cadence.
-- `ThreatFactory`
-  Ballistic launch generation toward the city.
-- `InterceptionMath`
-  Lead-solve used by interceptors.
-- `DamageModel`
-  Blast falloff and city-integrity accounting.
-- `FireControl`
-  Shared target-priority rules used by tests and the live battle loop. It prioritizes the closest inbound track, then the lower-altitude threat, then the threat closest to the centerline.
-- `BattleSimulation`
-  Shared wave spawning, launcher choice, interceptor guidance, fuse checks, city damage, and score accounting.
-- `RadarProjection`
-  Shared top-down radar mapping so the overlay matches the camera-facing direction of inbound threats.
+## Scene Bootstrap
+- UE5 boots through `/Engine/Maps/Entry`.
+- `ProjectAirDefenseGameMode::BeginPlay()` resolves `tileset.json` from `ExternalData/helsinki_kalasatama_3dtiles`.
+- `ACesiumGeoreference` is created or reused and aligned to the pilot origin.
+- `ACesiumSunSky` is created or reused and applies project runtime lighting defaults.
+- `ACesium3DTileset` is created or reused and loads the local upgraded Helsinki Kalasatama dataset through a `file:///` URL.
+- The root bounding sphere from the tileset is parsed and transformed from ECEF into Unreal coordinates.
+- `ProjectAirDefenseCityCameraPawn::FrameFocusPoint()` uses that radius to choose the initial orbit distance and focus point.
 
-## Rendering Layers
-- Procedural models:
-  terrain, coastline, roads, launchers, radar, buildings, missiles, interceptors, effects, debris.
-- Generated textures:
-  facade/window maps, ground/sea/beach/park/promenade/road maps, metal maps, concrete maps, sky/fog/glow/reflection maps.
-- Imported textures:
-  sky panorama and skyline backdrop.
-- Frame composition:
-  `BattleSceneRenderer` draws backdrop bands, reflection/horizon layers, atmosphere fog, and status overlays around the 3D world pass.
-  `BattleRadarOverlayRenderer` draws radar contacts, launcher sweep, and tracked-threat labels after HUD rendering.
-- Effects lifecycle:
-  `BattleEffectsController` owns the visual-effect and debris arrays, including budget scaling and per-frame effect updates.
-  `BattleEffectFactory` owns effect entity creation.
-  `BattleEffectUpdate` owns per-frame effect aging and transform updates.
-- Shader:
-  `NightShader` combines diffuse textures, roughness textures, emissive glow, directional moon/fill light, impact point light, specular response, fresnel rim, and fog.
+## Data Pipeline
+- Raw source archive:
+  `data/external/downloads/Helsinki3D_MESH_Kalasatama_2017_3D_Tiles_ZIP.zip`
+- Active runtime dataset:
+  `data/external/helsinki_kalasatama_3dtiles/`
+- Optional later photoreal bake input:
+  `data/external/helsinki_kalasatama_mesh/`
+- Runtime staging into the UE5 project is through:
+  `ue5/ProjectAirDefenseUE5/ExternalData/helsinki_kalasatama_3dtiles`
+- `scripts/prepare-ue5-city-tiles.ps1`
+  Extracts the official source and builds the root `tileset.json`.
+- `scripts/upgrade-ue5-city-tiles.ps1`
+  Runs Cesium `3d-tiles-tools upgrade` because the upstream Helsinki runtime package contains legacy `b3dm` payloads that packaged runtime rejects unchanged.
+- `tools/ue5_city_pipeline/patch_cesium_for_unreal.py`
+  Applies the local Cesium compatibility patch set, including the metadata-statistic enum default fix.
 
-## Destruction Model
-- Threat impact triggers:
-  blast effect, debris emission, camera shake, building damage, city-integrity loss.
-- Buildings store:
-  `integrity`, `visibleHeight`, `lean`, `leanTarget`, `collapseVelocity`.
-- Collapse is faked but stateful:
-  height reduction, lean, darkening, and debris make destruction visible without full rigid-body simulation.
+## Verification Lanes
+- Low-waste scene iteration:
+  `scripts/capture-ue5-editor-runtime-screenshot.ps1`
+  Launches `UnrealEditor.exe <uproject> -game`, captures a runtime frame, and supports scripted camera key input.
+- Shipping-path verification:
+  `scripts/package-ue5-runtime.ps1`
+  Builds one packaged runtime and removes duplicate `Saved/StagedBuilds` after archiving.
+- Packaged runtime capture:
+  `scripts/capture-ue5-runtime-screenshot.ps1 -Exe packaged/Win64/ProjectAirDefenseUE5.exe`
 
-## APK Channels
-- `release`
-  Production package id `com.airdefense.game`, requires stable release signing.
-- `local`
-  Debug-signed package id `com.airdefense.game.local`, safe for repeat sideload testing.
-- `debug`
-  Debug-signed package id `com.airdefense.game.debug`.
-
-## Verification Surface
-- Logic:
-  `core/src/test/kotlin/com/airdefense/game/*`
-- HUD state:
-  [BattleHudStateTest.kt](C:\codex_3dgame_android\project_air_defense\core\src\test\kotlin\com\airdefense\game\BattleHudStateTest.kt) covers wave-state, summary, and button-state formatting.
-- Effects budget math:
-  [BattleEffectsControllerTest.kt](C:\codex_3dgame_android\project_air_defense\core\src\test\kotlin\com\airdefense\game\BattleEffectsControllerTest.kt) covers effect-budget scaling, trail-stride escalation, and bounded effect-count reduction.
-- Frame telemetry:
-  [BattleFrameTelemetryTest.kt](C:\codex_3dgame_android\project_air_defense\core\src\test\kotlin\com\airdefense\game\BattleFrameTelemetryTest.kt) covers rolling summary formatting and log-interval behavior.
-- Scene controller:
-  [BattleSceneControllerTest.kt](C:\codex_3dgame_android\project_air_defense\core\src\test\kotlin\com\airdefense\game\BattleSceneControllerTest.kt) covers camera and scene-behavior invariants.
-- Building visuals:
-  [BattleBuildingVisualControllerTest.kt](C:\codex_3dgame_android\project_air_defense\core\src\test\kotlin\com\airdefense\game\BattleBuildingVisualControllerTest.kt) covers transform sync and damage-visual rules.
-- Headless balance:
-  `.\gradlew.bat :core:runBattleMonteCarlo -Pruns=300 -Pwaves=1 -Pseconds=48 -Pstep=0.05`
-- Windows shortcut:
-  `scripts/run-battle-monte-carlo.cmd`
-- Rendering:
-  emulator-verified for menu flow, battle entry, HUD state, and projectile readability.
-- Visual QA tooling:
-  `tools/android_visual_qa/visual_qa.py` drives OCR-backed launch, tap, capture, and screen-text verification on the emulator.
-- Trusted emulator lane:
-  Android 15 / API 35 / Pixel 9 Pro is the active smoke-test device; claims from stale or offline emulators are not valid QA evidence.
-- Android packaging:
-  debug install verified on emulator; production channel still requires a stable release keystore for update-safe release builds.
+## Storage Policy
+- Keep one raw upstream archive.
+- Keep one active upgraded runtime dataset.
+- Keep one packaged build.
+- Do not keep long-lived legacy backup copies of the runtime dataset after verification.
+- Do not keep `Saved/StagedBuilds` after a successful archive unless a task explicitly needs staged-only inspection.
