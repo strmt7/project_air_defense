@@ -1,5 +1,5 @@
 param(
-    [string]$Source = "helsinki_kalasatama_mesh",
+    [string]$Source = "helsinki_kalasatama_3dtiles",
     [string]$Output = "data/ue5_city_pilot/helsinki_kalasatama/pilot_manifest.json"
 )
 

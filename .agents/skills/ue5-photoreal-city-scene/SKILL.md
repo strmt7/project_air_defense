@@ -14,7 +14,7 @@ Use this skill when changing city-scene quality targets, camera policy, or envir
 
 - No static 2D gameplay backdrops.
 - Camera inspection controls are mandatory, not optional.
-- Treat Cesium or ArcGIS runtime streaming as validation tools first, not default shipping content.
+- Treat the current Helsinki 3D Tiles plus Cesium runtime as the truthful inspection path until the baked mesh path replaces it.
 - Use Nanite, World Partition, and UE5 lighting features as the base visual stack.
 - Do not reintroduce procedural placeholder skylines as the primary district.
 

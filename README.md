@@ -38,17 +38,29 @@ A repo in transition from a legacy Android/libGDX prototype to a UE5-first air-d
 ## Current Direction
 - UE5 is the only permitted engine for new runtime, rendering, tooling, editor, prototype, and shipping work.
 - The Android/libGDX codebase remains in-repo only as migration input and gameplay reference.
-- The first photoreal district pilot is Helsinki Kalasatama using official mesh data and a Blender -> UE5 ingest path.
-- Direct geospatial runtime rendering via Cesium or ArcGIS is allowed for truth-checking and editor validation, not as the default shipping path.
+- The active runtime city pilot is Helsinki Kalasatama using the official 3D Tiles package and Cesium for Unreal.
+- The photoreal shipping path for the same district remains official mesh -> Blender cleanup -> UE5 Nanite.
+- Direct geospatial runtime rendering via Cesium or ArcGIS is allowed for truth-checking, inspection, and bootstrap validation. It is not automatic permission to skip the later shipping bake.
 
 ## UE5 Pilot Tooling
-1. Generate the checked-in pilot manifest:
+1. Install the verified Cesium for Unreal plugin locally:
+   `.\scripts\install-cesium-for-unreal.cmd`
+2. Generate the checked-in pilot manifest:
    `.\scripts\generate-ue5-city-pilot.cmd`
-2. Dry-run the official source download:
+3. Dry-run the official source download:
    `.\scripts\download-ue5-city-source.cmd`
-3. Validate the UE5 pipeline:
+4. Prepare the extracted 3D Tiles package and generate the master `tileset.json`:
+   `.\scripts\prepare-ue5-city-tiles.cmd`
+5. Validate the UE5 pipeline:
    `py -3 .\tools\ue5_city_pipeline\test_ue5_city_pipeline.py`
-4. Open the UE5 scaffold under `ue5\ProjectAirDefenseUE5\`.
+6. Verify the UE5 bootstrap path headlessly:
+   `.\scripts\verify-ue5-bootstrap.cmd`
+7. Open the UE5 scaffold under `ue5\ProjectAirDefenseUE5\`.
+
+## Verified UE5 Toolchain
+- Unreal Engine `5.7`
+- Blender `5.1.0`
+- Cesium for Unreal `2.25.0`
 
 ## Legacy Android Prototype Snapshot
 These bullets describe the outgoing Android/libGDX prototype that remains in-repo for migration reference.
@@ -142,6 +154,7 @@ Production signing variables can be set in `~/.gradle/gradle.properties`, CI sec
 ## Notes
 - This is still a gameplay prototype, not a military simulator.
 - Static background images are not allowed in the gameplay battlespace going forward.
+- The current UE5 city proof path is real 3D Tiles data streamed locally through Cesium for Unreal. It is not a static panorama and not a fake skyline.
 - The current renderer targets a high-quality mobile approximation of premium night lighting; it does not use true hardware ray tracing.
 - Waterfront building placement and radar orientation are now validated in tests so the city stays inland and the radar reads top-down toward the horizon.
 - Android is intentionally wide-only. `AndroidLauncher` stays on `sensorLandscape`, and the manifest carries a targeted `DiscouragedApi` lint suppression on that activity because the game is not intended to support portrait operation.

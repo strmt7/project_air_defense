@@ -1,5 +1,5 @@
 param(
-    [string]$Source = "helsinki_kalasatama_mesh",
+    [string]$Source = "helsinki_kalasatama_3dtiles",
     [string]$Dest = "data/external",
     [switch]$DryRun,
     [switch]$Overwrite

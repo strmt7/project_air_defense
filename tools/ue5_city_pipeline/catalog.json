@@ -1,6 +1,28 @@
 {
   "sources": [
     {
+      "id": "helsinki_kalasatama_3dtiles",
+      "title": "Helsinki Kalasatama official 3D Tiles",
+      "official_page": "https://www.hel.fi/en/decision-making/information-on-helsinki/maps-and-geospatial-data/helsinki-3d",
+      "download_url": "https://3d.hel.ninja/data/mesh/Kalasatama/Helsinki3D_MESH_Kalasatama_2017_3D_Tiles_ZIP.zip",
+      "license_url": "https://www.hel.fi/en/decision-making/information-on-helsinki/maps-and-geospatial-data/helsinki-3d",
+      "license_summary": "Use the official Helsinki 3D terms on the source page before shipping.",
+      "format": "3d_tiles_zip",
+      "kind": "official_geospatial_tileset",
+      "recommended_area_sqkm": 1.0,
+      "preferred_pipeline": "3d_tiles_to_cesium_for_unreal",
+      "pilot_slug": "helsinki_kalasatama",
+      "camera_origin": {
+        "latitude": 60.1875,
+        "longitude": 24.9769,
+        "height_meters": 0.0
+      },
+      "notes": [
+        "Primary runtime pilot for a direct UE5 geospatial renderer.",
+        "Use Cesium for Unreal with a generated master tileset entry point."
+      ]
+    },
+    {
       "id": "helsinki_kalasatama_mesh",
       "title": "Helsinki Kalasatama official mesh",
       "official_page": "https://www.hel.fi/en/decision-making/information-on-helsinki/maps-and-geospatial-data/helsinki-3d",
@@ -11,6 +33,7 @@
       "kind": "official_textured_mesh",
       "recommended_area_sqkm": 1.0,
       "preferred_pipeline": "mesh_to_blender_to_ue5",
+      "pilot_slug": "helsinki_kalasatama",
       "notes": [
         "Primary photoreal pilot district.",
         "Waterfront high-rise district suited to Nanite and World Partition."
@@ -27,6 +50,7 @@
       "kind": "official_textured_mesh",
       "recommended_area_sqkm": 1.0,
       "preferred_pipeline": "mesh_to_blender_to_ue5",
+      "pilot_slug": "berlin",
       "notes": [
         "Strong fallback pilot when Helsinki is unsuitable.",
         "Use a bounded district, not the full city."
@@ -43,6 +67,7 @@
       "kind": "open_obj_tiles",
       "recommended_area_sqkm": 1.0,
       "preferred_pipeline": "obj_tiles_to_blender_to_ue5",
+      "pilot_slug": "rotterdam_3dbag",
       "notes": [
         "Useful when the workflow needs open tiling and geometry control.",
         "Expect more preprocessing than with an official integrated mesh."

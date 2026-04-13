@@ -11,7 +11,9 @@ local.properties
 __pycache__/
 *.pyc
 data/external/
+ue5/**/Plugins/CesiumForUnreal/
 ue5/**/Binaries/
 ue5/**/DerivedDataCache/
 ue5/**/Intermediate/
 ue5/**/Saved/
+ue5/**/cesium-request-cache.sqlite*
