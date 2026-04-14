@@ -5,6 +5,8 @@ import kotlin.test.Test
 import kotlin.test.assertTrue
 
 class AgentWorkflowDocsTest {
+    private val defaultBranchGuard = "github.ref_name == github.event.repository.default_branch"
+
     private data class SurfaceContract(
         val path: String,
         val maxNonEmptyLines: Int,
@@ -123,5 +125,36 @@ class AgentWorkflowDocsTest {
         assertTrue(pipeline.contains("android/assets/ATTRIBUTION.md"))
         assertTrue(attribution.contains("engel_house.obj"))
         assertTrue(repoSkill.contains("docs/level-asset-pipeline.md"))
+    }
+
+    @Test
+    fun allWorkflowJobsGateRunnerExecutionToDefaultBranch() {
+        val workflowPaths =
+            listOf(
+                ".github/workflows/android-release-apk.yml",
+                ".github/workflows/ktlint.yml",
+                ".github/workflows/quality.yml",
+            )
+
+        val workflowDir = File(repoRoot(), ".github/workflows")
+        val actualWorkflowPaths =
+            workflowDir
+                .listFiles { file -> file.extension == "yml" }
+                ?.map { ".github/workflows/${it.name}" }
+                ?.sorted()
+                ?: error("Could not list workflow files from ${workflowDir.absolutePath}")
+
+        assertTrue(
+            actualWorkflowPaths == workflowPaths.sorted(),
+            "Workflow file set changed. Update the contract test before editing workflow behavior.",
+        )
+
+        workflowPaths.forEach { path ->
+            val workflow = readRepoFile(path)
+            assertTrue(
+                workflow.contains(defaultBranchGuard),
+                "$path must gate runner execution to the default branch.",
+            )
+        }
     }
 }
