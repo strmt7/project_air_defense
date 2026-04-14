@@ -9,13 +9,9 @@ UE5-only rule: use Unreal Engine 5 planning docs for all new engine/runtime work
 - If you have opened 8 task-specific files, stop and summarize.
 
 ## Default route
-1. `AGENTS.md`
-2. this file
-3. `docs/reference/ai-agent-skills.md`
-4. `docs/index.md` when the first three files are not enough
-5. one domain doc
-6. one code file
-7. one nearest test
+1. `AGENTS.md`, this file, `docs/reference/ai-agent-skills.md`
+2. `docs/index.md` only when the first three files are not enough
+3. one domain doc, one code file, one nearest test
 
 ## Task map
 | Task | Load first |
@@ -33,5 +29,4 @@ UE5-only rule: use Unreal Engine 5 planning docs for all new engine/runtime work
 | Benchmarks and standards | `scripts/run-benchmark-suite.ps1`, `docs/benchmark-suite.md`, `docs/benchmark-sources.md` |
 | Agent docs, badges, workflows, skills | `docs/index.md`, `docs/reference/ai-agent-skills.md`, `docs/reference/ai-agent-integrations.md`, `docs/reference/ai-agent-upstream-sources.md`, `.agents/skills/` |
 
-- You know the exact file to edit and the exact command or artifact that will verify the change.
-- You can explain the license or provenance boundary for any new asset.
+- Stop when you know the exact file to edit, the exact verification command or artifact, and any required asset provenance boundary.
