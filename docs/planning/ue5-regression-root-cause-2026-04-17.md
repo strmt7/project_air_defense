@@ -45,6 +45,44 @@ This note records the verified causes behind the repeated dark, flat, fake-looki
 - The next real visual upgrade is not more fake geometry. It is either a better bounded official city source or a controlled Helsinki OBJ/Nanite bake with proper material cleanup.
 - Damage visualization is still a gameplay overlay, not true per-building deformation of the source mesh. It must remain subdued until a proper building-level damage binding exists.
 
+## Recovery Plan Amendment
+
+### Priority 0: Keep The Scene Truthful
+
+- Keep the runtime pointed at the active local Helsinki 3D Tiles path until a replacement source is selected and verified end-to-end.
+- Do not patch visual weakness with static images, flat sky cards, copied block towers, or healthy synthetic district geometry.
+- Treat any new geometry overlay as suspect until a screenshot proves it is not contaminating the real city mesh.
+- If the current Helsinki tileset remains too artifact-heavy, choose one explicit replacement strategy: a bounded official mesh/Nanite bake, a cleaned Helsinki OBJ district, or another documented open city source. Do not mix strategies in one commit.
+
+### Priority 1: Stabilize Lighting Before Adding Effects
+
+- The lighting stack must stay georeferenced: `ACesiumSunSky`, `ACesiumGeoreference`, tileset origin, and camera focus all need to agree.
+- Day/night work must be evaluated from at least three solar times: day, dusk, and night.
+- Do not force global exposure unless `PostExposureBias` is intentionally non-zero and the before/after capture proves it helps.
+- Buildings that look black are a lighting/material pipeline problem first, not a reason to add glow overlays.
+
+### Priority 2: Make Gameplay Proof Repeatable
+
+- The authoritative balance lane is the UE5 C++ simulation plus `scripts/run-ue5-battle-monte-carlo.ps1`.
+- The active-battle visual proof must use `-ProjectAirDefenseAutoStartBattle` or a recorded tap/click proof, never an assumed menu transition.
+- A gameplay claim requires both a headless metric and an active-battle screenshot. Process survival alone is not proof.
+- Launcher distance, district radius, and threat envelopes must stay tied to measured tileset bounds.
+
+### Priority 3: Improve UI Without Blocking The Sky
+
+- Keep the top HUD split into small left and right cards; do not restore a full-width top bar.
+- Use switches, sliders, and hold controls for mobile settings and camera operations; avoid repetitive button lists where a mobile control is clearer.
+- Preserve the exact main menu title `PROJECT AIR DEFENSE`.
+- Minimum text size and safe-zone spacing must be preserved after every menu or HUD layout change.
+
+### Priority 4: Ship Only Verified Deltas
+
+- Each commit must explain whether it changes source data, lighting, camera/scale, gameplay simulation, UI, or docs.
+- Any visual commit needs a fresh menu capture and an active-battle capture.
+- Any simulation commit needs UE automation plus the 300-run Monte Carlo lane.
+- Generated logs, screenshots, Cesium caches, intermediate build output, and staged packaged scratch output must stay out of git.
+- If GitHub Actions fail after push, fix the failing workflow on `main` with the smallest root-cause commit and poll again.
+
 ## Rules Going Forward
 
 - Do not reintroduce static gameplay backgrounds.
