@@ -6,6 +6,8 @@
 
 class AProjectAirDefensePlayerController;
 class UButton;
+class UCheckBox;
+class USlider;
 class UTextBlock;
 class UVerticalBox;
 class UWidget;
@@ -49,6 +51,9 @@ private:
   void HandleBlurPressed();
 
   UFUNCTION()
+  void HandleRayTracingPressed();
+
+  UFUNCTION()
   void HandleShadowPressed();
 
   UFUNCTION()
@@ -56,6 +61,39 @@ private:
 
   UFUNCTION()
   void HandlePostPressed();
+
+  UFUNCTION()
+  void HandleOverallQualitySliderChanged(float Value);
+
+  UFUNCTION()
+  void HandleAaSliderChanged(float Value);
+
+  UFUNCTION()
+  void HandleAoSwitchChanged(bool bIsChecked);
+
+  UFUNCTION()
+  void HandleBlurSwitchChanged(bool bIsChecked);
+
+  UFUNCTION()
+  void HandleRayTracingSwitchChanged(bool bIsChecked);
+
+  UFUNCTION()
+  void HandleShadowSliderChanged(float Value);
+
+  UFUNCTION()
+  void HandleReflectionSliderChanged(float Value);
+
+  UFUNCTION()
+  void HandlePostSliderChanged(float Value);
+
+  UFUNCTION()
+  void HandleTimeOfDaySliderChanged(float Value);
+
+  UFUNCTION()
+  void HandleTimeScaleSliderChanged(float Value);
+
+  UFUNCTION()
+  void HandleTimeCycleSwitchChanged(bool bIsChecked);
 
   UFUNCTION()
   void HandleCameraUpPressed();
@@ -89,6 +127,21 @@ private:
 
   UFUNCTION()
   void HandleCameraResetPressed();
+
+  UFUNCTION()
+  void HandleTimeBackPressed();
+
+  UFUNCTION()
+  void HandleTimeForwardPressed();
+
+  UFUNCTION()
+  void HandleTimeSlowerPressed();
+
+  UFUNCTION()
+  void HandleTimeFasterPressed();
+
+  UFUNCTION()
+  void HandleTimePausePressed();
 
   UFUNCTION()
   void HandleCameraHoldReleased();
@@ -133,6 +186,9 @@ private:
   TObjectPtr<UTextBlock> GraphicsSummaryText;
 
   UPROPERTY(Transient)
+  TObjectPtr<UTextBlock> TimeSummaryText;
+
+  UPROPERTY(Transient)
   TObjectPtr<UTextBlock> AaButtonText;
 
   UPROPERTY(Transient)
@@ -140,6 +196,9 @@ private:
 
   UPROPERTY(Transient)
   TObjectPtr<UTextBlock> BlurButtonText;
+
+  UPROPERTY(Transient)
+  TObjectPtr<UTextBlock> RayTracingButtonText;
 
   UPROPERTY(Transient)
   TObjectPtr<UTextBlock> ShadowButtonText;
@@ -151,6 +210,72 @@ private:
   TObjectPtr<UTextBlock> PostButtonText;
 
   UPROPERTY(Transient)
+  TObjectPtr<UTextBlock> QualityValueText;
+
+  UPROPERTY(Transient)
+  TObjectPtr<UTextBlock> AaValueText;
+
+  UPROPERTY(Transient)
+  TObjectPtr<UTextBlock> AoValueText;
+
+  UPROPERTY(Transient)
+  TObjectPtr<UTextBlock> BlurValueText;
+
+  UPROPERTY(Transient)
+  TObjectPtr<UTextBlock> RayTracingValueText;
+
+  UPROPERTY(Transient)
+  TObjectPtr<UTextBlock> ShadowValueText;
+
+  UPROPERTY(Transient)
+  TObjectPtr<UTextBlock> ReflectionValueText;
+
+  UPROPERTY(Transient)
+  TObjectPtr<UTextBlock> PostValueText;
+
+  UPROPERTY(Transient)
+  TObjectPtr<UTextBlock> TimeOfDayValueText;
+
+  UPROPERTY(Transient)
+  TObjectPtr<UTextBlock> TimeScaleValueText;
+
+  UPROPERTY(Transient)
+  TObjectPtr<UTextBlock> TimeCycleValueText;
+
+  UPROPERTY(Transient)
+  TObjectPtr<USlider> OverallQualitySlider;
+
+  UPROPERTY(Transient)
+  TObjectPtr<USlider> AaSlider;
+
+  UPROPERTY(Transient)
+  TObjectPtr<USlider> ShadowSlider;
+
+  UPROPERTY(Transient)
+  TObjectPtr<USlider> ReflectionSlider;
+
+  UPROPERTY(Transient)
+  TObjectPtr<USlider> PostSlider;
+
+  UPROPERTY(Transient)
+  TObjectPtr<USlider> TimeOfDaySlider;
+
+  UPROPERTY(Transient)
+  TObjectPtr<USlider> TimeScaleSlider;
+
+  UPROPERTY(Transient)
+  TObjectPtr<UCheckBox> AoSwitch;
+
+  UPROPERTY(Transient)
+  TObjectPtr<UCheckBox> BlurSwitch;
+
+  UPROPERTY(Transient)
+  TObjectPtr<UCheckBox> RayTracingSwitch;
+
+  UPROPERTY(Transient)
+  TObjectPtr<UCheckBox> TimeCycleSwitch;
+
+  UPROPERTY(Transient)
   TObjectPtr<UVerticalBox> SystemsDrawer;
 
   UPROPERTY(Transient)
@@ -160,4 +285,5 @@ private:
   FTimerHandle CameraHoldTimerHandle;
   FName ActiveCameraHoldAction;
   bool bTreeBuilt = false;
+  bool bRefreshingControls = false;
 };

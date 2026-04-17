@@ -219,6 +219,12 @@ bool FProjectAirDefenseBattleHostileImpactTest::RunTest(const FString& Parameter
       TestTrue(TEXT("hostile impact produces damage"), !Events.DistrictDamageEvents.IsEmpty());
       TestTrue(TEXT("hostile impact produces blast"), !Events.BlastEvents.IsEmpty());
       TestTrue(TEXT("city integrity decreased"), Simulation.GetCityIntegrity() < 100.0);
+      TestTrue(
+          TEXT("hostile impact produces structural damage"),
+          Events.DistrictDamageEvents[0].StructuralIntegrity < 100.0);
+      TestTrue(
+          TEXT("hostile impact reports blast coupling"),
+          Events.DistrictDamageEvents[0].GroundCoupling > 0.0);
       return true;
     }
   }

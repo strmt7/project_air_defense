@@ -66,8 +66,7 @@ $logText = Get-Content $logFilePath -Raw
 $requiredMarkers = @(
     "Game class is 'ProjectAirDefenseGameMode'",
     "[ProjectAirDefense] Bootstrapped pilot city scene",
-    "tileset.json",
-    "LogCesium: Loading tileset from URL file:///"
+    "tileset.json"
 )
 
 $missingMarkers = @()
@@ -79,6 +78,33 @@ foreach ($marker in $requiredMarkers) {
 
 if ($missingMarkers.Count -gt 0) {
     throw ("UE5 bootstrap verification failed. Missing log markers: " + ($missingMarkers -join "; "))
+}
+
+$acceptedSourceMarkers = @(
+    "https://data.3dbag.nl/",
+    "file:///"
+)
+$hasAcceptedSource = $false
+foreach ($marker in $acceptedSourceMarkers) {
+    if ($logText.Contains($marker)) {
+        $hasAcceptedSource = $true
+        break
+    }
+}
+
+if (-not $hasAcceptedSource) {
+    throw ("UE5 bootstrap verification failed. Missing accepted 3D Tiles source marker: " + ($acceptedSourceMarkers -join " or "))
+}
+
+$rejectedMarkers = @(
+    "LogCesium: Error",
+    "URL using bad/illegal format",
+    "Request failed: Other"
+)
+foreach ($marker in $rejectedMarkers) {
+    if ($logText.Contains($marker)) {
+        throw "UE5 bootstrap verification failed. Rejected log marker found: $marker"
+    }
 }
 
 Write-Output "Verified UE5 bootstrap log: $logFilePath"

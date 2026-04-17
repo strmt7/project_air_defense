@@ -48,6 +48,13 @@ constexpr double HostileDamageScale = 72.0;
 constexpr double HostileCityIntegrityLoss = 12.0;
 constexpr double CollapseIntegrityLoss = 6.0;
 constexpr double DefenseDamageScale = 36.0;
+constexpr int32 DistrictStructuralFloorCount = 12;
+constexpr double AirburstGroundCouplingFloor = 0.08;
+constexpr double FullGroundCouplingAltitudeMeters = 35.0;
+constexpr double NoGroundCouplingAltitudeMeters = 650.0;
+constexpr double StructuralDamageMultiplier = 1.22;
+constexpr double CollapseFloorThreshold = 34.0;
+constexpr double FullCollapseThreshold = 7.5;
 constexpr double FallbackClosingSpeed = 280.0;
 constexpr double FallbackVerticalWeight = 0.35;
 constexpr double MinimumFallbackTimeToImpact = 0.4;
@@ -93,6 +100,12 @@ struct FThreatProfileDefinition {
   double GuidanceTurnRateDegreesPerSecond = 0.0;
   double DesiredAltitudeMinMeters = 0.0;
   double DesiredAltitudeMaxMeters = 0.0;
+};
+
+struct FBlastDamageSample {
+  double Damage = 0.0;
+  double BlastDistanceMeters = 0.0;
+  double GroundCoupling = 0.0;
 };
 
 const FThreatAssessmentWeights ThreatAssessmentWeights;
@@ -230,7 +243,44 @@ FString MakeInterceptorId(int32 Ordinal) {
   return FString::Printf(TEXT("I-%04d"), Ordinal);
 }
 
-double ComputeDistrictDamage(
+double BlastGroundCoupling(const FVector3d& ImpactPositionMeters) {
+  const double AltitudeMeters = FMath::Max(ImpactPositionMeters.Z, 0.0);
+  if (AltitudeMeters <= FullGroundCouplingAltitudeMeters) {
+    return 1.0;
+  }
+  const double Alpha = FMath::Clamp(
+      (AltitudeMeters - FullGroundCouplingAltitudeMeters) /
+          (NoGroundCouplingAltitudeMeters - FullGroundCouplingAltitudeMeters),
+      0.0,
+      1.0);
+  return FMath::Lerp(1.0, AirburstGroundCouplingFloor, Alpha);
+}
+
+int32 DamagedFloorsForStructuralIntegrity(double StructuralIntegrity) {
+  const double DamageRatio = 1.0 - FMath::Clamp(StructuralIntegrity / 100.0, 0.0, 1.0);
+  return FMath::Clamp(
+      static_cast<int32>(FMath::CeilToDouble(DamageRatio * DistrictStructuralFloorCount)),
+      0,
+      DistrictStructuralFloorCount);
+}
+
+int32 CollapsedFloorsForStructuralIntegrity(double StructuralIntegrity) {
+  if (StructuralIntegrity <= FullCollapseThreshold) {
+    return DistrictStructuralFloorCount;
+  }
+  if (StructuralIntegrity >= CollapseFloorThreshold) {
+    return 0;
+  }
+  const double CollapseRatio =
+      (CollapseFloorThreshold - StructuralIntegrity) /
+      (CollapseFloorThreshold - FullCollapseThreshold);
+  return FMath::Clamp(
+      static_cast<int32>(FMath::CeilToDouble(CollapseRatio * DistrictStructuralFloorCount)),
+      0,
+      DistrictStructuralFloorCount);
+}
+
+FBlastDamageSample ComputeDistrictDamage(
     const FProjectAirDefenseDistrictCell& DistrictCell,
     const FVector3d& ImpactPositionMeters,
     double RadiusMeters,
@@ -239,12 +289,18 @@ double ComputeDistrictDamage(
   const FVector2D ImpactGround(ImpactPositionMeters.X, ImpactPositionMeters.Y);
   const double Distance = FVector2D::Distance(CellGround, ImpactGround);
   const double EffectiveRadius = RadiusMeters + DistrictCell.RadiusMeters;
+  FBlastDamageSample DamageSample;
+  DamageSample.BlastDistanceMeters = Distance;
+  DamageSample.GroundCoupling = BlastGroundCoupling(ImpactPositionMeters);
   if (Distance >= EffectiveRadius) {
-    return 0.0;
+    return DamageSample;
   }
 
   const double Scale = bHostile ? HostileDamageScale : DefenseDamageScale;
-  return FMath::Max(((EffectiveRadius - Distance) / EffectiveRadius) * Scale, MinimumDistrictDamage);
+  const double Falloff = FMath::Square((EffectiveRadius - Distance) / EffectiveRadius);
+  const double GroundFactor = FMath::Lerp(0.48, 1.0, DamageSample.GroundCoupling);
+  DamageSample.Damage = FMath::Max(Falloff * Scale * GroundFactor, MinimumDistrictDamage);
+  return DamageSample;
 }
 
 double CityIntegrityLoss(bool bHostile, bool bDestroyedDistrict) {
@@ -716,7 +772,6 @@ void FProjectAirDefenseBattleSimulation::UpdateLauncherReloads(double DeltaSecon
 void FProjectAirDefenseBattleSimulation::UpdateThreats(
     double DeltaSeconds,
     FStepAccumulator& Events) {
-  const double EngagementRangeSquared = FMath::Square(EffectiveEngagementRange(this->Settings));
   int32 ThreatIndex = 0;
   while (ThreatIndex < this->Threats.Num()) {
     FProjectAirDefenseThreatState& Threat = this->Threats[ThreatIndex];
@@ -811,13 +866,17 @@ void FProjectAirDefenseBattleSimulation::UpdateInterceptors(
       FProjectAirDefenseBlastEvent BlastEvent;
       BlastEvent.PositionMeters = Interceptor.PositionMeters;
       BlastEvent.RadiusMeters = EffectiveBlastRadiusMeters * InterceptBlastScale;
+      BlastEvent.GroundCoupling = BlastGroundCoupling(BlastEvent.PositionMeters);
+      BlastEvent.PeakDamage = 0.0;
       BlastEvent.Kind = EProjectAirDefenseBlastKind::Intercept;
+      BlastEvent.bGroundImpact = BlastEvent.GroundCoupling >= 0.95;
       Events.BlastEvents.Add(BlastEvent);
 
-      Events.RemovedThreatIds.Add(Target->Id);
+      const FString TargetId = Target->Id;
+      Events.RemovedThreatIds.Add(TargetId);
       Events.RemovedInterceptorIds.Add(Interceptor.Id);
-      this->Threats.RemoveAll([&](const FProjectAirDefenseThreatState& Threat) {
-        return Threat.Id == Target->Id;
+      this->Threats.RemoveAll([&TargetId](const FProjectAirDefenseThreatState& Threat) {
+        return Threat.Id == TargetId;
       });
       this->Interceptors.RemoveAt(InterceptorIndex);
       continue;
@@ -1012,17 +1071,26 @@ void FProjectAirDefenseBattleSimulation::ResolveImpact(
   FProjectAirDefenseBlastEvent BlastEvent;
   BlastEvent.PositionMeters = PositionMeters;
   BlastEvent.RadiusMeters = RadiusMeters * BlastVisualRadiusScale;
+  BlastEvent.GroundCoupling = BlastGroundCoupling(PositionMeters);
+  BlastEvent.PeakDamage = (bHostile ? HostileDamageScale : DefenseDamageScale) * BlastEvent.GroundCoupling;
   BlastEvent.Kind = bHostile ? EProjectAirDefenseBlastKind::HostileImpact
                              : EProjectAirDefenseBlastKind::Intercept;
+  BlastEvent.bGroundImpact = BlastEvent.GroundCoupling >= 0.95;
   Events.BlastEvents.Add(BlastEvent);
 
   for (FProjectAirDefenseDistrictCell& DistrictCell : this->DistrictCells) {
-    const double Damage =
+    const FBlastDamageSample DamageSample =
         ComputeDistrictDamage(DistrictCell, PositionMeters, RadiusMeters, bHostile);
-    if (Damage <= 0.0) {
+    if (DamageSample.Damage <= 0.0) {
       continue;
     }
-    this->ApplyDistrictImpact(DistrictCell, Damage, PositionMeters, Events);
+    this->ApplyDistrictImpact(
+        DistrictCell,
+        DamageSample.Damage,
+        DamageSample.BlastDistanceMeters,
+        DamageSample.GroundCoupling,
+        PositionMeters,
+        Events);
   }
 
   if (bHostile) {
@@ -1034,22 +1102,52 @@ void FProjectAirDefenseBattleSimulation::ResolveImpact(
 void FProjectAirDefenseBattleSimulation::ApplyDistrictImpact(
     FProjectAirDefenseDistrictCell& DistrictCell,
     double Damage,
+    double BlastDistanceMeters,
+    double GroundCoupling,
     const FVector3d& ImpactPositionMeters,
     FStepAccumulator& Events) {
   const double BeforeIntegrity = DistrictCell.Integrity;
+  const double BeforeStructuralIntegrity = DistrictCell.StructuralIntegrity;
+  const bool bWasCollapsed = DistrictCell.bCollapsed;
+  const double AppliedDamage = FMath::Max(Damage, MinimumDistrictDamage);
   DistrictCell.Integrity =
-      FMath::Max(0.0, DistrictCell.Integrity - FMath::Max(Damage, MinimumDistrictDamage));
-  if (FMath::IsNearlyEqual(DistrictCell.Integrity, BeforeIntegrity)) {
+      FMath::Max(0.0, DistrictCell.Integrity - AppliedDamage);
+  const double StructuralDamage =
+      AppliedDamage * StructuralDamageMultiplier * FMath::Lerp(0.55, 1.15, GroundCoupling);
+  DistrictCell.StructuralIntegrity =
+      FMath::Max(0.0, DistrictCell.StructuralIntegrity - StructuralDamage);
+  DistrictCell.DamagedFloors =
+      FMath::Max(DistrictCell.DamagedFloors, DamagedFloorsForStructuralIntegrity(DistrictCell.StructuralIntegrity));
+  DistrictCell.CollapsedFloors =
+      FMath::Max(DistrictCell.CollapsedFloors, CollapsedFloorsForStructuralIntegrity(DistrictCell.StructuralIntegrity));
+  DistrictCell.bCollapsed =
+      DistrictCell.StructuralIntegrity <= FullCollapseThreshold ||
+      DistrictCell.Integrity <= 0.0 ||
+      DistrictCell.CollapsedFloors >= DistrictStructuralFloorCount;
+  if (DistrictCell.bCollapsed) {
+    DistrictCell.CollapsedFloors = DistrictStructuralFloorCount;
+    DistrictCell.DamagedFloors = DistrictStructuralFloorCount;
+  }
+
+  if (FMath::IsNearlyEqual(DistrictCell.Integrity, BeforeIntegrity) &&
+      FMath::IsNearlyEqual(DistrictCell.StructuralIntegrity, BeforeStructuralIntegrity)) {
     return;
   }
 
   FProjectAirDefenseDistrictDamageEvent DamageEvent;
   DamageEvent.DistrictId = DistrictCell.Id;
   DamageEvent.Integrity = DistrictCell.Integrity;
+  DamageEvent.StructuralIntegrity = DistrictCell.StructuralIntegrity;
+  DamageEvent.Damage = AppliedDamage;
+  DamageEvent.BlastDistanceMeters = BlastDistanceMeters;
+  DamageEvent.GroundCoupling = GroundCoupling;
+  DamageEvent.DamagedFloors = DistrictCell.DamagedFloors;
+  DamageEvent.CollapsedFloors = DistrictCell.CollapsedFloors;
+  DamageEvent.bCollapsed = DistrictCell.bCollapsed;
   DamageEvent.EpicenterMeters = ImpactPositionMeters;
   Events.DistrictDamageEvents.Add(DamageEvent);
 
-  if (BeforeIntegrity > 0.0 && DistrictCell.Integrity <= 0.0) {
+  if (!bWasCollapsed && DistrictCell.bCollapsed) {
     ++this->TotalDestroyedDistricts;
     this->CityIntegrity =
         FMath::Max(0.0, this->CityIntegrity - CityIntegrityLoss(false, true));

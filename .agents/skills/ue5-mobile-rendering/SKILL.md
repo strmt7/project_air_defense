@@ -20,6 +20,7 @@ description: Use when changing UE5 smartphone rendering, graphics settings, anti
 - Verify feature support against Epic's current mobile rendering and performance docs before exposing AA, AO, reflections, shadows, post-process, or similar toggles.
 - Use the Mobile Previewer and device-profile-driven preview before claiming a mobile visual result.
 - Prefer stable frame time, legibility, and truthful materials over desktop-only effects.
+- Ray tracing may be exposed only as an opt-in request path and must remain off by default; it is not the Android mobile baseline.
 - No static gameplay backdrops. The battle scene must stay geometry-driven, tileset-driven, or material-driven.
 - Keep the disk footprint controlled during iteration: one packaged build, no stale staged-build duplicates, no redundant dataset copies.
 - Every rendering or settings change needs serial proof, not overlapping runtime launches.

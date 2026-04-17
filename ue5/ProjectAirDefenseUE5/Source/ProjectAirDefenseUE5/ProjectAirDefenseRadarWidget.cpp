@@ -56,6 +56,15 @@ TArray<FVector2D> BuildCirclePoints(const FVector2D& Center, float Radius, int32
   return Points;
 }
 
+TArray<FVector2D> BuildDiamondPoints(const FVector2D& Center, float Radius) {
+  return {
+      Center + FVector2D(0.0f, -Radius),
+      Center + FVector2D(Radius, 0.0f),
+      Center + FVector2D(0.0f, Radius),
+      Center + FVector2D(-Radius, 0.0f),
+  };
+}
+
 FVector2D ProjectRadarPoint(const FVector2D& LocalMeters, const FVector2D& Center, float Radius, double ExtentMeters) {
   const double SafeExtent = FMath::Max(ExtentMeters, 1.0);
   const FVector2D Normalized = FVector2D(
@@ -166,16 +175,15 @@ int32 UProjectAirDefenseRadarWidget::NativePaint(
   for (const FProjectAirDefenseRadarDistrictSnapshot& District : Snapshot.Districts) {
     const FVector2D DistrictCenter =
         ProjectRadarPoint(District.LocalPositionMeters, RadarCenter, RadarRadius, Snapshot.ExtentMeters);
-    const float DistrictRadius = static_cast<float>((District.RadiusMeters / Snapshot.ExtentMeters) * RadarRadius);
     const float IntegrityAlpha =
         static_cast<float>(FMath::Clamp(District.Integrity / 100.0, 0.25, 1.0));
     DrawPolyline(
         OutDrawElements,
         LayerId + 2,
         AllottedGeometry,
-        BuildCirclePoints(DistrictCenter, FMath::Max(DistrictRadius, 4.0f), 20),
-        FLinearColor(0.18f, 0.86f, 0.88f, IntegrityAlpha),
-        1.1f,
+        BuildDiamondPoints(DistrictCenter, 4.2f),
+        FLinearColor(0.34f, 0.92f, 0.88f, IntegrityAlpha * 0.88f),
+        1.4f,
         true);
   }
 

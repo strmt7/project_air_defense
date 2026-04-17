@@ -2,6 +2,8 @@
 
 Use `AGENTS.md` as the repo contract.
 
+Single-session mandate: do not spawn, delegate to, coordinate, or recommend background agents, subagents, parallel agents, or separate agent sessions for this repo.
+
 Then load:
 1. `docs/reference/ai-agent-context-routing.md`
 2. `docs/reference/ai-agent-skills.md`

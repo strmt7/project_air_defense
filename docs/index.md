@@ -6,7 +6,9 @@ Central navigation hub for Project Air Defense documentation. Start here, then l
 
 - `planning/ue5-engine-mandate.md` -- authoritative UE5-only engine rule and world-systems baseline
 - `planning/ue5-city-model-strategies.md` -- ranked city-model acquisition strategies for UE5
-- `planning/ue5-city-pilot-helsinki-kalasatama.md` -- first photoreal district pilot with source, preprocessing, and UE5 ingest contract
+- `planning/ue5-city-pilot-helsinki-kalasatama.md` -- active local Helsinki Kalasatama pilot with source, preprocessing, and UE5 ingest contract
+- `planning/ue5-city-pilot-3dbag-rotterdam.md` -- evaluated remote 3DBAG Rotterdam LoD2.2 candidate and UE5 runtime contract
+- `planning/ue5-regression-root-cause-2026-04-17.md` -- current root-cause log for the dark/flat/fake-city regression loop
 - `planning/ue5-visual-acceptance.md` -- non-negotiable visual and camera acceptance criteria for the UE5 city scene
 - `reference/ue5-city-model-source-map.md` -- official docs, datasets, and forum/community evidence behind the UE5 city plan
 
@@ -14,6 +16,7 @@ Central navigation hub for Project Air Defense documentation. Start here, then l
 
 - `architecture.md` -- repo architecture, gameplay modules, and system boundaries
 - `popular-3d-android-game-workflows.md` -- legacy mobile/libGDX workflow references retained for migration context
+- `reference/android-3d-game-repo-benchmark.md` -- 50+ source-backed Android/3D game, renderer, physics, GIS, and workflow repositories for UE5 mobile development
 
 ## 3. Benchmarks And Quality
 

@@ -45,6 +45,12 @@ public:
   bool IsMotionBlurEnabled() const;
 
   UFUNCTION(BlueprintCallable, Category = "Project Air Defense|Graphics")
+  void SetRayTracingEnabled(bool bEnabled);
+
+  UFUNCTION(BlueprintPure, Category = "Project Air Defense|Graphics")
+  bool IsRayTracingEnabled() const;
+
+  UFUNCTION(BlueprintCallable, Category = "Project Air Defense|Graphics")
   void ApplyHighQualityDefaults();
 
   UFUNCTION(BlueprintPure, Category = "Project Air Defense|Graphics")
@@ -63,4 +69,7 @@ private:
 
   UPROPERTY(Config)
   bool bMotionBlurEnabled;
+
+  UPROPERTY(Config)
+  bool bRayTracingEnabled;
 };

@@ -68,6 +68,8 @@ private:
   void ApplyDistrictImpact(
       FProjectAirDefenseDistrictCell& DistrictCell,
       double Damage,
+      double BlastDistanceMeters,
+      double GroundCoupling,
       const FVector3d& ImpactPositionMeters,
       FStepAccumulator& Events);
 

@@ -3,21 +3,25 @@
 #include "Blueprint/WidgetTree.h"
 #include "Components/Border.h"
 #include "Components/Button.h"
+#include "Components/CheckBox.h"
 #include "Components/HorizontalBox.h"
 #include "Components/HorizontalBoxSlot.h"
 #include "Components/Overlay.h"
 #include "Components/OverlaySlot.h"
 #include "Components/SafeZone.h"
 #include "Components/SizeBox.h"
+#include "Components/Slider.h"
 #include "Components/TextBlock.h"
 #include "Components/UniformGridPanel.h"
 #include "Components/UniformGridSlot.h"
 #include "Components/VerticalBox.h"
 #include "Components/VerticalBoxSlot.h"
+#include "Brushes/SlateRoundedBoxBrush.h"
 #include "ProjectAirDefenseBattleManager.h"
 #include "ProjectAirDefenseGameUserSettings.h"
 #include "ProjectAirDefensePlayerController.h"
 #include "ProjectAirDefenseRadarWidget.h"
+#include "ProjectAirDefenseTouchButton.h"
 #include "Styling/AppStyle.h"
 
 namespace {
@@ -25,6 +29,8 @@ constexpr float UiMargin = 22.0f;
 constexpr float PanelPadding = 18.0f;
 constexpr float ButtonGap = 10.0f;
 constexpr float DrawerGap = 14.0f;
+constexpr float CardCornerRadius = 14.0f;
+constexpr float ButtonCornerRadius = 12.0f;
 
 const FName CameraPanUpAction(TEXT("CameraPanUp"));
 const FName CameraPanDownAction(TEXT("CameraPanDown"));
@@ -59,7 +65,11 @@ UTextBlock* CreateText(
 
 UBorder* CreateCard(UWidgetTree* WidgetTree, const FLinearColor& FillColor, float Padding = PanelPadding) {
   UBorder* Border = WidgetTree->ConstructWidget<UBorder>();
-  Border->SetBrushColor(FillColor);
+  Border->SetBrush(FSlateRoundedBoxBrush(
+      FillColor,
+      CardCornerRadius,
+      FLinearColor(0.64f, 0.76f, 0.84f, 0.22f),
+      1.0f));
   Border->SetPadding(FMargin(Padding));
   return Border;
 }
@@ -70,11 +80,38 @@ UButton* CreateButton(
     const FLinearColor& FillColor,
     UTextBlock*& OutLabel,
     int32 FontSize = 20) {
-  UButton* Button = WidgetTree->ConstructWidget<UButton>();
-  Button->SetBackgroundColor(FillColor);
+  UButton* Button = WidgetTree->ConstructWidget<UProjectAirDefenseTouchButton>();
+  const FLinearColor HoverColor(
+      FMath::Min(FillColor.R + 0.05f, 1.0f),
+      FMath::Min(FillColor.G + 0.06f, 1.0f),
+      FMath::Min(FillColor.B + 0.07f, 1.0f),
+      FillColor.A);
+  const FLinearColor PressedColor(
+      FMath::Max(FillColor.R - 0.035f, 0.0f),
+      FMath::Max(FillColor.G - 0.035f, 0.0f),
+      FMath::Max(FillColor.B - 0.035f, 0.0f),
+      FillColor.A);
+  FButtonStyle ButtonStyle;
+  ButtonStyle.SetNormal(FSlateRoundedBoxBrush(
+      FillColor,
+      ButtonCornerRadius,
+      FLinearColor(0.62f, 0.72f, 0.80f, 0.40f),
+      1.0f));
+  ButtonStyle.SetHovered(FSlateRoundedBoxBrush(
+      HoverColor,
+      ButtonCornerRadius,
+      FLinearColor(0.78f, 0.90f, 1.0f, 0.64f),
+      1.5f));
+  ButtonStyle.SetPressed(FSlateRoundedBoxBrush(
+      PressedColor,
+      ButtonCornerRadius,
+      FLinearColor(0.48f, 0.64f, 0.75f, 0.60f),
+      1.0f));
+  ButtonStyle.SetNormalPadding(FMargin(0.0f));
+  ButtonStyle.SetPressedPadding(FMargin(0.0f));
+  Button->SetStyle(ButtonStyle);
   Button->SetColorAndOpacity(FLinearColor::White);
   Button->SetClickMethod(EButtonClickMethod::MouseDown);
-  Button->IsFocusable = false;
 
   UBorder* PaddingBorder = WidgetTree->ConstructWidget<UBorder>();
   PaddingBorder->SetBrushColor(FLinearColor::Transparent);
@@ -114,6 +151,73 @@ FString AntiAliasingLabel(EProjectAirDefenseAntiAliasingMethod Method) {
   }
   return TEXT("AA ?");
 }
+
+FString AntiAliasingShortLabel(EProjectAirDefenseAntiAliasingMethod Method) {
+  return AntiAliasingLabel(Method).Replace(TEXT("AA "), TEXT(""));
+}
+
+EProjectAirDefenseAntiAliasingMethod AntiAliasingMethodFromSlider(float Value) {
+  const int32 Index = FMath::Clamp(FMath::RoundToInt(Value), 0, 4);
+  switch (Index) {
+  case 0:
+    return EProjectAirDefenseAntiAliasingMethod::None;
+  case 1:
+    return EProjectAirDefenseAntiAliasingMethod::FXAA;
+  case 2:
+    return EProjectAirDefenseAntiAliasingMethod::TAA;
+  case 3:
+    return EProjectAirDefenseAntiAliasingMethod::TSR;
+  case 4:
+    return EProjectAirDefenseAntiAliasingMethod::SMAA;
+  }
+  return EProjectAirDefenseAntiAliasingMethod::TSR;
+}
+
+float SliderValueFromAntiAliasingMethod(EProjectAirDefenseAntiAliasingMethod Method) {
+  switch (Method) {
+  case EProjectAirDefenseAntiAliasingMethod::None:
+    return 0.0f;
+  case EProjectAirDefenseAntiAliasingMethod::FXAA:
+    return 1.0f;
+  case EProjectAirDefenseAntiAliasingMethod::TAA:
+    return 2.0f;
+  case EProjectAirDefenseAntiAliasingMethod::TSR:
+    return 3.0f;
+  case EProjectAirDefenseAntiAliasingMethod::SMAA:
+    return 4.0f;
+  }
+  return 3.0f;
+}
+
+int32 SliderQualityLevel(float Value) {
+  return FMath::Clamp(FMath::RoundToInt(Value), 0, 4);
+}
+
+FString QualityLevelLabel(int32 QualityLevel) {
+  switch (FMath::Clamp(QualityLevel, 0, 4)) {
+  case 0:
+    return TEXT("LOW");
+  case 1:
+    return TEXT("MED");
+  case 2:
+    return TEXT("HIGH");
+  case 3:
+    return TEXT("EPIC");
+  case 4:
+    return TEXT("CINE");
+  }
+  return TEXT("AUTO");
+}
+
+FString SwitchLabel(bool bEnabled) {
+  return bEnabled ? TEXT("ON") : TEXT("OFF");
+}
+
+FString SolarTimeLabel(double SolarTimeHours) {
+  const int32 TotalMinutes = FMath::RoundToInt(FMath::Fmod(SolarTimeHours + 24.0, 24.0) * 60.0) % (24 * 60);
+  return FString::Printf(TEXT("%02d:%02d"), TotalMinutes / 60, TotalMinutes % 60);
+}
+
 } // namespace
 
 void UProjectAirDefenseBattleWidget::BindController(AProjectAirDefensePlayerController* InController) {
@@ -189,9 +293,43 @@ void UProjectAirDefenseBattleWidget::RefreshFromRuntime() {
   if (this->GraphicsSummaryText != nullptr) {
     this->GraphicsSummaryText->SetText(FText::FromString(BattleManager->BuildGraphicsSummaryText()));
   }
+  if (this->TimeSummaryText != nullptr && Controller != nullptr) {
+    this->TimeSummaryText->SetText(FText::FromString(Controller->BuildTimeSummaryText()));
+  }
+
+  const bool bWasRefreshingControls = this->bRefreshingControls;
+  this->bRefreshingControls = true;
+
+  if (Controller != nullptr) {
+    const double SolarTimeHours = Controller->GetSolarTimeHours();
+    const double TimeScaleHoursPerMinute = Controller->GetTimeScaleHoursPerMinute();
+    const double MaxTimeScaleHoursPerMinute = Controller->GetTimeScaleMaxHoursPerMinute();
+    if (this->TimeOfDaySlider != nullptr) {
+      this->TimeOfDaySlider->SetValue(static_cast<float>(SolarTimeHours));
+    }
+    if (this->TimeOfDayValueText != nullptr) {
+      this->TimeOfDayValueText->SetText(FText::FromString(SolarTimeLabel(SolarTimeHours)));
+    }
+    if (this->TimeScaleSlider != nullptr) {
+      this->TimeScaleSlider->SetMaxValue(static_cast<float>(MaxTimeScaleHoursPerMinute));
+      this->TimeScaleSlider->SetValue(static_cast<float>(TimeScaleHoursPerMinute));
+    }
+    if (this->TimeScaleValueText != nullptr) {
+      this->TimeScaleValueText->SetText(FText::FromString(FString::Printf(TEXT("%.1fh/min"), TimeScaleHoursPerMinute)));
+    }
+    if (this->TimeCycleSwitch != nullptr) {
+      this->TimeCycleSwitch->SetIsChecked(!FMath::IsNearlyZero(TimeScaleHoursPerMinute));
+    }
+    if (this->TimeCycleValueText != nullptr) {
+      this->TimeCycleValueText->SetText(FText::FromString(
+          FMath::IsNearlyZero(TimeScaleHoursPerMinute) ? TEXT("PAUSED") : TEXT("RUNNING")));
+    }
+  }
 
   if (const UProjectAirDefenseGameUserSettings* Settings =
           UProjectAirDefenseGameUserSettings::GetProjectAirDefenseGameUserSettings()) {
+    const int32 OverallQuality =
+        Settings->GetOverallScalabilityLevel() < 0 ? 3 : Settings->GetOverallScalabilityLevel();
     if (this->AaButtonText != nullptr) {
       this->AaButtonText->SetText(FText::FromString(AntiAliasingLabel(Settings->GetPreferredAntiAliasingMethod())));
     }
@@ -202,6 +340,10 @@ void UProjectAirDefenseBattleWidget::RefreshFromRuntime() {
     if (this->BlurButtonText != nullptr) {
       this->BlurButtonText->SetText(FText::FromString(
           Settings->IsMotionBlurEnabled() ? TEXT("BLUR ON") : TEXT("BLUR OFF")));
+    }
+    if (this->RayTracingButtonText != nullptr) {
+      this->RayTracingButtonText->SetText(FText::FromString(
+          Settings->IsRayTracingEnabled() ? TEXT("RT REQ") : TEXT("RT OFF")));
     }
     if (this->ShadowButtonText != nullptr) {
       this->ShadowButtonText->SetText(FText::FromString(
@@ -215,7 +357,56 @@ void UProjectAirDefenseBattleWidget::RefreshFromRuntime() {
       this->PostButtonText->SetText(FText::FromString(
           FString::Printf(TEXT("POST %d"), Settings->GetPostProcessingQuality())));
     }
+    if (this->OverallQualitySlider != nullptr) {
+      this->OverallQualitySlider->SetValue(static_cast<float>(OverallQuality));
+    }
+    if (this->QualityValueText != nullptr) {
+      this->QualityValueText->SetText(FText::FromString(QualityLevelLabel(OverallQuality)));
+    }
+    if (this->AaSlider != nullptr) {
+      this->AaSlider->SetValue(SliderValueFromAntiAliasingMethod(Settings->GetPreferredAntiAliasingMethod()));
+    }
+    if (this->AaValueText != nullptr) {
+      this->AaValueText->SetText(FText::FromString(AntiAliasingShortLabel(Settings->GetPreferredAntiAliasingMethod())));
+    }
+    if (this->AoSwitch != nullptr) {
+      this->AoSwitch->SetIsChecked(Settings->IsAmbientOcclusionEnabled());
+    }
+    if (this->AoValueText != nullptr) {
+      this->AoValueText->SetText(FText::FromString(SwitchLabel(Settings->IsAmbientOcclusionEnabled())));
+    }
+    if (this->BlurSwitch != nullptr) {
+      this->BlurSwitch->SetIsChecked(Settings->IsMotionBlurEnabled());
+    }
+    if (this->BlurValueText != nullptr) {
+      this->BlurValueText->SetText(FText::FromString(SwitchLabel(Settings->IsMotionBlurEnabled())));
+    }
+    if (this->RayTracingSwitch != nullptr) {
+      this->RayTracingSwitch->SetIsChecked(Settings->IsRayTracingEnabled());
+    }
+    if (this->RayTracingValueText != nullptr) {
+      this->RayTracingValueText->SetText(FText::FromString(Settings->IsRayTracingEnabled() ? TEXT("REQUESTED") : TEXT("OFF")));
+    }
+    if (this->ShadowSlider != nullptr) {
+      this->ShadowSlider->SetValue(static_cast<float>(Settings->GetShadowQuality()));
+    }
+    if (this->ShadowValueText != nullptr) {
+      this->ShadowValueText->SetText(FText::FromString(QualityLevelLabel(Settings->GetShadowQuality())));
+    }
+    if (this->ReflectionSlider != nullptr) {
+      this->ReflectionSlider->SetValue(static_cast<float>(Settings->GetReflectionQuality()));
+    }
+    if (this->ReflectionValueText != nullptr) {
+      this->ReflectionValueText->SetText(FText::FromString(QualityLevelLabel(Settings->GetReflectionQuality())));
+    }
+    if (this->PostSlider != nullptr) {
+      this->PostSlider->SetValue(static_cast<float>(Settings->GetPostProcessingQuality()));
+    }
+    if (this->PostValueText != nullptr) {
+      this->PostValueText->SetText(FText::FromString(QualityLevelLabel(Settings->GetPostProcessingQuality())));
+    }
   }
+  this->bRefreshingControls = bWasRefreshingControls;
 
   this->SetDrawerVisibility(Controller != nullptr && Controller->IsSystemsMenuVisible());
 }
@@ -293,6 +484,12 @@ void UProjectAirDefenseBattleWidget::HandleBlurPressed() {
   }
 }
 
+void UProjectAirDefenseBattleWidget::HandleRayTracingPressed() {
+  if (AProjectAirDefensePlayerController* Controller = this->ResolveController()) {
+    Controller->RequestToggleRayTracing();
+  }
+}
+
 void UProjectAirDefenseBattleWidget::HandleShadowPressed() {
   if (AProjectAirDefensePlayerController* Controller = this->ResolveController()) {
     Controller->RequestCycleShadowQuality();
@@ -308,6 +505,119 @@ void UProjectAirDefenseBattleWidget::HandleReflectionPressed() {
 void UProjectAirDefenseBattleWidget::HandlePostPressed() {
   if (AProjectAirDefensePlayerController* Controller = this->ResolveController()) {
     Controller->RequestCyclePostProcessingQuality();
+  }
+}
+
+void UProjectAirDefenseBattleWidget::HandleOverallQualitySliderChanged(float Value) {
+  if (this->bRefreshingControls) {
+    return;
+  }
+  if (AProjectAirDefensePlayerController* Controller = this->ResolveController()) {
+    Controller->RequestSetOverallQualityLevel(SliderQualityLevel(Value));
+    this->RefreshFromRuntime();
+  }
+}
+
+void UProjectAirDefenseBattleWidget::HandleAaSliderChanged(float Value) {
+  if (this->bRefreshingControls) {
+    return;
+  }
+  if (AProjectAirDefensePlayerController* Controller = this->ResolveController()) {
+    Controller->RequestSetAntiAliasingMethod(AntiAliasingMethodFromSlider(Value));
+    this->RefreshFromRuntime();
+  }
+}
+
+void UProjectAirDefenseBattleWidget::HandleAoSwitchChanged(bool bIsChecked) {
+  if (this->bRefreshingControls) {
+    return;
+  }
+  if (AProjectAirDefensePlayerController* Controller = this->ResolveController()) {
+    Controller->RequestSetAmbientOcclusionEnabled(bIsChecked);
+    this->RefreshFromRuntime();
+  }
+}
+
+void UProjectAirDefenseBattleWidget::HandleBlurSwitchChanged(bool bIsChecked) {
+  if (this->bRefreshingControls) {
+    return;
+  }
+  if (AProjectAirDefensePlayerController* Controller = this->ResolveController()) {
+    Controller->RequestSetMotionBlurEnabled(bIsChecked);
+    this->RefreshFromRuntime();
+  }
+}
+
+void UProjectAirDefenseBattleWidget::HandleRayTracingSwitchChanged(bool bIsChecked) {
+  if (this->bRefreshingControls) {
+    return;
+  }
+  if (AProjectAirDefensePlayerController* Controller = this->ResolveController()) {
+    Controller->RequestSetRayTracingEnabled(bIsChecked);
+    this->RefreshFromRuntime();
+  }
+}
+
+void UProjectAirDefenseBattleWidget::HandleShadowSliderChanged(float Value) {
+  if (this->bRefreshingControls) {
+    return;
+  }
+  if (AProjectAirDefensePlayerController* Controller = this->ResolveController()) {
+    Controller->RequestSetShadowQualityLevel(SliderQualityLevel(Value));
+    this->RefreshFromRuntime();
+  }
+}
+
+void UProjectAirDefenseBattleWidget::HandleReflectionSliderChanged(float Value) {
+  if (this->bRefreshingControls) {
+    return;
+  }
+  if (AProjectAirDefensePlayerController* Controller = this->ResolveController()) {
+    Controller->RequestSetReflectionQualityLevel(SliderQualityLevel(Value));
+    this->RefreshFromRuntime();
+  }
+}
+
+void UProjectAirDefenseBattleWidget::HandlePostSliderChanged(float Value) {
+  if (this->bRefreshingControls) {
+    return;
+  }
+  if (AProjectAirDefensePlayerController* Controller = this->ResolveController()) {
+    Controller->RequestSetPostProcessingQualityLevel(SliderQualityLevel(Value));
+    this->RefreshFromRuntime();
+  }
+}
+
+void UProjectAirDefenseBattleWidget::HandleTimeOfDaySliderChanged(float Value) {
+  if (this->bRefreshingControls) {
+    return;
+  }
+  if (AProjectAirDefensePlayerController* Controller = this->ResolveController()) {
+    Controller->RequestSetSolarTime(Value);
+    this->RefreshFromRuntime();
+  }
+}
+
+void UProjectAirDefenseBattleWidget::HandleTimeScaleSliderChanged(float Value) {
+  if (this->bRefreshingControls) {
+    return;
+  }
+  if (AProjectAirDefensePlayerController* Controller = this->ResolveController()) {
+    Controller->RequestSetTimeScale(Value);
+    this->RefreshFromRuntime();
+  }
+}
+
+void UProjectAirDefenseBattleWidget::HandleTimeCycleSwitchChanged(bool bIsChecked) {
+  if (this->bRefreshingControls) {
+    return;
+  }
+  if (AProjectAirDefensePlayerController* Controller = this->ResolveController()) {
+    const bool bIsRunning = !FMath::IsNearlyZero(Controller->GetTimeScaleHoursPerMinute());
+    if (bIsChecked != bIsRunning) {
+      Controller->RequestToggleTimeCycle();
+    }
+    this->RefreshFromRuntime();
   }
 }
 
@@ -354,6 +664,36 @@ void UProjectAirDefenseBattleWidget::HandleCameraZoomPlusPressed() {
 void UProjectAirDefenseBattleWidget::HandleCameraResetPressed() {
   if (AProjectAirDefensePlayerController* Controller = this->ResolveController()) {
     Controller->RequestCameraReset();
+  }
+}
+
+void UProjectAirDefenseBattleWidget::HandleTimeBackPressed() {
+  if (AProjectAirDefensePlayerController* Controller = this->ResolveController()) {
+    Controller->RequestTimeStepBack();
+  }
+}
+
+void UProjectAirDefenseBattleWidget::HandleTimeForwardPressed() {
+  if (AProjectAirDefensePlayerController* Controller = this->ResolveController()) {
+    Controller->RequestTimeStepForward();
+  }
+}
+
+void UProjectAirDefenseBattleWidget::HandleTimeSlowerPressed() {
+  if (AProjectAirDefensePlayerController* Controller = this->ResolveController()) {
+    Controller->RequestSlowerTime();
+  }
+}
+
+void UProjectAirDefenseBattleWidget::HandleTimeFasterPressed() {
+  if (AProjectAirDefensePlayerController* Controller = this->ResolveController()) {
+    Controller->RequestFasterTime();
+  }
+}
+
+void UProjectAirDefenseBattleWidget::HandleTimePausePressed() {
+  if (AProjectAirDefensePlayerController* Controller = this->ResolveController()) {
+    Controller->RequestToggleTimeCycle();
   }
 }
 
@@ -513,6 +853,15 @@ void UProjectAirDefenseBattleWidget::BuildWidgetTree() {
   this->WaveButtonText = WaveLabel;
   BottomActions->AddChildToHorizontalBox(WaveButton);
 
+  UTextBlock* MapCreditText =
+      CreateText(this->WidgetTree, TEXT("\u00A9 City of Helsinki 3D Mesh, CC BY 4.0"), 18, FLinearColor(0.82f, 0.90f, 1.0f, 0.72f), ETextJustify::Right);
+  AddOverlayChild(
+      RootOverlay,
+      MapCreditText,
+      HAlign_Right,
+      VAlign_Bottom,
+      FMargin(0.0f, 0.0f, UiMargin, 82.0f));
+
   UBorder* DrawerCard = CreateCard(this->WidgetTree, FLinearColor(0.03f, 0.07f, 0.11f, 0.88f), 20.0f);
   AddOverlayChild(
       RootOverlay,
@@ -613,54 +962,108 @@ void UProjectAirDefenseBattleWidget::BuildWidgetTree() {
 
   UVerticalBox* GraphicsPanel = BuildDrawerPanel(TEXT("GRAPHICS"), FLinearColor(0.79f, 0.63f, 0.99f, 1.0f));
   this->GraphicsSummaryText =
-      CreateText(this->WidgetTree, TEXT("AUTO  AA ?  AO ?"), 19, FLinearColor(0.94f, 0.97f, 1.0f, 1.0f));
+      CreateText(this->WidgetTree, TEXT("AUTO  AA ?  AO ?  RT ?  SH ?  RF ?  PP ?"), 19, FLinearColor(0.94f, 0.97f, 1.0f, 1.0f));
   if (UVerticalBoxSlot* VerticalSlot = GraphicsPanel->AddChildToVerticalBox(this->GraphicsSummaryText)) {
     VerticalSlot->SetPadding(FMargin(0.0f, 0.0f, 0.0f, 12.0f));
   }
-  UUniformGridPanel* GraphicsGrid = this->WidgetTree->ConstructWidget<UUniformGridPanel>();
-  GraphicsGrid->SetMinDesiredSlotWidth(108.0f);
-  GraphicsGrid->SetMinDesiredSlotHeight(48.0f);
-  GraphicsPanel->AddChildToVerticalBox(GraphicsGrid);
 
-  UTextBlock* QualityMinusLabel = nullptr;
-  UButton* QualityMinus = CreateButton(this->WidgetTree, TEXT("QUALITY -"), FLinearColor(0.11f, 0.10f, 0.18f, 0.96f), QualityMinusLabel, 18);
-  QualityMinus->OnClicked.AddDynamic(this, &UProjectAirDefenseBattleWidget::HandleQualityMinusPressed);
-  GraphicsGrid->AddChildToUniformGrid(QualityMinus, 0, 0);
-  UTextBlock* QualityPlusLabel = nullptr;
-  UButton* QualityPlus = CreateButton(this->WidgetTree, TEXT("QUALITY +"), FLinearColor(0.11f, 0.10f, 0.18f, 0.96f), QualityPlusLabel, 18);
-  QualityPlus->OnClicked.AddDynamic(this, &UProjectAirDefenseBattleWidget::HandleQualityPlusPressed);
-  GraphicsGrid->AddChildToUniformGrid(QualityPlus, 0, 1);
+  auto AddSettingSlider =
+      [this](
+          UVerticalBox* Panel,
+          const FString& Label,
+          TObjectPtr<UTextBlock>& OutValueText,
+          float MinValue,
+          float MaxValue,
+          float StepSize) -> USlider* {
+    UVerticalBox* RowStack = this->WidgetTree->ConstructWidget<UVerticalBox>();
+    if (UVerticalBoxSlot* RowSlot = Panel->AddChildToVerticalBox(RowStack)) {
+      RowSlot->SetPadding(FMargin(0.0f, 0.0f, 0.0f, 10.0f));
+    }
 
-  UTextBlock* AaLabel = nullptr;
-  UButton* AaButton = CreateButton(this->WidgetTree, TEXT("AA TSR"), FLinearColor(0.11f, 0.10f, 0.18f, 0.96f), AaLabel, 18);
-  this->AaButtonText = AaLabel;
-  AaButton->OnClicked.AddDynamic(this, &UProjectAirDefenseBattleWidget::HandleAaPressed);
-  GraphicsGrid->AddChildToUniformGrid(AaButton, 1, 0);
-  UTextBlock* AoLabel = nullptr;
-  UButton* AoButton = CreateButton(this->WidgetTree, TEXT("AO ON"), FLinearColor(0.11f, 0.10f, 0.18f, 0.96f), AoLabel, 18);
-  this->AoButtonText = AoLabel;
-  AoButton->OnClicked.AddDynamic(this, &UProjectAirDefenseBattleWidget::HandleAoPressed);
-  GraphicsGrid->AddChildToUniformGrid(AoButton, 1, 1);
-  UTextBlock* BlurLabel = nullptr;
-  UButton* BlurButton = CreateButton(this->WidgetTree, TEXT("BLUR OFF"), FLinearColor(0.11f, 0.10f, 0.18f, 0.96f), BlurLabel, 18);
-  this->BlurButtonText = BlurLabel;
-  BlurButton->OnClicked.AddDynamic(this, &UProjectAirDefenseBattleWidget::HandleBlurPressed);
-  GraphicsGrid->AddChildToUniformGrid(BlurButton, 2, 0);
-  UTextBlock* ShadowLabel = nullptr;
-  UButton* ShadowButton = CreateButton(this->WidgetTree, TEXT("SHADOW 0"), FLinearColor(0.11f, 0.10f, 0.18f, 0.96f), ShadowLabel, 18);
-  this->ShadowButtonText = ShadowLabel;
-  ShadowButton->OnClicked.AddDynamic(this, &UProjectAirDefenseBattleWidget::HandleShadowPressed);
-  GraphicsGrid->AddChildToUniformGrid(ShadowButton, 2, 1);
-  UTextBlock* ReflectionLabel = nullptr;
-  UButton* ReflectionButton = CreateButton(this->WidgetTree, TEXT("REFLECT 0"), FLinearColor(0.11f, 0.10f, 0.18f, 0.96f), ReflectionLabel, 18);
-  this->ReflectionButtonText = ReflectionLabel;
-  ReflectionButton->OnClicked.AddDynamic(this, &UProjectAirDefenseBattleWidget::HandleReflectionPressed);
-  GraphicsGrid->AddChildToUniformGrid(ReflectionButton, 3, 0);
-  UTextBlock* PostLabel = nullptr;
-  UButton* PostButton = CreateButton(this->WidgetTree, TEXT("POST 0"), FLinearColor(0.11f, 0.10f, 0.18f, 0.96f), PostLabel, 18);
-  this->PostButtonText = PostLabel;
-  PostButton->OnClicked.AddDynamic(this, &UProjectAirDefenseBattleWidget::HandlePostPressed);
-  GraphicsGrid->AddChildToUniformGrid(PostButton, 3, 1);
+    UHorizontalBox* HeaderRow = this->WidgetTree->ConstructWidget<UHorizontalBox>();
+    RowStack->AddChildToVerticalBox(HeaderRow);
+    if (UHorizontalBoxSlot* LabelSlot = HeaderRow->AddChildToHorizontalBox(CreateText(
+            this->WidgetTree,
+            Label,
+            17,
+            FLinearColor(0.75f, 0.86f, 0.96f, 1.0f)))) {
+      LabelSlot->SetSize(ESlateSizeRule::Fill);
+    }
+    OutValueText =
+        CreateText(this->WidgetTree, TEXT("--"), 17, FLinearColor(0.98f, 0.82f, 0.46f, 1.0f), ETextJustify::Right);
+    HeaderRow->AddChildToHorizontalBox(OutValueText);
+
+    USlider* Slider = this->WidgetTree->ConstructWidget<USlider>();
+    Slider->SetMinValue(MinValue);
+    Slider->SetMaxValue(MaxValue);
+    Slider->SetStepSize(StepSize);
+    Slider->SetIndentHandle(false);
+    if (UVerticalBoxSlot* SliderSlot = RowStack->AddChildToVerticalBox(Slider)) {
+      SliderSlot->SetPadding(FMargin(0.0f, 4.0f, 0.0f, 0.0f));
+    }
+    return Slider;
+  };
+
+  auto AddSwitchRow =
+      [this](UVerticalBox* Panel, const FString& Label, TObjectPtr<UTextBlock>& OutValueText) -> UCheckBox* {
+    UHorizontalBox* Row = this->WidgetTree->ConstructWidget<UHorizontalBox>();
+    if (UVerticalBoxSlot* RowSlot = Panel->AddChildToVerticalBox(Row)) {
+      RowSlot->SetPadding(FMargin(0.0f, 2.0f, 0.0f, 10.0f));
+    }
+    if (UHorizontalBoxSlot* LabelSlot = Row->AddChildToHorizontalBox(CreateText(
+            this->WidgetTree,
+            Label,
+            17,
+            FLinearColor(0.75f, 0.86f, 0.96f, 1.0f)))) {
+      LabelSlot->SetSize(ESlateSizeRule::Fill);
+      LabelSlot->SetVerticalAlignment(VAlign_Center);
+    }
+    OutValueText =
+        CreateText(this->WidgetTree, TEXT("OFF"), 17, FLinearColor(0.98f, 0.82f, 0.46f, 1.0f), ETextJustify::Right);
+    if (UHorizontalBoxSlot* ValueSlot = Row->AddChildToHorizontalBox(OutValueText)) {
+      ValueSlot->SetPadding(FMargin(0.0f, 0.0f, 12.0f, 0.0f));
+      ValueSlot->SetVerticalAlignment(VAlign_Center);
+    }
+    UCheckBox* Switch = this->WidgetTree->ConstructWidget<UCheckBox>();
+    Switch->SetCheckedState(ECheckBoxState::Unchecked);
+    if (UHorizontalBoxSlot* SwitchSlot = Row->AddChildToHorizontalBox(Switch)) {
+      SwitchSlot->SetVerticalAlignment(VAlign_Center);
+    }
+    return Switch;
+  };
+
+  this->OverallQualitySlider =
+      AddSettingSlider(GraphicsPanel, TEXT("QUALITY"), this->QualityValueText, 0.0f, 4.0f, 1.0f);
+  this->OverallQualitySlider->OnValueChanged.AddDynamic(this, &UProjectAirDefenseBattleWidget::HandleOverallQualitySliderChanged);
+  this->AaSlider = AddSettingSlider(GraphicsPanel, TEXT("ANTI-ALIASING"), this->AaValueText, 0.0f, 4.0f, 1.0f);
+  this->AaSlider->OnValueChanged.AddDynamic(this, &UProjectAirDefenseBattleWidget::HandleAaSliderChanged);
+  this->AoSwitch = AddSwitchRow(GraphicsPanel, TEXT("AMBIENT OCCLUSION"), this->AoValueText);
+  this->AoSwitch->OnCheckStateChanged.AddDynamic(this, &UProjectAirDefenseBattleWidget::HandleAoSwitchChanged);
+  this->BlurSwitch = AddSwitchRow(GraphicsPanel, TEXT("MOTION BLUR"), this->BlurValueText);
+  this->BlurSwitch->OnCheckStateChanged.AddDynamic(this, &UProjectAirDefenseBattleWidget::HandleBlurSwitchChanged);
+  this->RayTracingSwitch = AddSwitchRow(GraphicsPanel, TEXT("RAY TRACING REQUEST"), this->RayTracingValueText);
+  this->RayTracingSwitch->OnCheckStateChanged.AddDynamic(this, &UProjectAirDefenseBattleWidget::HandleRayTracingSwitchChanged);
+  this->ShadowSlider = AddSettingSlider(GraphicsPanel, TEXT("SHADOWS"), this->ShadowValueText, 0.0f, 4.0f, 1.0f);
+  this->ShadowSlider->OnValueChanged.AddDynamic(this, &UProjectAirDefenseBattleWidget::HandleShadowSliderChanged);
+  this->ReflectionSlider = AddSettingSlider(GraphicsPanel, TEXT("REFLECTIONS"), this->ReflectionValueText, 0.0f, 4.0f, 1.0f);
+  this->ReflectionSlider->OnValueChanged.AddDynamic(this, &UProjectAirDefenseBattleWidget::HandleReflectionSliderChanged);
+  this->PostSlider = AddSettingSlider(GraphicsPanel, TEXT("POST PROCESS"), this->PostValueText, 0.0f, 4.0f, 1.0f);
+  this->PostSlider->OnValueChanged.AddDynamic(this, &UProjectAirDefenseBattleWidget::HandlePostSliderChanged);
+
+  UVerticalBox* TimePanel = BuildDrawerPanel(TEXT("TIME"), FLinearColor(1.0f, 0.78f, 0.38f, 1.0f));
+  this->TimeSummaryText =
+      CreateText(this->WidgetTree, TEXT("TIME 14:00 | PAUSED"), 19, FLinearColor(0.94f, 0.97f, 1.0f, 1.0f));
+  if (UVerticalBoxSlot* VerticalSlot = TimePanel->AddChildToVerticalBox(this->TimeSummaryText)) {
+    VerticalSlot->SetPadding(FMargin(0.0f, 0.0f, 0.0f, 12.0f));
+  }
+  this->TimeOfDaySlider =
+      AddSettingSlider(TimePanel, TEXT("TIME OF DAY"), this->TimeOfDayValueText, 0.0f, 24.0f, 0.25f);
+  this->TimeOfDaySlider->OnValueChanged.AddDynamic(this, &UProjectAirDefenseBattleWidget::HandleTimeOfDaySliderChanged);
+  this->TimeScaleSlider =
+      AddSettingSlider(TimePanel, TEXT("DAY/NIGHT SPEED"), this->TimeScaleValueText, 0.0f, 12.0f, 0.25f);
+  this->TimeScaleSlider->OnValueChanged.AddDynamic(this, &UProjectAirDefenseBattleWidget::HandleTimeScaleSliderChanged);
+  this->TimeCycleSwitch = AddSwitchRow(TimePanel, TEXT("CYCLE"), this->TimeCycleValueText);
+  this->TimeCycleSwitch->OnCheckStateChanged.AddDynamic(this, &UProjectAirDefenseBattleWidget::HandleTimeCycleSwitchChanged);
 
   this->SetDrawerVisibility(false);
 }

@@ -10,7 +10,9 @@
 #include "ProjectAirDefenseBattleManager.h"
 #include "ProjectAirDefenseBattleWidget.h"
 #include "ProjectAirDefenseCityCameraPawn.h"
+#include "ProjectAirDefenseGameMode.h"
 #include "ProjectAirDefenseMainMenuWidget.h"
+#include "ProjectAirDefenseRuntimeSettings.h"
 
 namespace {
 FString VerificationScreenshotPath() {
@@ -52,9 +54,13 @@ void AProjectAirDefensePlayerController::SetupInputComponent() {
   this->InputComponent->BindKey(EKeys::F5, IE_Pressed, this, &AProjectAirDefensePlayerController::HandleCycleAntiAliasing);
   this->InputComponent->BindKey(EKeys::F6, IE_Pressed, this, &AProjectAirDefensePlayerController::HandleToggleAmbientOcclusion);
   this->InputComponent->BindKey(EKeys::F7, IE_Pressed, this, &AProjectAirDefensePlayerController::HandleToggleMotionBlur);
+  this->InputComponent->BindKey(EKeys::F4, IE_Pressed, this, &AProjectAirDefensePlayerController::HandleToggleRayTracing);
   this->InputComponent->BindKey(EKeys::F8, IE_Pressed, this, &AProjectAirDefensePlayerController::HandleCycleShadowQuality);
   this->InputComponent->BindKey(EKeys::F9, IE_Pressed, this, &AProjectAirDefensePlayerController::HandleCycleReflectionQuality);
   this->InputComponent->BindKey(EKeys::F10, IE_Pressed, this, &AProjectAirDefensePlayerController::HandleCyclePostProcessingQuality);
+  this->InputComponent->BindKey(EKeys::LeftBracket, IE_Pressed, this, &AProjectAirDefensePlayerController::HandleTimeStepBack);
+  this->InputComponent->BindKey(EKeys::RightBracket, IE_Pressed, this, &AProjectAirDefensePlayerController::HandleTimeStepForward);
+  this->InputComponent->BindKey(EKeys::P, IE_Pressed, this, &AProjectAirDefensePlayerController::HandleToggleTimeCycle);
   this->InputComponent->BindKey(EKeys::F11, IE_Pressed, this, &AProjectAirDefensePlayerController::HandleCaptureVerificationScreenshot);
   this->InputComponent->BindKey(EKeys::F12, IE_Pressed, this, &AProjectAirDefensePlayerController::HandleRequestGracefulQuit);
 }
@@ -123,9 +129,22 @@ void AProjectAirDefensePlayerController::RequestDecreaseQuality() {
   }
 }
 
+void AProjectAirDefensePlayerController::RequestSetOverallQualityLevel(int32 QualityLevel) {
+  if (AProjectAirDefenseBattleManager* BattleManager = this->FindBattleManager()) {
+    BattleManager->SetOverallQualityLevel(QualityLevel);
+  }
+}
+
 void AProjectAirDefensePlayerController::RequestCycleAntiAliasing() {
   if (AProjectAirDefenseBattleManager* BattleManager = this->FindBattleManager()) {
     BattleManager->CycleAntiAliasingMethod();
+  }
+}
+
+void AProjectAirDefensePlayerController::RequestSetAntiAliasingMethod(
+    EProjectAirDefenseAntiAliasingMethod Method) {
+  if (AProjectAirDefenseBattleManager* BattleManager = this->FindBattleManager()) {
+    BattleManager->SetAntiAliasingMethod(Method);
   }
 }
 
@@ -135,9 +154,33 @@ void AProjectAirDefensePlayerController::RequestToggleAmbientOcclusion() {
   }
 }
 
+void AProjectAirDefensePlayerController::RequestSetAmbientOcclusionEnabled(bool bEnabled) {
+  if (AProjectAirDefenseBattleManager* BattleManager = this->FindBattleManager()) {
+    BattleManager->SetAmbientOcclusionEnabled(bEnabled);
+  }
+}
+
 void AProjectAirDefensePlayerController::RequestToggleMotionBlur() {
   if (AProjectAirDefenseBattleManager* BattleManager = this->FindBattleManager()) {
     BattleManager->ToggleMotionBlur();
+  }
+}
+
+void AProjectAirDefensePlayerController::RequestSetMotionBlurEnabled(bool bEnabled) {
+  if (AProjectAirDefenseBattleManager* BattleManager = this->FindBattleManager()) {
+    BattleManager->SetMotionBlurEnabled(bEnabled);
+  }
+}
+
+void AProjectAirDefensePlayerController::RequestToggleRayTracing() {
+  if (AProjectAirDefenseBattleManager* BattleManager = this->FindBattleManager()) {
+    BattleManager->ToggleRayTracing();
+  }
+}
+
+void AProjectAirDefensePlayerController::RequestSetRayTracingEnabled(bool bEnabled) {
+  if (AProjectAirDefenseBattleManager* BattleManager = this->FindBattleManager()) {
+    BattleManager->SetRayTracingEnabled(bEnabled);
   }
 }
 
@@ -147,15 +190,33 @@ void AProjectAirDefensePlayerController::RequestCycleShadowQuality() {
   }
 }
 
+void AProjectAirDefensePlayerController::RequestSetShadowQualityLevel(int32 QualityLevel) {
+  if (AProjectAirDefenseBattleManager* BattleManager = this->FindBattleManager()) {
+    BattleManager->SetShadowQualityLevel(QualityLevel);
+  }
+}
+
 void AProjectAirDefensePlayerController::RequestCycleReflectionQuality() {
   if (AProjectAirDefenseBattleManager* BattleManager = this->FindBattleManager()) {
     BattleManager->CycleReflectionQuality();
   }
 }
 
+void AProjectAirDefensePlayerController::RequestSetReflectionQualityLevel(int32 QualityLevel) {
+  if (AProjectAirDefenseBattleManager* BattleManager = this->FindBattleManager()) {
+    BattleManager->SetReflectionQualityLevel(QualityLevel);
+  }
+}
+
 void AProjectAirDefensePlayerController::RequestCyclePostProcessingQuality() {
   if (AProjectAirDefenseBattleManager* BattleManager = this->FindBattleManager()) {
     BattleManager->CyclePostProcessingQuality();
+  }
+}
+
+void AProjectAirDefensePlayerController::RequestSetPostProcessingQualityLevel(int32 QualityLevel) {
+  if (AProjectAirDefenseBattleManager* BattleManager = this->FindBattleManager()) {
+    BattleManager->SetPostProcessingQualityLevel(QualityLevel);
   }
 }
 
@@ -193,6 +254,80 @@ void AProjectAirDefensePlayerController::RequestCameraReset() {
   if (AProjectAirDefenseCityCameraPawn* CameraPawn = this->FindCameraPawn()) {
     CameraPawn->ResetCamera();
   }
+}
+
+void AProjectAirDefensePlayerController::RequestTimeStepBack() {
+  const UProjectAirDefenseRuntimeSettings* Settings = GetDefault<UProjectAirDefenseRuntimeSettings>();
+  this->RequestTimeStep(-(Settings == nullptr ? 1.0 : Settings->TimeControlStepHours));
+}
+
+void AProjectAirDefensePlayerController::RequestTimeStepForward() {
+  const UProjectAirDefenseRuntimeSettings* Settings = GetDefault<UProjectAirDefenseRuntimeSettings>();
+  this->RequestTimeStep(Settings == nullptr ? 1.0 : Settings->TimeControlStepHours);
+}
+
+void AProjectAirDefensePlayerController::RequestTimeStep(double DeltaHours) {
+  if (AProjectAirDefenseGameMode* GameMode = this->FindProjectGameMode()) {
+    GameMode->AdjustSolarTime(DeltaHours);
+  }
+}
+
+void AProjectAirDefensePlayerController::RequestSetSolarTime(double SolarTimeHours) {
+  if (AProjectAirDefenseGameMode* GameMode = this->FindProjectGameMode()) {
+    GameMode->SetSolarTime(SolarTimeHours);
+  }
+}
+
+void AProjectAirDefensePlayerController::RequestSlowerTime() {
+  if (AProjectAirDefenseGameMode* GameMode = this->FindProjectGameMode()) {
+    GameMode->AdjustTimeScale(-this->GetTimeScaleStepHoursPerMinute());
+  }
+}
+
+void AProjectAirDefensePlayerController::RequestFasterTime() {
+  if (AProjectAirDefenseGameMode* GameMode = this->FindProjectGameMode()) {
+    GameMode->AdjustTimeScale(this->GetTimeScaleStepHoursPerMinute());
+  }
+}
+
+void AProjectAirDefensePlayerController::RequestSetTimeScale(double HoursPerMinute) {
+  if (AProjectAirDefenseGameMode* GameMode = this->FindProjectGameMode()) {
+    GameMode->SetTimeScale(HoursPerMinute);
+  }
+}
+
+void AProjectAirDefensePlayerController::RequestToggleTimeCycle() {
+  if (AProjectAirDefenseGameMode* GameMode = this->FindProjectGameMode()) {
+    GameMode->ToggleTimeCycle();
+  }
+}
+
+double AProjectAirDefensePlayerController::GetSolarTimeHours() const {
+  if (const AProjectAirDefenseGameMode* GameMode = this->FindProjectGameMode()) {
+    return GameMode->GetSolarTime();
+  }
+  return 0.0;
+}
+
+double AProjectAirDefensePlayerController::GetTimeScaleHoursPerMinute() const {
+  if (const AProjectAirDefenseGameMode* GameMode = this->FindProjectGameMode()) {
+    return GameMode->GetTimeScale();
+  }
+  return 0.0;
+}
+
+double AProjectAirDefensePlayerController::GetTimeScaleMaxHoursPerMinute() const {
+  if (const AProjectAirDefenseGameMode* GameMode = this->FindProjectGameMode()) {
+    return GameMode->GetTimeScaleMax();
+  }
+  return 12.0;
+}
+
+FString AProjectAirDefensePlayerController::BuildTimeSummaryText() const {
+  if (const AProjectAirDefenseGameMode* GameMode = this->FindProjectGameMode()) {
+    return GameMode->BuildTimeSummaryText();
+  }
+  return TEXT("TIME --:-- | PAUSED");
 }
 
 void AProjectAirDefensePlayerController::BuildWidgets() {
@@ -255,9 +390,28 @@ void AProjectAirDefensePlayerController::ApplyVerificationLaunchFlags() {
       0.25f);
 }
 
+AProjectAirDefenseGameMode* AProjectAirDefensePlayerController::FindProjectGameMode() const {
+  UWorld* World = this->GetWorld();
+  return World == nullptr ? nullptr : World->GetAuthGameMode<AProjectAirDefenseGameMode>();
+}
+
+double AProjectAirDefensePlayerController::GetTimeScaleStepHoursPerMinute() const {
+  const UProjectAirDefenseRuntimeSettings* Settings = GetDefault<UProjectAirDefenseRuntimeSettings>();
+  return Settings == nullptr ? 1.0 : FMath::Max(Settings->TimeScaleStepHoursPerMinute, 0.25);
+}
+
+bool AProjectAirDefensePlayerController::StartBattleForShortcut(
+    bool bStartWaveImmediately,
+    bool bOpenSystemsImmediately) {
+  if (this->bBattleStarted) {
+    return false;
+  }
+  this->StartBattleExperience(bStartWaveImmediately, bOpenSystemsImmediately);
+  return true;
+}
+
 void AProjectAirDefensePlayerController::HandleToggleSystemsMenu() {
-  if (!this->bBattleStarted) {
-    this->StartBattleExperience(false, true);
+  if (this->StartBattleForShortcut(false, true)) {
     return;
   }
   this->SetSystemsMenuVisible(!this->bSystemsMenuVisible);
@@ -282,83 +436,101 @@ void AProjectAirDefensePlayerController::HandlePrimaryMenuAction() {
 }
 
 void AProjectAirDefensePlayerController::HandleStartWave() {
-  if (!this->bBattleStarted) {
-    this->StartBattleExperience(true, false);
+  if (this->StartBattleForShortcut(true, false)) {
     return;
   }
   this->RequestStartWave();
 }
 
 void AProjectAirDefensePlayerController::HandleCycleDoctrine() {
-  if (!this->bBattleStarted) {
-    this->StartBattleExperience(false, true);
+  if (this->StartBattleForShortcut(false, true)) {
     return;
   }
   this->RequestCycleDoctrine();
 }
 
 void AProjectAirDefensePlayerController::HandleIncreaseQuality() {
-  if (!this->bBattleStarted) {
-    this->StartBattleExperience(false, true);
+  if (this->StartBattleForShortcut(false, true)) {
     return;
   }
   this->RequestIncreaseQuality();
 }
 
 void AProjectAirDefensePlayerController::HandleDecreaseQuality() {
-  if (!this->bBattleStarted) {
-    this->StartBattleExperience(false, true);
+  if (this->StartBattleForShortcut(false, true)) {
     return;
   }
   this->RequestDecreaseQuality();
 }
 
 void AProjectAirDefensePlayerController::HandleCycleAntiAliasing() {
-  if (!this->bBattleStarted) {
-    this->StartBattleExperience(false, true);
+  if (this->StartBattleForShortcut(false, true)) {
     return;
   }
   this->RequestCycleAntiAliasing();
 }
 
 void AProjectAirDefensePlayerController::HandleToggleAmbientOcclusion() {
-  if (!this->bBattleStarted) {
-    this->StartBattleExperience(false, true);
+  if (this->StartBattleForShortcut(false, true)) {
     return;
   }
   this->RequestToggleAmbientOcclusion();
 }
 
 void AProjectAirDefensePlayerController::HandleToggleMotionBlur() {
-  if (!this->bBattleStarted) {
-    this->StartBattleExperience(false, true);
+  if (this->StartBattleForShortcut(false, true)) {
     return;
   }
   this->RequestToggleMotionBlur();
 }
 
+void AProjectAirDefensePlayerController::HandleToggleRayTracing() {
+  if (this->StartBattleForShortcut(false, true)) {
+    return;
+  }
+  this->RequestToggleRayTracing();
+}
+
 void AProjectAirDefensePlayerController::HandleCycleShadowQuality() {
-  if (!this->bBattleStarted) {
-    this->StartBattleExperience(false, true);
+  if (this->StartBattleForShortcut(false, true)) {
     return;
   }
   this->RequestCycleShadowQuality();
 }
 
 void AProjectAirDefensePlayerController::HandleCycleReflectionQuality() {
-  if (!this->bBattleStarted) {
-    this->StartBattleExperience(false, true);
+  if (this->StartBattleForShortcut(false, true)) {
     return;
   }
   this->RequestCycleReflectionQuality();
 }
 
 void AProjectAirDefensePlayerController::HandleCyclePostProcessingQuality() {
-  if (!this->bBattleStarted) {
-    this->StartBattleExperience(false, true);
+  if (this->StartBattleForShortcut(false, true)) {
     return;
   }
   this->RequestCyclePostProcessingQuality();
+}
+
+void AProjectAirDefensePlayerController::HandleTimeStepBack() {
+  if (this->StartBattleForShortcut(false, true)) {
+    return;
+  }
+  this->RequestTimeStepBack();
+}
+
+void AProjectAirDefensePlayerController::HandleTimeStepForward() {
+  if (this->StartBattleForShortcut(false, true)) {
+    return;
+  }
+  this->RequestTimeStepForward();
+}
+
+void AProjectAirDefensePlayerController::HandleToggleTimeCycle() {
+  if (this->StartBattleForShortcut(false, true)) {
+    return;
+  }
+  this->RequestToggleTimeCycle();
 }
 
 void AProjectAirDefensePlayerController::HandleCaptureVerificationScreenshot() {

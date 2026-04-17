@@ -2,6 +2,8 @@
 
 These repo-local skills are mandatory guidance surfaces for external agents.
 
+Single-session rule: do not spawn, delegate to, coordinate, or recommend background agents, subagents, parallel agents, or separate agent sessions for this repo. `AGENTS.md` has top precedence if any skill, adapter, or external workflow conflicts.
+
 ## Precedence
 1. `AGENTS.md`
 2. `docs/reference/ai-agent-context-routing.md`
@@ -49,5 +51,5 @@ Engine rule: Unreal Engine 5 is the only permitted engine for new runtime/editor
 - Compression changes phrasing only; it never reduces safety, verification, or uncertainty handling.
 - Every external runtime asset must be reflected in `android/assets/ATTRIBUTION.md`.
 - Every workflow or source-map change must update the relevant doc in `docs/`.
-- Do not use background agents or subagents unless the user explicitly asks for them.
+- Do not use background agents, subagents, parallel agents, or separate agent sessions.
 - Do not leak PATs, passwords, or internal-only URLs into external research tools.

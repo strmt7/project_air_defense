@@ -32,6 +32,10 @@ struct FProjectAirDefenseDistrictCell {
   FVector3d LocalPositionMeters = FVector3d::ZeroVector;
   double RadiusMeters = 180.0;
   double Integrity = 100.0;
+  double StructuralIntegrity = 100.0;
+  int32 DamagedFloors = 0;
+  int32 CollapsedFloors = 0;
+  bool bCollapsed = false;
 };
 
 struct FProjectAirDefenseThreatState {
@@ -65,12 +69,22 @@ struct FProjectAirDefenseTrailEvent {
 struct FProjectAirDefenseBlastEvent {
   FVector3d PositionMeters = FVector3d::ZeroVector;
   double RadiusMeters = 0.0;
+  double GroundCoupling = 0.0;
+  double PeakDamage = 0.0;
   EProjectAirDefenseBlastKind Kind = EProjectAirDefenseBlastKind::HostileImpact;
+  bool bGroundImpact = false;
 };
 
 struct FProjectAirDefenseDistrictDamageEvent {
   FString DistrictId;
   double Integrity = 100.0;
+  double StructuralIntegrity = 100.0;
+  double Damage = 0.0;
+  double BlastDistanceMeters = 0.0;
+  double GroundCoupling = 0.0;
+  int32 DamagedFloors = 0;
+  int32 CollapsedFloors = 0;
+  bool bCollapsed = false;
   FVector3d EpicenterMeters = FVector3d::ZeroVector;
 };
 
@@ -142,6 +156,10 @@ struct FProjectAirDefenseRadarDistrictSnapshot {
   FVector2d LocalPositionMeters = FVector2d::ZeroVector;
   double RadiusMeters = 0.0;
   double Integrity = 100.0;
+  double StructuralIntegrity = 100.0;
+  int32 DamagedFloors = 0;
+  int32 CollapsedFloors = 0;
+  bool bCollapsed = false;
 };
 
 struct FProjectAirDefenseRadarLauncherSnapshot {

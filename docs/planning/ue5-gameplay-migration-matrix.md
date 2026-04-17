@@ -26,7 +26,7 @@ This file is the authoritative checklist for porting the actual game from the le
 | Wave spawning and accounting | `BattleSimulation.kt` | `ProjectAirDefenseBattleSimulation.*` | implemented, verified | consistency + seeded tests |
 | Interceptor lead solve and fuse check | `BattleLogic.kt` | `ProjectAirDefenseBattleSimulation.*` | implemented, verified | intercept tests |
 | Threat impact and city damage | `BattleSimulation.kt` | `ProjectAirDefenseBattleSimulation.*` | implemented, verified | hostile-impact test |
-| Monte Carlo / headless balance lane | `BattleMonteCarloRunner.kt` | UE headless simulation runner | pending | command + report |
+| Monte Carlo / headless balance lane | `BattleMonteCarloRunner.kt` | `ProjectAirDefenseBattleMonteCarloCommandlet.*` | implemented, verified | `scripts/run-ue5-automation-tests.ps1` smoke JSON contract + `scripts/run-ue5-battle-monte-carlo.ps1` full balance report |
 
 ## Runtime Gameplay Presentation
 
@@ -38,7 +38,7 @@ This file is the authoritative checklist for porting the actual game from the le
 | Touch-first systems drawer and camera controls | `BattleHudController.kt` + `BattleSceneController.kt` | `ProjectAirDefenseBattleWidget.*` + `ProjectAirDefenseCityCameraPawn.*` | implemented, verified | packaged systems runtime capture |
 | Gameplay input: start wave, doctrine, graphics toggles | `BattleHudController.kt` + `StartScreen.kt` | `ProjectAirDefensePlayerController.*` | implemented, verified | runtime input exercise |
 | Radar / tactical overlay | `BattleRadarOverlayRenderer.kt` | `ProjectAirDefenseRadarWidget.*` + `ProjectAirDefenseBattleManager::BuildRadarSnapshot()` | implemented, verified | packaged runtime capture |
-| Battle VFX and blast readability | `BattleEffectsController.kt` | UE VFX path | pending | runtime capture |
+| Battle VFX and blast readability | `BattleEffectsController.kt` | `ProjectAirDefenseBattleManager.*` packaged mesh VFX | implemented, verified | packaged battle runtime capture |
 
 ## Menus And UX
 
@@ -57,7 +57,7 @@ This file is the authoritative checklist for porting the actual game from the le
 
 ## Immediate Order
 
-1. Add battle VFX and blast readability improvements.
-2. Add a headless Monte Carlo lane for UE5 balance work.
+1. Add Android-device UE packaging/profiling proof after the Win64 UE5 runtime lane is stable.
+2. Add asset validation gates for 3D Tiles, glTF/GLB, and compressed texture inputs before new city datasets become active runtime content.
 3. Move the front-end menu stack toward CommonUI only if the current UMG menu flow starts fragmenting.
 4. Replace the direct `UButton::IsFocusable` construction workaround with a stable UE5.7-safe non-focus path when Epic exposes one publicly.
