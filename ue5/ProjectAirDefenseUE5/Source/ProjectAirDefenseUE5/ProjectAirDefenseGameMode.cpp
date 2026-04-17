@@ -2,13 +2,16 @@
 
 #include "Cesium3DTileset.h"
 #include "CesiumGeoreference.h"
+#include "CesiumGlobeAnchorComponent.h"
 #include "CesiumSunSky.h"
 #include "HighResScreenshot.h"
 #include "HAL/FileManager.h"
 #include "Kismet/KismetSystemLibrary.h"
 #include "Misc/CommandLine.h"
 #include "Engine/ExponentialHeightFog.h"
+#include "Components/DirectionalLightComponent.h"
 #include "Components/ExponentialHeightFogComponent.h"
+#include "Components/SkyLightComponent.h"
 #include "Engine/PostProcessVolume.h"
 #include "GameFramework/HUD.h"
 #include "GameFramework/WorldSettings.h"
@@ -25,9 +28,37 @@
 
 namespace {
 constexpr const TCHAR* ProjectCategory = TEXT("ProjectAirDefense");
+
+double WrapSolarTime(double SolarTime) {
+  double WrappedTime = FMath::Fmod(SolarTime, 24.0);
+  if (WrappedTime < 0.0) {
+    WrappedTime += 24.0;
+  }
+  return WrappedTime;
+}
+
+double DaylightAlphaForSolarTime(double SolarTime) {
+  const double SunHeight = FMath::Cos((WrapSolarTime(SolarTime) - 12.0) * UE_DOUBLE_PI / 12.0);
+  const double RawAlpha = FMath::Clamp((SunHeight + 0.08) / 1.08, 0.0, 1.0);
+  return RawAlpha * RawAlpha * (3.0 - 2.0 * RawAlpha);
+}
+
+double ResolveTimeScaleMaxHoursPerMinute(const UProjectAirDefenseRuntimeSettings* Settings) {
+  return Settings == nullptr ? 12.0 : FMath::Max(Settings->TimeScaleMaxHoursPerMinute, 0.25);
+}
+
+double ResolveTimeScaleResumeHoursPerMinute(const UProjectAirDefenseRuntimeSettings* Settings) {
+  const double MaxScale = ResolveTimeScaleMaxHoursPerMinute(Settings);
+  const double PreferredScale =
+      Settings != nullptr && Settings->TimeScaleDefaultHoursPerMinute > 0.0
+          ? Settings->TimeScaleDefaultHoursPerMinute
+          : (Settings == nullptr ? 1.0 : Settings->TimeScaleStepHoursPerMinute);
+  return FMath::Clamp(PreferredScale, 0.25, MaxScale);
+}
 }
 
 AProjectAirDefenseGameMode::AProjectAirDefenseGameMode() {
+  this->PrimaryActorTick.bCanEverTick = true;
   this->DefaultPawnClass = AProjectAirDefenseCityCameraPawn::StaticClass();
   this->PlayerControllerClass = AProjectAirDefensePlayerController::StaticClass();
   this->HUDClass = AHUD::StaticClass();
@@ -37,6 +68,71 @@ void AProjectAirDefenseGameMode::BeginPlay() {
   Super::BeginPlay();
   this->BootstrapPilotScene();
   this->ConfigureVerificationCapture();
+}
+
+void AProjectAirDefenseGameMode::Tick(float DeltaSeconds) {
+  Super::Tick(DeltaSeconds);
+
+  if (this->RuntimeSunSky == nullptr || FMath::IsNearlyZero(this->RuntimeTimeScaleHoursPerMinute)) {
+    return;
+  }
+
+  this->RuntimeSolarTime =
+      WrapSolarTime(this->RuntimeSolarTime + static_cast<double>(DeltaSeconds) * this->RuntimeTimeScaleHoursPerMinute / 60.0);
+  this->ApplyRuntimeSolarLighting();
+}
+
+void AProjectAirDefenseGameMode::AdjustSolarTime(double DeltaHours) {
+  this->RuntimeSolarTime = WrapSolarTime(this->RuntimeSolarTime + DeltaHours);
+  this->ApplyRuntimeSolarLighting();
+}
+
+void AProjectAirDefenseGameMode::SetSolarTime(double SolarTimeHours) {
+  this->RuntimeSolarTime = WrapSolarTime(SolarTimeHours);
+  this->ApplyRuntimeSolarLighting();
+}
+
+void AProjectAirDefenseGameMode::AdjustTimeScale(double DeltaHoursPerMinute) {
+  const UProjectAirDefenseRuntimeSettings* Settings = GetDefault<UProjectAirDefenseRuntimeSettings>();
+  this->RuntimeTimeScaleHoursPerMinute =
+      FMath::Clamp(
+          this->RuntimeTimeScaleHoursPerMinute + DeltaHoursPerMinute,
+          0.0,
+          ResolveTimeScaleMaxHoursPerMinute(Settings));
+}
+
+void AProjectAirDefenseGameMode::SetTimeScale(double HoursPerMinute) {
+  const UProjectAirDefenseRuntimeSettings* Settings = GetDefault<UProjectAirDefenseRuntimeSettings>();
+  this->RuntimeTimeScaleHoursPerMinute =
+      FMath::Clamp(HoursPerMinute, 0.0, ResolveTimeScaleMaxHoursPerMinute(Settings));
+}
+
+void AProjectAirDefenseGameMode::ToggleTimeCycle() {
+  const UProjectAirDefenseRuntimeSettings* Settings = GetDefault<UProjectAirDefenseRuntimeSettings>();
+  this->RuntimeTimeScaleHoursPerMinute =
+      FMath::IsNearlyZero(this->RuntimeTimeScaleHoursPerMinute) ? ResolveTimeScaleResumeHoursPerMinute(Settings) : 0.0;
+}
+
+double AProjectAirDefenseGameMode::GetSolarTime() const {
+  return WrapSolarTime(this->RuntimeSolarTime);
+}
+
+double AProjectAirDefenseGameMode::GetTimeScale() const {
+  return this->RuntimeTimeScaleHoursPerMinute;
+}
+
+double AProjectAirDefenseGameMode::GetTimeScaleMax() const {
+  return ResolveTimeScaleMaxHoursPerMinute(GetDefault<UProjectAirDefenseRuntimeSettings>());
+}
+
+FString AProjectAirDefenseGameMode::BuildTimeSummaryText() const {
+  const int32 TotalMinutes = FMath::RoundToInt(WrapSolarTime(this->RuntimeSolarTime) * 60.0) % (24 * 60);
+  const int32 Hour = TotalMinutes / 60;
+  const int32 Minute = TotalMinutes % 60;
+  if (FMath::IsNearlyZero(this->RuntimeTimeScaleHoursPerMinute)) {
+    return FString::Printf(TEXT("TIME %02d:%02d | PAUSED"), Hour, Minute);
+  }
+  return FString::Printf(TEXT("TIME %02d:%02d | %.1fh/min"), Hour, Minute, this->RuntimeTimeScaleHoursPerMinute);
 }
 
 void AProjectAirDefenseGameMode::BootstrapPilotScene() {
@@ -54,12 +150,17 @@ void AProjectAirDefenseGameMode::BootstrapPilotScene() {
     WorldSettings->bEnableWorldBoundsChecks = false;
   }
 
-  FString TilesetJson = this->FindTilesetJson();
-  if (TilesetJson.IsEmpty()) {
+  FString TilesetJson;
+  FString TilesetUrl = Settings->RemoteTilesetUrl;
+  const bool bUseRemoteTileset = !TilesetUrl.IsEmpty();
+  if (TilesetUrl.IsEmpty()) {
+    TilesetJson = this->FindTilesetJson();
+  }
+  if (TilesetUrl.IsEmpty() && TilesetJson.IsEmpty()) {
     UE_LOG(
         LogTemp,
         Warning,
-        TEXT("[%s] No local tileset.json found under %s"),
+        TEXT("[%s] No remote tileset URL configured and no local tileset.json found under %s"),
         ProjectCategory,
         *Settings->LocalTilesetRootRelativePath);
     return;
@@ -83,6 +184,10 @@ void AProjectAirDefenseGameMode::BootstrapPilotScene() {
     SunSky = World->SpawnActor<ACesiumSunSky>();
   }
   if (SunSky != nullptr) {
+    if (SunSky->GlobeAnchor != nullptr) {
+      SunSky->GlobeAnchor->SetGeoreference(Georeference);
+      SunSky->GlobeAnchor->MoveToEarthCenteredEarthFixedPosition(FVector::ZeroVector);
+    }
     this->ApplyPilotSceneLighting(*SunSky);
   }
   this->ApplyPilotSceneAtmosphere();
@@ -96,10 +201,13 @@ void AProjectAirDefenseGameMode::BootstrapPilotScene() {
   }
 
   Tileset->SetTilesetSource(ETilesetSource::FromUrl);
-  Tileset->SetUrl(this->BuildFileUri(TilesetJson));
+  if (TilesetUrl.IsEmpty()) {
+    TilesetUrl = this->BuildFileUri(TilesetJson);
+  }
+  Tileset->SetUrl(TilesetUrl);
   Tileset->SetGeoreference(Georeference);
   Tileset->ShowCreditsOnScreen = false;
-  Tileset->ApplyDpiScaling = EApplyDpiScaling::No;
+  Tileset->ApplyDpiScaling = EApplyDpiScaling::UseProjectDefault;
   Tileset->MaximumScreenSpaceError = Settings->MaximumScreenSpaceError;
   Tileset->MaximumCachedBytes = Settings->MaximumCachedBytes;
   Tileset->MaximumSimultaneousTileLoads = Settings->MaximumSimultaneousTileLoads;
@@ -117,13 +225,24 @@ void AProjectAirDefenseGameMode::BootstrapPilotScene() {
   Tileset->RefreshTileset();
 
   FVector CameraFocusPoint = FVector::ZeroVector;
-  double TilesetRadiusMeters = 0.0;
-  if (!this->TryResolveTilesetFocusPoint(
-          TilesetJson,
-          *Georeference,
-          CameraFocusPoint,
-          TilesetRadiusMeters)) {
-    CameraFocusPoint = FVector::ZeroVector;
+  double TilesetRadiusMeters = FMath::Max(Settings->RemoteTilesetFallbackRadiusMeters, 0.0);
+  double CameraFrameRadiusMeters = TilesetRadiusMeters;
+  if (!TilesetJson.IsEmpty()) {
+    if (this->TryResolveTilesetFocusPoint(
+            TilesetJson,
+            *Georeference,
+            CameraFocusPoint,
+            TilesetRadiusMeters)) {
+      CameraFrameRadiusMeters = TilesetRadiusMeters;
+    } else {
+      CameraFocusPoint = FVector::ZeroVector;
+    }
+  }
+  if (bUseRemoteTileset && Settings->RemoteTilesetCameraFrameRadiusMeters > 0.0) {
+    CameraFrameRadiusMeters =
+        TilesetRadiusMeters > 0.0
+            ? FMath::Min(Settings->RemoteTilesetCameraFrameRadiusMeters, TilesetRadiusMeters)
+            : Settings->RemoteTilesetCameraFrameRadiusMeters;
   }
 
   APlayerController* PlayerController = World->GetFirstPlayerController();
@@ -132,7 +251,7 @@ void AProjectAirDefenseGameMode::BootstrapPilotScene() {
             Cast<AProjectAirDefenseCityCameraPawn>(PlayerController->GetPawn())) {
       CameraPawn->FrameFocusPoint(
           CameraFocusPoint,
-          static_cast<float>(TilesetRadiusMeters));
+          static_cast<float>(CameraFrameRadiusMeters));
     }
   }
 
@@ -143,11 +262,12 @@ void AProjectAirDefenseGameMode::BootstrapPilotScene() {
   UE_LOG(
       LogTemp,
       Log,
-      TEXT("[%s] Bootstrapped pilot city scene from %s (focus=%s radius=%.2f m)"),
+      TEXT("[%s] Bootstrapped pilot city scene from %s (focus=%s gameplayRadius=%.2f m cameraFrameRadius=%.2f m)"),
       ProjectCategory,
-      *TilesetJson,
+      *TilesetUrl,
       *CameraFocusPoint.ToString(),
-      TilesetRadiusMeters);
+      TilesetRadiusMeters,
+      CameraFrameRadiusMeters);
 }
 
 void AProjectAirDefenseGameMode::ConfigureVerificationCapture() {
@@ -246,21 +366,49 @@ AProjectAirDefenseBattleManager* AProjectAirDefenseGameMode::EnsureBattleManager
   return this->BattleManager;
 }
 
-void AProjectAirDefenseGameMode::ApplyPilotSceneLighting(ACesiumSunSky& SunSky) const {
+void AProjectAirDefenseGameMode::ApplyPilotSceneLighting(ACesiumSunSky& SunSky) {
   const UProjectAirDefenseRuntimeSettings* Settings = GetDefault<UProjectAirDefenseRuntimeSettings>();
   if (Settings == nullptr) {
     return;
   }
 
+  this->RuntimeSunSky = &SunSky;
+  this->RuntimeSolarTime = WrapSolarTime(Settings->SolarTime);
+  this->RuntimeTimeScaleHoursPerMinute =
+      FMath::Clamp(Settings->TimeScaleDefaultHoursPerMinute, 0.0, ResolveTimeScaleMaxHoursPerMinute(Settings));
   SunSky.TimeZone = Settings->TimeZone;
-  SunSky.SolarTime = Settings->SolarTime;
+  SunSky.SolarTime = this->RuntimeSolarTime;
   SunSky.Month = Settings->Month;
   SunSky.Day = Settings->Day;
   SunSky.Year = Settings->Year;
   SunSky.UseDaylightSavingTime = Settings->bUseDaylightSavingTime;
-  SunSky.DirectionalLight->SetIntensity(Settings->DirectionalLightIntensityLux);
-  SunSky.SkyLight->SetIntensity(Settings->SkyLightIntensityScale);
-  SunSky.UpdateSun();
+  if (SunSky.DirectionalLight != nullptr) {
+    SunSky.DirectionalLight->SetCastShadows(true);
+  }
+  if (SunSky.SkyLight != nullptr) {
+    SunSky.SkyLight->SetRealTimeCapture(false);
+  }
+  this->ApplyRuntimeSolarLighting();
+}
+
+void AProjectAirDefenseGameMode::ApplyRuntimeSolarLighting() {
+  const UProjectAirDefenseRuntimeSettings* Settings = GetDefault<UProjectAirDefenseRuntimeSettings>();
+  if (Settings == nullptr || this->RuntimeSunSky == nullptr) {
+    return;
+  }
+
+  this->RuntimeSunSky->SolarTime = this->RuntimeSolarTime;
+  this->RuntimeSunSky->UpdateSun();
+
+  const double DayAlpha = DaylightAlphaForSolarTime(this->RuntimeSolarTime);
+  if (this->RuntimeSunSky->DirectionalLight != nullptr) {
+    this->RuntimeSunSky->DirectionalLight->SetIntensity(
+        FMath::Lerp(Settings->NightDirectionalLightIntensityLux, Settings->DirectionalLightIntensityLux, DayAlpha));
+  }
+  if (this->RuntimeSunSky->SkyLight != nullptr) {
+    this->RuntimeSunSky->SkyLight->SetIntensity(
+        FMath::Lerp(Settings->NightSkyLightIntensityScale, Settings->SkyLightIntensityScale, DayAlpha));
+  }
 }
 
 void AProjectAirDefenseGameMode::ApplyPilotSceneAtmosphere() const {
@@ -317,8 +465,11 @@ void AProjectAirDefenseGameMode::ApplyPilotSceneAtmosphere() const {
   PostProcessVolume->Priority = 100.0f;
 
   FPostProcessSettings& PostProcessSettings = PostProcessVolume->Settings;
-  PostProcessSettings.bOverride_AutoExposureBias = true;
-  PostProcessSettings.AutoExposureBias = Settings->PostExposureBias;
+  const bool bOverrideExposureBias = !FMath::IsNearlyZero(Settings->PostExposureBias);
+  PostProcessSettings.bOverride_AutoExposureBias = bOverrideExposureBias;
+  if (bOverrideExposureBias) {
+    PostProcessSettings.AutoExposureBias = Settings->PostExposureBias;
+  }
   PostProcessSettings.bOverride_BloomIntensity = true;
   PostProcessSettings.BloomIntensity = Settings->PostBloomIntensity;
   PostProcessSettings.bOverride_VignetteIntensity = true;

@@ -26,6 +26,15 @@ public:
   UPROPERTY(EditAnywhere, Config, Category = "City Pilot")
   FString TilesetJsonFileName;
 
+  UPROPERTY(EditAnywhere, Config, Category = "City Pilot")
+  FString RemoteTilesetUrl;
+
+  UPROPERTY(EditAnywhere, Config, Category = "City Pilot")
+  double RemoteTilesetFallbackRadiusMeters;
+
+  UPROPERTY(EditAnywhere, Config, Category = "City Pilot")
+  double RemoteTilesetCameraFrameRadiusMeters;
+
   UPROPERTY(EditAnywhere, Config, Category = "Georeference")
   double OriginLatitude;
 
@@ -58,6 +67,24 @@ public:
 
   UPROPERTY(EditAnywhere, Config, Category = "Lighting")
   double SkyLightIntensityScale;
+
+  UPROPERTY(EditAnywhere, Config, Category = "Lighting")
+  double NightDirectionalLightIntensityLux;
+
+  UPROPERTY(EditAnywhere, Config, Category = "Lighting")
+  double NightSkyLightIntensityScale;
+
+  UPROPERTY(EditAnywhere, Config, Category = "Lighting")
+  double TimeControlStepHours;
+
+  UPROPERTY(EditAnywhere, Config, Category = "Lighting")
+  double TimeScaleDefaultHoursPerMinute;
+
+  UPROPERTY(EditAnywhere, Config, Category = "Lighting")
+  double TimeScaleStepHoursPerMinute;
+
+  UPROPERTY(EditAnywhere, Config, Category = "Lighting")
+  double TimeScaleMaxHoursPerMinute;
 
   UPROPERTY(EditAnywhere, Config, Category = "Atmosphere")
   FLinearColor FogInscatteringColor;

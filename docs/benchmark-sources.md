@@ -33,6 +33,8 @@ This benchmark suite was shaped from the following sources.
   https://github.com/detekt/detekt
 - Gradle Profiler:
   https://github.com/gradle/gradle-profiler
+- Android and 3D game repository benchmark:
+  docs/reference/android-3d-game-repo-benchmark.md
 
 ## How they map to this repo
 
@@ -44,3 +46,5 @@ This benchmark suite was shaped from the following sources.
   `scripts/run-benchmark-suite.ps1`
 - Headless gameplay balance sweep:
   `core:runBattleMonteCarlo`
+- UE5 headless gameplay balance sweep:
+  `scripts/run-ue5-battle-monte-carlo.ps1`

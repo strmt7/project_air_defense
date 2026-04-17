@@ -6,9 +6,11 @@
 #include "ProjectAirDefenseBattleManager.generated.h"
 
 class UMaterialInterface;
+class UInstancedStaticMeshComponent;
 class UStaticMesh;
 class UStaticMeshComponent;
 class USceneComponent;
+enum class EProjectAirDefenseAntiAliasingMethod : uint8;
 
 UCLASS()
 class PROJECTAIRDEFENSEUE5_API AProjectAirDefenseBattleManager : public AActor {
@@ -26,12 +28,21 @@ public:
   void CycleDoctrine();
   void IncreaseOverallQuality();
   void DecreaseOverallQuality();
+  void SetOverallQualityLevel(int32 QualityLevel);
   void CycleAntiAliasingMethod();
+  void SetAntiAliasingMethod(EProjectAirDefenseAntiAliasingMethod Method);
   void ToggleAmbientOcclusion();
+  void SetAmbientOcclusionEnabled(bool bEnabled);
   void ToggleMotionBlur();
+  void SetMotionBlurEnabled(bool bEnabled);
+  void ToggleRayTracing();
+  void SetRayTracingEnabled(bool bEnabled);
   void CycleShadowQuality();
+  void SetShadowQualityLevel(int32 QualityLevel);
   void CycleReflectionQuality();
+  void SetReflectionQualityLevel(int32 QualityLevel);
   void CyclePostProcessingQuality();
+  void SetPostProcessingQualityLevel(int32 QualityLevel);
 
   bool IsBattlefieldInitialized() const;
   FProjectAirDefenseRuntimeSnapshot BuildRuntimeSnapshot() const;
@@ -41,22 +52,41 @@ public:
 private:
   struct FBlastVisual {
     FVector WorldPosition = FVector::ZeroVector;
-    double RadiusUnrealUnits = 0.0;
-    double RemainingSeconds = 0.0;
-    FColor Color = FColor::Red;
+    FVector CoreScale = FVector::OneVector;
+    FVector ShockwaveScale = FVector::OneVector;
+    double AgeSeconds = 0.0;
+    double LifetimeSeconds = 0.0;
+    EProjectAirDefenseBlastKind Kind = EProjectAirDefenseBlastKind::HostileImpact;
+  };
+
+  struct FTrailVisual {
+    FVector WorldPosition = FVector::ZeroVector;
+    FVector BaseScale = FVector::OneVector;
+    double AgeSeconds = 0.0;
+    double LifetimeSeconds = 0.0;
+    bool bHostile = true;
   };
 
   void RebuildSimulation();
   void BuildDistrictCells();
   void SyncStaticVisuals();
   void SyncDynamicVisuals();
+  void SyncDistrictDamageFloorVisuals(const TArray<FProjectAirDefenseDistrictCell>& LiveDistrictCells);
   void UpdateBlastVisuals(double DeltaSeconds);
+  void UpdateTrailVisuals(double DeltaSeconds);
+  void RefreshTransientVisualInstances();
   void ApplyStepEvents(const FProjectAirDefenseStepEvents& Events);
+  void SpawnTrailVisual(const FProjectAirDefenseTrailEvent& TrailEvent);
+  void SpawnBlastVisual(const FProjectAirDefenseBlastEvent& BlastEvent);
   UStaticMeshComponent* CreateStaticMarker(
       const FString& DebugName,
       UStaticMesh* Mesh,
       const FVector& WorldLocation,
       const FVector& WorldScale,
+      const FLinearColor& Color);
+  UInstancedStaticMeshComponent* CreateInstancedMarker(
+      const FString& DebugName,
+      UStaticMesh* Mesh,
       const FLinearColor& Color);
   UStaticMeshComponent* EnsureDynamicMarker(
       TMap<FString, TObjectPtr<UStaticMeshComponent>>& MarkerMap,
@@ -96,6 +126,30 @@ private:
   TArray<TObjectPtr<UStaticMeshComponent>> LauncherVisuals;
 
   UPROPERTY(Transient)
+  TArray<TObjectPtr<UStaticMeshComponent>> DistrictStatusVisuals;
+
+  UPROPERTY(Transient)
+  TObjectPtr<UInstancedStaticMeshComponent> DamagedDistrictFloorInstances;
+
+  UPROPERTY(Transient)
+  TObjectPtr<UInstancedStaticMeshComponent> HostileTrailInstances;
+
+  UPROPERTY(Transient)
+  TObjectPtr<UInstancedStaticMeshComponent> InterceptorTrailInstances;
+
+  UPROPERTY(Transient)
+  TObjectPtr<UInstancedStaticMeshComponent> HostileBlastCoreInstances;
+
+  UPROPERTY(Transient)
+  TObjectPtr<UInstancedStaticMeshComponent> InterceptBlastCoreInstances;
+
+  UPROPERTY(Transient)
+  TObjectPtr<UInstancedStaticMeshComponent> HostileBlastShockwaveInstances;
+
+  UPROPERTY(Transient)
+  TObjectPtr<UInstancedStaticMeshComponent> InterceptBlastShockwaveInstances;
+
+  UPROPERTY(Transient)
   TMap<FString, TObjectPtr<UStaticMeshComponent>> ThreatVisuals;
 
   UPROPERTY(Transient)
@@ -105,6 +159,7 @@ private:
   TArray<FProjectAirDefenseDistrictCell> DistrictCells;
   TArray<FVector3d> LauncherPositionsMeters;
   TArray<FBlastVisual> BlastVisuals;
+  TArray<FTrailVisual> TrailVisuals;
   TMap<FString, FVector> LastThreatWorldPositions;
   TMap<FString, FVector> LastInterceptorWorldPositions;
 
@@ -113,6 +168,8 @@ private:
   double StepAccumulatorSeconds = 0.0;
   double ElapsedBattleSeconds = 0.0;
   double TimeSinceBeginPlaySeconds = 0.0;
+  int32 TrailVisualSpawnsThisFrame = 0;
+  int32 BlastVisualSpawnsThisFrame = 0;
   bool bBattlefieldInitialized = false;
   bool bAutoStartedFirstWave = false;
 };

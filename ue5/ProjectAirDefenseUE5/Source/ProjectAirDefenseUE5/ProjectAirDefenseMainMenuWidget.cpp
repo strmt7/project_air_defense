@@ -13,14 +13,20 @@
 #include "Components/TextBlock.h"
 #include "Components/VerticalBox.h"
 #include "Components/VerticalBoxSlot.h"
+#include "Brushes/SlateRoundedBoxBrush.h"
 #include "ProjectAirDefenseBattleManager.h"
 #include "ProjectAirDefensePlayerController.h"
+#include "ProjectAirDefenseTouchButton.h"
 #include "Styling/AppStyle.h"
 
 namespace {
 constexpr float PanelPadding = 26.0f;
 constexpr float ButtonGap = 14.0f;
 constexpr float ChipGap = 10.0f;
+constexpr float PanelCornerRadius = 18.0f;
+constexpr float ButtonCornerRadius = 12.0f;
+constexpr float ChipCornerRadius = 10.0f;
+constexpr const TCHAR* MainMenuTitleText = TEXT("PROJECT AIR DEFENSE");
 
 FSlateFontInfo MakeFont(int32 Size) {
   FSlateFontInfo FontInfo = FAppStyle::GetFontStyle(TEXT("NormalFont"));
@@ -47,11 +53,38 @@ UButton* CreatePrimaryButton(
     const FString& Label,
     const FLinearColor& FillColor,
     UTextBlock*& OutLabel) {
-  UButton* Button = WidgetTree->ConstructWidget<UButton>();
-  Button->SetBackgroundColor(FillColor);
+  UButton* Button = WidgetTree->ConstructWidget<UProjectAirDefenseTouchButton>();
+  const FLinearColor HoverColor(
+      FMath::Min(FillColor.R + 0.05f, 1.0f),
+      FMath::Min(FillColor.G + 0.06f, 1.0f),
+      FMath::Min(FillColor.B + 0.07f, 1.0f),
+      FillColor.A);
+  const FLinearColor PressedColor(
+      FMath::Max(FillColor.R - 0.035f, 0.0f),
+      FMath::Max(FillColor.G - 0.035f, 0.0f),
+      FMath::Max(FillColor.B - 0.035f, 0.0f),
+      FillColor.A);
+  FButtonStyle ButtonStyle;
+  ButtonStyle.SetNormal(FSlateRoundedBoxBrush(
+      FillColor,
+      ButtonCornerRadius,
+      FLinearColor(0.62f, 0.72f, 0.80f, 0.42f),
+      1.0f));
+  ButtonStyle.SetHovered(FSlateRoundedBoxBrush(
+      HoverColor,
+      ButtonCornerRadius,
+      FLinearColor(0.78f, 0.90f, 1.0f, 0.66f),
+      1.5f));
+  ButtonStyle.SetPressed(FSlateRoundedBoxBrush(
+      PressedColor,
+      ButtonCornerRadius,
+      FLinearColor(0.48f, 0.64f, 0.75f, 0.62f),
+      1.0f));
+  ButtonStyle.SetNormalPadding(FMargin(0.0f));
+  ButtonStyle.SetPressedPadding(FMargin(0.0f));
+  Button->SetStyle(ButtonStyle);
   Button->SetColorAndOpacity(FLinearColor::White);
   Button->SetClickMethod(EButtonClickMethod::MouseDown);
-  Button->IsFocusable = false;
 
   UBorder* PaddingBorder = WidgetTree->ConstructWidget<UBorder>();
   PaddingBorder->SetBrushColor(FLinearColor::Transparent);
@@ -65,14 +98,22 @@ UButton* CreatePrimaryButton(
 
 UBorder* CreatePanel(UWidgetTree* WidgetTree, const FLinearColor& FillColor) {
   UBorder* Border = WidgetTree->ConstructWidget<UBorder>();
-  Border->SetBrushColor(FillColor);
+  Border->SetBrush(FSlateRoundedBoxBrush(
+      FillColor,
+      PanelCornerRadius,
+      FLinearColor(0.62f, 0.74f, 0.82f, 0.22f),
+      1.0f));
   Border->SetPadding(FMargin(PanelPadding));
   return Border;
 }
 
 UBorder* CreateChip(UWidgetTree* WidgetTree, const FString& Label, const FLinearColor& FillColor) {
   UBorder* Border = WidgetTree->ConstructWidget<UBorder>();
-  Border->SetBrushColor(FillColor);
+  Border->SetBrush(FSlateRoundedBoxBrush(
+      FillColor,
+      ChipCornerRadius,
+      FLinearColor(0.75f, 0.86f, 0.92f, 0.18f),
+      1.0f));
   Border->SetPadding(FMargin(12.0f, 6.0f));
   Border->SetContent(CreateText(
       WidgetTree,
@@ -149,7 +190,7 @@ void UProjectAirDefenseMainMenuWidget::BuildWidgetTree() {
   SurfaceBox->SetContent(Content);
 
   UTextBlock* TitleText =
-      CreateText(this->WidgetTree, TEXT("AIR DEFENSE"), 42, FLinearColor(0.96f, 0.98f, 1.0f, 1.0f));
+      CreateText(this->WidgetTree, MainMenuTitleText, 40, FLinearColor(0.96f, 0.98f, 1.0f, 1.0f));
   if (UVerticalBoxSlot* VerticalSlot = Content->AddChildToVerticalBox(TitleText)) {
     VerticalSlot->SetPadding(FMargin(0.0f, 0.0f, 0.0f, 8.0f));
   }

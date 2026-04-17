@@ -2,6 +2,8 @@
 
 UE5-only rule: use Unreal Engine 5 planning docs for all new engine/runtime work. Existing Android/libGDX files are legacy migration-reference only.
 
+Single-session rule: never spawn, delegate to, coordinate, or recommend background agents, subagents, parallel agents, or separate agent sessions.
+
 ## Numeric caps
 - Open at most 4 task-specific files in the first pass.
 - Run at most 2 refine loops before naming the edit target.
@@ -17,7 +19,7 @@ UE5-only rule: use Unreal Engine 5 planning docs for all new engine/runtime work
 | Task | Load first |
 | --- | --- |
 | UE5 engine migration, city sourcing, geospatial pipeline | `docs/planning/ue5-engine-mandate.md`, `docs/planning/ue5-city-model-strategies.md`, `docs/reference/ue5-city-model-source-map.md` |
-| UE5 photoreal city pilot or camera inspection surface | `docs/planning/ue5-city-pilot-helsinki-kalasatama.md`, `docs/planning/ue5-visual-acceptance.md`, `ue5/ProjectAirDefenseUE5/README.md` |
+| UE5 photoreal city pilot or camera inspection surface | `docs/planning/ue5-city-pilot-3dbag-rotterdam.md`, `docs/planning/ue5-city-pilot-helsinki-kalasatama.md`, `docs/planning/ue5-visual-acceptance.md`, `ue5/ProjectAirDefenseUE5/README.md` |
 | UE5 mobile gameplay flow, touch state, radar, battle start, or deterministic verification | `docs/reference/ue5-mobile-agent-skill-sources.md`, `.agents/skills/ue5-mobile-gameplay/SKILL.md`, `docs/planning/ue5-gameplay-migration-matrix.md` |
 | UE5 mobile HUD, menus, settings, or touch ergonomics | `docs/reference/ue5-mobile-agent-skill-sources.md`, `.agents/skills/ue5-mobile-ui/SKILL.md`, nearest UE5 UI code file |
 | UE5 front-end menu stack, options flow, or CommonUI-routing decision | `docs/reference/ue5-mobile-agent-skill-sources.md`, `.agents/skills/ue5-commonui-menu-systems/SKILL.md`, nearest UE5 UI code file |

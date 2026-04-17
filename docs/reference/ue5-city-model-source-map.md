@@ -18,13 +18,14 @@ Compact evidence list for the UE5 city-model plan. Official sources come first. 
 | Source | Type | Why it matters |
 | --- | --- | --- |
 | [Helsinki 3D](https://www.hel.fi/en/decision-making/information-on-helsinki/maps-and-geospatial-data/helsinki-3d) | official city data portal | open 3D mesh and semantic city models exist |
-| [Helsinki Kalasatama 3D Tiles](https://3d.hel.ninja/data/mesh/Kalasatama/Helsinki3D_MESH_Kalasatama_2017_3D_Tiles_ZIP.zip) | official tiles download | direct local UE5 runtime proof path exists |
+| [Helsinki Kalasatama 3D Tiles](https://3d.hel.ninja/data/mesh/Kalasatama/Helsinki3D_MESH_Kalasatama_2017_3D_Tiles_ZIP.zip) | official tiles download | active local UE5 runtime proof path |
 | [Helsinki Kalasatama OBJ mesh](https://3d.hel.ninja/data/mesh/Kalasatama/Helsinki3D_MESH_Kalasatama_2017_OBJ_ZIP.zip) | official mesh download | district-sized textured mesh candidate exists now |
 | [Berlin 3D download portal](https://www.businesslocationcenter.de/en/economic-atlas/download-portal) | official city portal | official textured OBJ city mesh downloads exist |
+| [3DBAG LoD2.2 3D Tiles](https://data.3dbag.nl/v20250903/cesium3dtiles/lod22/tileset.json) | official 3D Tiles stream | evaluated remote UE5 runtime candidate |
 | [3DBAG OBJ delivery](https://docs.3dbag.nl/en/delivery/obj/) | official dataset docs | open OBJ exports are available |
 | [3DBAG CityJSON delivery](https://docs.3dbag.nl/en/delivery/cityjson/) | official dataset docs | semantic open city data is available |
 | [3DBAG web services](https://docs.3dbag.nl/en/delivery/webservices/) | official dataset docs | 3D Tiles and web-service path exists |
-| [3DBAG copyright](https://docs.3dbag.nl/en/copyright/) | official dataset docs | licensing boundary is explicit |
+| [3DBAG copyright](https://docs.3dbag.nl/en/copyright/) | official dataset docs | CC BY 4.0 license and required credit are explicit |
 | [Cesium for Unreal](https://cesium.com/learn/unreal/) | official SDK docs | direct 3D Tiles rendering path inside UE5 |
 | [Cesium for Unreal releases](https://github.com/CesiumGS/cesium-unreal/releases) | official plugin releases | version-pinned local plugin installation path |
 | [Cesium OSM Buildings](https://cesium.com/platform/cesium-ion/content/cesium-osm-buildings/) | official Cesium content page | quick building truth-check layer exists |

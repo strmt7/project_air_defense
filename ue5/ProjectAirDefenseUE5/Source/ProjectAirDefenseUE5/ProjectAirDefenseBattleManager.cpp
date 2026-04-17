@@ -1,7 +1,8 @@
 #include "ProjectAirDefenseBattleManager.h"
 
+#include "Components/InstancedStaticMeshComponent.h"
+#include "Components/SceneComponent.h"
 #include "Components/StaticMeshComponent.h"
-#include "DrawDebugHelpers.h"
 #include "Engine/StaticMesh.h"
 #include "GameFramework/PlayerController.h"
 #include "Materials/MaterialInterface.h"
@@ -11,16 +12,62 @@
 
 namespace {
 constexpr double MetersToUnrealUnits = 100.0;
-constexpr double AutoBlastVisualSeconds = 0.85;
-constexpr double TrailVisualSeconds = 1.25;
+constexpr double AutoBlastVisualSeconds = 1.15;
+constexpr double TrailVisualSeconds = 1.35;
 constexpr double ThreatMarkerRadiusMeters = 5.5;
 constexpr double ThreatMarkerLengthMeters = 30.0;
 constexpr double InterceptorMarkerRadiusMeters = 3.8;
 constexpr double InterceptorMarkerLengthMeters = 18.0;
+constexpr double ThreatTrailRadiusMeters = 3.0;
+constexpr double InterceptorTrailRadiusMeters = 2.0;
+constexpr double BlastCoreRadiusScale = 0.28;
+constexpr double BlastCoreMaxRadiusMeters = 88.0;
+constexpr double BlastShockwaveHalfHeightMeters = 1.6;
 constexpr double LauncherMarkerRadiusMeters = 22.0;
 constexpr double LauncherMarkerHalfHeightMeters = 7.5;
-constexpr double DistrictRingElevationMeters = 10.0;
-constexpr double DistrictStatusStemMeters = 18.0;
+constexpr double DistrictBeaconRadiusMeters = 7.0;
+constexpr double DistrictBeaconMinHalfHeightMeters = 8.0;
+constexpr double DistrictBeaconMaxHalfHeightMeters = 32.0;
+constexpr int32 MaxSimulationStepsPerFrame = 4;
+constexpr int32 MaxTrailVisuals = 160;
+constexpr int32 MaxBlastVisuals = 36;
+constexpr int32 MaxTrailVisualSpawnsPerFrame = 24;
+constexpr int32 MaxBlastVisualSpawnsPerFrame = 6;
+constexpr int32 DistrictDamageFloorCount = 12;
+constexpr double DistrictDamageTowerOffsetXMeters = 46.0;
+constexpr double DistrictDamageTowerOffsetYMeters = -42.0;
+constexpr double DistrictDamageFloorWidthMeters = 42.0;
+constexpr double DistrictDamageFloorDepthMeters = 38.0;
+constexpr double DistrictDamageFloorHeightMeters = 2.0;
+constexpr double DistrictDamageFloorStepMeters = 3.35;
+constexpr double DistrictDamageFloorBaseHeightMeters = 3.0;
+constexpr int32 MinGraphicsQualityLevel = 0;
+constexpr int32 MaxGraphicsQualityLevel = 4;
+constexpr EProjectAirDefenseAntiAliasingMethod AntiAliasingMethods[] = {
+    EProjectAirDefenseAntiAliasingMethod::None,
+    EProjectAirDefenseAntiAliasingMethod::FXAA,
+    EProjectAirDefenseAntiAliasingMethod::TAA,
+    EProjectAirDefenseAntiAliasingMethod::TSR,
+    EProjectAirDefenseAntiAliasingMethod::SMAA,
+};
+
+int32 ClampGraphicsQualityLevel(int32 QualityLevel) {
+  return FMath::Clamp(QualityLevel, MinGraphicsQualityLevel, MaxGraphicsQualityLevel);
+}
+
+void ApplyAndSaveGraphicsSettings(UProjectAirDefenseGameUserSettings& Settings) {
+  Settings.ApplyNonResolutionSettings();
+  Settings.SaveSettings();
+}
+
+int32 AntiAliasingMethodIndex(EProjectAirDefenseAntiAliasingMethod Method) {
+  for (int32 Index = 0; Index < UE_ARRAY_COUNT(AntiAliasingMethods); ++Index) {
+    if (AntiAliasingMethods[Index] == Method) {
+      return Index;
+    }
+  }
+  return 0;
+}
 
 FVector ScaleSphereToRadius(double RadiusMeters) {
   const double RadiusUnrealUnits = RadiusMeters * MetersToUnrealUnits;
@@ -41,7 +88,25 @@ FVector ScaleCone(double RadiusMeters, double LengthMeters) {
       (LengthMeters * MetersToUnrealUnits) / 100.0);
 }
 
-FLinearColor ThreatColor() {
+FVector ScaleBox(double WidthMeters, double DepthMeters, double HeightMeters) {
+  return FVector(
+      (WidthMeters * MetersToUnrealUnits) / 100.0,
+      (DepthMeters * MetersToUnrealUnits) / 100.0,
+      (HeightMeters * MetersToUnrealUnits) / 100.0);
+}
+
+FLinearColor ThreatColor(const FProjectAirDefenseThreatState& Threat) {
+  switch (Threat.ThreatType) {
+  case EProjectAirDefenseThreatType::Ballistic:
+    return Threat.bIsTracked ? FLinearColor(1.0f, 0.42f, 0.18f, 1.0f)
+                             : FLinearColor(0.9f, 0.16f, 0.1f, 1.0f);
+  case EProjectAirDefenseThreatType::Glide:
+    return Threat.bIsTracked ? FLinearColor(1.0f, 0.55f, 0.24f, 1.0f)
+                             : FLinearColor(0.95f, 0.24f, 0.14f, 1.0f);
+  case EProjectAirDefenseThreatType::Cruise:
+    return Threat.bIsTracked ? FLinearColor(1.0f, 0.82f, 0.22f, 1.0f)
+                             : FLinearColor(0.95f, 0.54f, 0.14f, 1.0f);
+  }
   return FLinearColor(1.0f, 0.28f, 0.22f, 1.0f);
 }
 
@@ -52,6 +117,7 @@ FLinearColor InterceptorColor() {
 FRotator MarkerRotationFromVelocity(const FVector& Velocity) {
   return FRotationMatrix::MakeFromZ(Velocity.GetSafeNormal()).Rotator();
 }
+
 } // namespace
 
 AProjectAirDefenseBattleManager::AProjectAirDefenseBattleManager() {
@@ -104,7 +170,10 @@ void AProjectAirDefenseBattleManager::Tick(float DeltaSeconds) {
 
   const double FixedStepSeconds =
       Settings == nullptr ? 0.05 : FMath::Max(Settings->SimulationFixedStepSeconds, 0.01);
-  this->StepAccumulatorSeconds += DeltaSeconds;
+  this->StepAccumulatorSeconds =
+      FMath::Min(this->StepAccumulatorSeconds + DeltaSeconds, FixedStepSeconds * MaxSimulationStepsPerFrame);
+  this->TrailVisualSpawnsThisFrame = 0;
+  this->BlastVisualSpawnsThisFrame = 0;
   while (this->StepAccumulatorSeconds >= FixedStepSeconds) {
     this->StepAccumulatorSeconds -= FixedStepSeconds;
     this->ElapsedBattleSeconds += FixedStepSeconds;
@@ -114,6 +183,8 @@ void AProjectAirDefenseBattleManager::Tick(float DeltaSeconds) {
 
   this->SyncDynamicVisuals();
   this->UpdateBlastVisuals(DeltaSeconds);
+  this->UpdateTrailVisuals(DeltaSeconds);
+  this->RefreshTransientVisualInstances();
 }
 
 void AProjectAirDefenseBattleManager::InitializeBattlefield(
@@ -152,80 +223,166 @@ void AProjectAirDefenseBattleManager::CycleDoctrine() {
 }
 
 void AProjectAirDefenseBattleManager::IncreaseOverallQuality() {
-  if (UProjectAirDefenseGameUserSettings* Settings =
-          UProjectAirDefenseGameUserSettings::GetProjectAirDefenseGameUserSettings()) {
-    const int32 CurrentLevel =
-        Settings->GetOverallScalabilityLevel() < 0 ? 3 : Settings->GetOverallScalabilityLevel();
-    Settings->SetOverallScalabilityLevel(FMath::Clamp(CurrentLevel + 1, 0, 4));
-    Settings->ApplyNonResolutionSettings();
-    Settings->SaveSettings();
-  }
+  const UProjectAirDefenseGameUserSettings* Settings =
+      UProjectAirDefenseGameUserSettings::GetProjectAirDefenseGameUserSettings();
+  const int32 CurrentLevel =
+      Settings == nullptr || Settings->GetOverallScalabilityLevel() < 0
+          ? 3
+          : Settings->GetOverallScalabilityLevel();
+  this->SetOverallQualityLevel(CurrentLevel + 1);
 }
 
 void AProjectAirDefenseBattleManager::DecreaseOverallQuality() {
+  const UProjectAirDefenseGameUserSettings* Settings =
+      UProjectAirDefenseGameUserSettings::GetProjectAirDefenseGameUserSettings();
+  const int32 CurrentLevel =
+      Settings == nullptr || Settings->GetOverallScalabilityLevel() < 0
+          ? 3
+          : Settings->GetOverallScalabilityLevel();
+  this->SetOverallQualityLevel(CurrentLevel - 1);
+}
+
+void AProjectAirDefenseBattleManager::SetOverallQualityLevel(int32 QualityLevel) {
   if (UProjectAirDefenseGameUserSettings* Settings =
           UProjectAirDefenseGameUserSettings::GetProjectAirDefenseGameUserSettings()) {
+    const int32 ClampedQualityLevel = ClampGraphicsQualityLevel(QualityLevel);
     const int32 CurrentLevel =
         Settings->GetOverallScalabilityLevel() < 0 ? 3 : Settings->GetOverallScalabilityLevel();
-    Settings->SetOverallScalabilityLevel(FMath::Clamp(CurrentLevel - 1, 0, 4));
-    Settings->ApplyNonResolutionSettings();
-    Settings->SaveSettings();
+    if (CurrentLevel == ClampedQualityLevel) {
+      return;
+    }
+    Settings->SetOverallScalabilityLevel(ClampedQualityLevel);
+    ApplyAndSaveGraphicsSettings(*Settings);
   }
 }
 
 void AProjectAirDefenseBattleManager::CycleAntiAliasingMethod() {
   if (UProjectAirDefenseGameUserSettings* Settings =
           UProjectAirDefenseGameUserSettings::GetProjectAirDefenseGameUserSettings()) {
-    const int32 NextValue = (static_cast<int32>(Settings->GetPreferredAntiAliasingMethod()) + 1) % 5;
-    Settings->SetPreferredAntiAliasingMethod(
-        static_cast<EProjectAirDefenseAntiAliasingMethod>(NextValue));
-    Settings->ApplyNonResolutionSettings();
-    Settings->SaveSettings();
+    const int32 CurrentIndex = AntiAliasingMethodIndex(Settings->GetPreferredAntiAliasingMethod());
+    this->SetAntiAliasingMethod(AntiAliasingMethods[(CurrentIndex + 1) % UE_ARRAY_COUNT(AntiAliasingMethods)]);
+  }
+}
+
+void AProjectAirDefenseBattleManager::SetAntiAliasingMethod(EProjectAirDefenseAntiAliasingMethod Method) {
+  if (UProjectAirDefenseGameUserSettings* Settings =
+          UProjectAirDefenseGameUserSettings::GetProjectAirDefenseGameUserSettings()) {
+    if (Settings->GetPreferredAntiAliasingMethod() == Method) {
+      return;
+    }
+    Settings->SetPreferredAntiAliasingMethod(Method);
+    ApplyAndSaveGraphicsSettings(*Settings);
   }
 }
 
 void AProjectAirDefenseBattleManager::ToggleAmbientOcclusion() {
   if (UProjectAirDefenseGameUserSettings* Settings =
           UProjectAirDefenseGameUserSettings::GetProjectAirDefenseGameUserSettings()) {
-    Settings->SetAmbientOcclusionEnabled(!Settings->IsAmbientOcclusionEnabled());
-    Settings->ApplyNonResolutionSettings();
-    Settings->SaveSettings();
+    this->SetAmbientOcclusionEnabled(!Settings->IsAmbientOcclusionEnabled());
+  }
+}
+
+void AProjectAirDefenseBattleManager::SetAmbientOcclusionEnabled(bool bEnabled) {
+  if (UProjectAirDefenseGameUserSettings* Settings =
+          UProjectAirDefenseGameUserSettings::GetProjectAirDefenseGameUserSettings()) {
+    if (Settings->IsAmbientOcclusionEnabled() == bEnabled) {
+      return;
+    }
+    Settings->SetAmbientOcclusionEnabled(bEnabled);
+    ApplyAndSaveGraphicsSettings(*Settings);
   }
 }
 
 void AProjectAirDefenseBattleManager::ToggleMotionBlur() {
   if (UProjectAirDefenseGameUserSettings* Settings =
           UProjectAirDefenseGameUserSettings::GetProjectAirDefenseGameUserSettings()) {
-    Settings->SetMotionBlurEnabled(!Settings->IsMotionBlurEnabled());
-    Settings->ApplyNonResolutionSettings();
-    Settings->SaveSettings();
+    this->SetMotionBlurEnabled(!Settings->IsMotionBlurEnabled());
+  }
+}
+
+void AProjectAirDefenseBattleManager::SetMotionBlurEnabled(bool bEnabled) {
+  if (UProjectAirDefenseGameUserSettings* Settings =
+          UProjectAirDefenseGameUserSettings::GetProjectAirDefenseGameUserSettings()) {
+    if (Settings->IsMotionBlurEnabled() == bEnabled) {
+      return;
+    }
+    Settings->SetMotionBlurEnabled(bEnabled);
+    ApplyAndSaveGraphicsSettings(*Settings);
+  }
+}
+
+void AProjectAirDefenseBattleManager::ToggleRayTracing() {
+  if (UProjectAirDefenseGameUserSettings* Settings =
+          UProjectAirDefenseGameUserSettings::GetProjectAirDefenseGameUserSettings()) {
+    this->SetRayTracingEnabled(!Settings->IsRayTracingEnabled());
+  }
+}
+
+void AProjectAirDefenseBattleManager::SetRayTracingEnabled(bool bEnabled) {
+  if (UProjectAirDefenseGameUserSettings* Settings =
+          UProjectAirDefenseGameUserSettings::GetProjectAirDefenseGameUserSettings()) {
+    if (Settings->IsRayTracingEnabled() == bEnabled) {
+      return;
+    }
+    Settings->SetRayTracingEnabled(bEnabled);
+    ApplyAndSaveGraphicsSettings(*Settings);
   }
 }
 
 void AProjectAirDefenseBattleManager::CycleShadowQuality() {
   if (UProjectAirDefenseGameUserSettings* Settings =
           UProjectAirDefenseGameUserSettings::GetProjectAirDefenseGameUserSettings()) {
-    Settings->SetShadowQuality((Settings->GetShadowQuality() + 1) % 5);
-    Settings->ApplyNonResolutionSettings();
-    Settings->SaveSettings();
+    this->SetShadowQualityLevel((Settings->GetShadowQuality() + 1) % (MaxGraphicsQualityLevel + 1));
+  }
+}
+
+void AProjectAirDefenseBattleManager::SetShadowQualityLevel(int32 QualityLevel) {
+  if (UProjectAirDefenseGameUserSettings* Settings =
+          UProjectAirDefenseGameUserSettings::GetProjectAirDefenseGameUserSettings()) {
+    const int32 ClampedQualityLevel = ClampGraphicsQualityLevel(QualityLevel);
+    if (Settings->GetShadowQuality() == ClampedQualityLevel) {
+      return;
+    }
+    Settings->SetShadowQuality(ClampedQualityLevel);
+    ApplyAndSaveGraphicsSettings(*Settings);
   }
 }
 
 void AProjectAirDefenseBattleManager::CycleReflectionQuality() {
   if (UProjectAirDefenseGameUserSettings* Settings =
           UProjectAirDefenseGameUserSettings::GetProjectAirDefenseGameUserSettings()) {
-    Settings->SetReflectionQuality((Settings->GetReflectionQuality() + 1) % 5);
-    Settings->ApplyNonResolutionSettings();
-    Settings->SaveSettings();
+    this->SetReflectionQualityLevel((Settings->GetReflectionQuality() + 1) % (MaxGraphicsQualityLevel + 1));
+  }
+}
+
+void AProjectAirDefenseBattleManager::SetReflectionQualityLevel(int32 QualityLevel) {
+  if (UProjectAirDefenseGameUserSettings* Settings =
+          UProjectAirDefenseGameUserSettings::GetProjectAirDefenseGameUserSettings()) {
+    const int32 ClampedQualityLevel = ClampGraphicsQualityLevel(QualityLevel);
+    if (Settings->GetReflectionQuality() == ClampedQualityLevel) {
+      return;
+    }
+    Settings->SetReflectionQuality(ClampedQualityLevel);
+    ApplyAndSaveGraphicsSettings(*Settings);
   }
 }
 
 void AProjectAirDefenseBattleManager::CyclePostProcessingQuality() {
   if (UProjectAirDefenseGameUserSettings* Settings =
           UProjectAirDefenseGameUserSettings::GetProjectAirDefenseGameUserSettings()) {
-    Settings->SetPostProcessingQuality((Settings->GetPostProcessingQuality() + 1) % 5);
-    Settings->ApplyNonResolutionSettings();
-    Settings->SaveSettings();
+    this->SetPostProcessingQualityLevel((Settings->GetPostProcessingQuality() + 1) % (MaxGraphicsQualityLevel + 1));
+  }
+}
+
+void AProjectAirDefenseBattleManager::SetPostProcessingQualityLevel(int32 QualityLevel) {
+  if (UProjectAirDefenseGameUserSettings* Settings =
+          UProjectAirDefenseGameUserSettings::GetProjectAirDefenseGameUserSettings()) {
+    const int32 ClampedQualityLevel = ClampGraphicsQualityLevel(QualityLevel);
+    if (Settings->GetPostProcessingQuality() == ClampedQualityLevel) {
+      return;
+    }
+    Settings->SetPostProcessingQuality(ClampedQualityLevel);
+    ApplyAndSaveGraphicsSettings(*Settings);
   }
 }
 
@@ -247,13 +404,19 @@ FProjectAirDefenseRadarSnapshot AProjectAirDefenseBattleManager::BuildRadarSnaps
         FMath::Max(Snapshot.ExtentMeters, PositionMeters.Length() + RadiusMeters + 180.0);
   };
 
-  for (const FProjectAirDefenseDistrictCell& DistrictCell : this->DistrictCells) {
+  const TArray<FProjectAirDefenseDistrictCell>& RadarDistrictCells =
+      this->Simulation ? this->Simulation->GetDistrictCells() : this->DistrictCells;
+  for (const FProjectAirDefenseDistrictCell& DistrictCell : RadarDistrictCells) {
     FProjectAirDefenseRadarDistrictSnapshot DistrictSnapshot;
     DistrictSnapshot.Id = DistrictCell.Id;
     DistrictSnapshot.LocalPositionMeters =
         FVector2d(DistrictCell.LocalPositionMeters.X, DistrictCell.LocalPositionMeters.Y);
     DistrictSnapshot.RadiusMeters = DistrictCell.RadiusMeters;
     DistrictSnapshot.Integrity = DistrictCell.Integrity;
+    DistrictSnapshot.StructuralIntegrity = DistrictCell.StructuralIntegrity;
+    DistrictSnapshot.DamagedFloors = DistrictCell.DamagedFloors;
+    DistrictSnapshot.CollapsedFloors = DistrictCell.CollapsedFloors;
+    DistrictSnapshot.bCollapsed = DistrictCell.bCollapsed;
     Snapshot.Districts.Add(DistrictSnapshot);
     UpdateExtent(DistrictSnapshot.LocalPositionMeters, DistrictSnapshot.RadiusMeters);
   }
@@ -323,15 +486,16 @@ FString AProjectAirDefenseBattleManager::BuildGraphicsSummaryText() const {
       break;
     }
     return FString::Printf(
-        TEXT("%s  %s  AO %s  SH %d  RF %d  PP %d"),
+        TEXT("%s  %s  AO %s  RT %s  SH %d  RF %d  PP %d"),
         *OverallLabel,
         *AALabel,
         Settings->IsAmbientOcclusionEnabled() ? TEXT("ON") : TEXT("OFF"),
+        Settings->IsRayTracingEnabled() ? TEXT("REQ") : TEXT("OFF"),
         Settings->GetShadowQuality(),
         Settings->GetReflectionQuality(),
         Settings->GetPostProcessingQuality());
   }
-  return TEXT("AUTO  AA ?  AO ?  SH ?  RF ?  PP ?");
+  return TEXT("AUTO  AA ?  AO ?  RT ?  SH ?  RF ?  PP ?");
 }
 
 void AProjectAirDefenseBattleManager::RebuildSimulation() {
@@ -344,13 +508,27 @@ void AProjectAirDefenseBattleManager::RebuildSimulation() {
       this->LauncherPositionsMeters,
       Settings,
       4242);
+  for (const TPair<FString, TObjectPtr<UStaticMeshComponent>>& Entry : this->ThreatVisuals) {
+    if (Entry.Value != nullptr) {
+      Entry.Value->DestroyComponent();
+    }
+  }
+  for (const TPair<FString, TObjectPtr<UStaticMeshComponent>>& Entry : this->InterceptorVisuals) {
+    if (Entry.Value != nullptr) {
+      Entry.Value->DestroyComponent();
+    }
+  }
   this->ThreatVisuals.Empty();
   this->InterceptorVisuals.Empty();
   this->LastThreatWorldPositions.Empty();
   this->LastInterceptorWorldPositions.Empty();
   this->BlastVisuals.Empty();
+  this->TrailVisuals.Empty();
+  this->RefreshTransientVisualInstances();
   this->ElapsedBattleSeconds = 0.0;
   this->StepAccumulatorSeconds = 0.0;
+  this->TrailVisualSpawnsThisFrame = 0;
+  this->BlastVisualSpawnsThisFrame = 0;
 }
 
 void AProjectAirDefenseBattleManager::BuildDistrictCells() {
@@ -398,22 +576,44 @@ void AProjectAirDefenseBattleManager::SyncStaticVisuals() {
       Component->DestroyComponent();
     }
   }
-  this->DistrictVisuals.Empty();
-  this->LauncherVisuals.Empty();
-
-  for (int32 Index = 0; Index < this->LauncherPositionsMeters.Num(); ++Index) {
-    UStaticMeshComponent* LauncherMarker = this->CreateStaticMarker(
-        FString::Printf(TEXT("Launcher-%d"), Index),
-        this->CylinderMesh != nullptr ? this->CylinderMesh : this->CubeMesh,
-        this->ToWorldPosition(this->LauncherPositionsMeters[Index] + FVector3d(0.0, 0.0, LauncherMarkerHalfHeightMeters)),
-        this->CylinderMesh != nullptr
-            ? ScaleCylinder(LauncherMarkerRadiusMeters, LauncherMarkerHalfHeightMeters)
-            : FVector(2.1f, 2.1f, 0.65f),
-        FLinearColor(0.18f, 0.86f, 1.0f, 1.0f));
-    if (LauncherMarker != nullptr) {
-      this->LauncherVisuals.Add(LauncherMarker);
+  for (UStaticMeshComponent* Component : this->DistrictStatusVisuals) {
+    if (Component != nullptr) {
+      Component->DestroyComponent();
     }
   }
+  auto DestroyInstancedComponent = [](TObjectPtr<UInstancedStaticMeshComponent>& Component) {
+    if (Component != nullptr) {
+      Component->DestroyComponent();
+      Component = nullptr;
+    }
+  };
+  DestroyInstancedComponent(this->DamagedDistrictFloorInstances);
+  DestroyInstancedComponent(this->HostileTrailInstances);
+  DestroyInstancedComponent(this->InterceptorTrailInstances);
+  DestroyInstancedComponent(this->HostileBlastCoreInstances);
+  DestroyInstancedComponent(this->InterceptBlastCoreInstances);
+  DestroyInstancedComponent(this->HostileBlastShockwaveInstances);
+  DestroyInstancedComponent(this->InterceptBlastShockwaveInstances);
+  this->DistrictVisuals.Empty();
+  this->LauncherVisuals.Empty();
+  this->DistrictStatusVisuals.Empty();
+  this->DamagedDistrictFloorInstances =
+      this->CreateInstancedMarker(TEXT("DistrictFloors-Damaged"), this->CubeMesh, FLinearColor(0.92f, 0.30f, 0.12f, 1.0f));
+  this->HostileTrailInstances =
+      this->CreateInstancedMarker(TEXT("Trail-Hot"), this->SphereMesh, FLinearColor(1.0f, 0.34f, 0.12f, 1.0f));
+  this->InterceptorTrailInstances =
+      this->CreateInstancedMarker(TEXT("Trail-Interceptor"), this->SphereMesh, FLinearColor(0.22f, 0.95f, 1.0f, 1.0f));
+  this->HostileBlastCoreInstances =
+      this->CreateInstancedMarker(TEXT("BlastCore-Hot"), this->SphereMesh, FLinearColor(1.0f, 0.48f, 0.12f, 1.0f));
+  this->InterceptBlastCoreInstances =
+      this->CreateInstancedMarker(TEXT("BlastCore-Interceptor"), this->SphereMesh, FLinearColor(0.22f, 0.95f, 1.0f, 1.0f));
+  this->HostileBlastShockwaveInstances =
+      this->CreateInstancedMarker(TEXT("BlastShockwave-Hot"), this->CylinderMesh != nullptr ? this->CylinderMesh : this->SphereMesh, FLinearColor(1.0f, 0.48f, 0.12f, 1.0f));
+  this->InterceptBlastShockwaveInstances =
+      this->CreateInstancedMarker(TEXT("BlastShockwave-Interceptor"), this->CylinderMesh != nullptr ? this->CylinderMesh : this->SphereMesh, FLinearColor(0.22f, 0.95f, 1.0f, 1.0f));
+
+  // District and launcher state belongs in the radar/HUD. Rendering those
+  // anchors in-world makes the real city mesh look like synthetic debug art.
 }
 
 void AProjectAirDefenseBattleManager::SyncDynamicVisuals() {
@@ -424,15 +624,17 @@ void AProjectAirDefenseBattleManager::SyncDynamicVisuals() {
   TSet<FString> LiveThreatIds;
   for (const FProjectAirDefenseThreatState& Threat : this->Simulation->GetThreats()) {
     LiveThreatIds.Add(Threat.Id);
+    const FLinearColor ThreatVisualColor = ThreatColor(Threat);
     UStaticMeshComponent* ThreatMarker =
         this->EnsureDynamicMarker(
             this->ThreatVisuals,
             Threat.Id,
             this->ConeMesh != nullptr ? this->ConeMesh : this->SphereMesh,
-            ThreatColor());
+            ThreatVisualColor);
     if (ThreatMarker == nullptr) {
       continue;
     }
+    this->ApplyColor(ThreatMarker, ThreatVisualColor);
     const FVector WorldPosition = this->ToWorldPosition(Threat.PositionMeters);
     ThreatMarker->SetWorldLocation(WorldPosition);
     ThreatMarker->SetWorldScale3D(
@@ -441,17 +643,6 @@ void AProjectAirDefenseBattleManager::SyncDynamicVisuals() {
             : ScaleSphereToRadius(ThreatMarkerRadiusMeters));
     ThreatMarker->SetWorldRotation(
         MarkerRotationFromVelocity(FVector(Threat.VelocityMetersPerSecond)));
-    if (const FVector* PreviousPosition = this->LastThreatWorldPositions.Find(Threat.Id)) {
-      DrawDebugLine(
-          this->GetWorld(),
-          *PreviousPosition,
-          WorldPosition,
-          Threat.bIsTracked ? FColor::Orange : FColor::Red,
-          false,
-          TrailVisualSeconds,
-          0,
-          2.2f);
-    }
     this->LastThreatWorldPositions.Add(Threat.Id, WorldPosition);
   }
   this->RemoveStaleMarkers(this->ThreatVisuals, this->LastThreatWorldPositions, LiveThreatIds);
@@ -476,17 +667,6 @@ void AProjectAirDefenseBattleManager::SyncDynamicVisuals() {
             : ScaleSphereToRadius(InterceptorMarkerRadiusMeters));
     InterceptorMarker->SetWorldRotation(
         MarkerRotationFromVelocity(FVector(Interceptor.VelocityMetersPerSecond)));
-    if (const FVector* PreviousPosition = this->LastInterceptorWorldPositions.Find(Interceptor.Id)) {
-      DrawDebugLine(
-          this->GetWorld(),
-          *PreviousPosition,
-          WorldPosition,
-          FColor::Cyan,
-          false,
-          TrailVisualSeconds,
-          0,
-          2.0f);
-    }
     this->LastInterceptorWorldPositions.Add(Interceptor.Id, WorldPosition);
   }
   this->RemoveStaleMarkers(
@@ -494,32 +674,68 @@ void AProjectAirDefenseBattleManager::SyncDynamicVisuals() {
       this->LastInterceptorWorldPositions,
       LiveInterceptorIds);
 
-  for (const FProjectAirDefenseDistrictCell& DistrictCell : this->Simulation->GetDistrictCells()) {
-    const FVector DistrictCenter =
-        this->ToWorldPosition(DistrictCell.LocalPositionMeters + FVector3d(0.0, 0.0, DistrictRingElevationMeters));
-    const FColor DistrictColor = this->DistrictColorForIntegrity(DistrictCell.Integrity).ToFColor(true);
-    DrawDebugCircle(
-        this->GetWorld(),
-        DistrictCenter,
-        DistrictCell.RadiusMeters * MetersToUnrealUnits,
-        40,
-        DistrictColor,
-        false,
-        -1.0f,
-        0,
-        1.8f,
-        FVector::RightVector,
-        FVector::ForwardVector,
-        false);
-    DrawDebugLine(
-        this->GetWorld(),
-        DistrictCenter,
-        DistrictCenter + FVector(0.0f, 0.0f, DistrictStatusStemMeters * MetersToUnrealUnits),
-        DistrictColor,
-        false,
-        -1.0f,
-        0,
-        1.2f);
+  const TArray<FProjectAirDefenseDistrictCell>& LiveDistrictCells = this->Simulation->GetDistrictCells();
+  for (int32 Index = 0; Index < LiveDistrictCells.Num() && Index < this->DistrictStatusVisuals.Num(); ++Index) {
+    UStaticMeshComponent* DistrictMarker = this->DistrictStatusVisuals[Index];
+    if (DistrictMarker == nullptr) {
+      continue;
+    }
+    const FProjectAirDefenseDistrictCell& DistrictCell = LiveDistrictCells[Index];
+    const double IntegrityRatio = FMath::Clamp(DistrictCell.Integrity / 100.0, 0.0, 1.0);
+    const double HalfHeightMeters =
+        FMath::Lerp(DistrictBeaconMinHalfHeightMeters, DistrictBeaconMaxHalfHeightMeters, IntegrityRatio);
+    DistrictMarker->SetWorldLocation(
+        this->ToWorldPosition(DistrictCell.LocalPositionMeters + FVector3d(0.0, 0.0, HalfHeightMeters)));
+    DistrictMarker->SetWorldScale3D(
+        this->CylinderMesh != nullptr
+            ? ScaleCylinder(DistrictBeaconRadiusMeters, HalfHeightMeters)
+            : ScaleSphereToRadius(DistrictBeaconRadiusMeters));
+    this->ApplyColor(DistrictMarker, this->DistrictColorForIntegrity(DistrictCell.Integrity));
+  }
+  this->SyncDistrictDamageFloorVisuals(LiveDistrictCells);
+}
+
+void AProjectAirDefenseBattleManager::SyncDistrictDamageFloorVisuals(
+    const TArray<FProjectAirDefenseDistrictCell>& LiveDistrictCells) {
+  if (this->DamagedDistrictFloorInstances != nullptr) {
+    this->DamagedDistrictFloorInstances->ClearInstances();
+  }
+  for (const FProjectAirDefenseDistrictCell& DistrictCell : LiveDistrictCells) {
+    const int32 CollapsedFloors =
+        FMath::Clamp(DistrictCell.CollapsedFloors, 0, DistrictDamageFloorCount);
+    const int32 DamagedFloors =
+        FMath::Clamp(DistrictCell.DamagedFloors, 0, DistrictDamageFloorCount);
+    if (DamagedFloors <= 0 && CollapsedFloors <= 0) {
+      continue;
+    }
+    const int32 FirstCollapsedFloor = DistrictDamageFloorCount - CollapsedFloors;
+    const int32 FirstDamagedFloor = DistrictDamageFloorCount - DamagedFloors;
+    for (int32 FloorIndex = 0; FloorIndex < DistrictDamageFloorCount; ++FloorIndex) {
+      const bool bCollapsedFloor = FloorIndex >= FirstCollapsedFloor;
+      if (bCollapsedFloor) {
+        continue;
+      }
+
+      const bool bDamagedFloor = FloorIndex >= FirstDamagedFloor;
+      if (!bDamagedFloor || this->DamagedDistrictFloorInstances == nullptr) {
+        continue;
+      }
+      const double FloorCenterHeightMeters =
+          DistrictDamageFloorBaseHeightMeters + static_cast<double>(FloorIndex) * DistrictDamageFloorStepMeters;
+      const FVector FloorLocation =
+          this->ToWorldPosition(
+              DistrictCell.LocalPositionMeters +
+              FVector3d(
+                  DistrictDamageTowerOffsetXMeters,
+                  DistrictDamageTowerOffsetYMeters,
+                  FloorCenterHeightMeters));
+      const FVector FloorScale =
+          ScaleBox(
+              DistrictDamageFloorWidthMeters,
+              DistrictDamageFloorDepthMeters,
+              bDamagedFloor ? DistrictDamageFloorHeightMeters * 0.72 : DistrictDamageFloorHeightMeters);
+      this->DamagedDistrictFloorInstances->AddInstance(FTransform(FRotator::ZeroRotator, FloorLocation, FloorScale), true);
+    }
   }
 }
 
@@ -527,18 +743,10 @@ void AProjectAirDefenseBattleManager::UpdateBlastVisuals(double DeltaSeconds) {
   int32 BlastIndex = 0;
   while (BlastIndex < this->BlastVisuals.Num()) {
     FBlastVisual& BlastVisual = this->BlastVisuals[BlastIndex];
-    BlastVisual.RemainingSeconds -= DeltaSeconds;
-    DrawDebugSphere(
-        this->GetWorld(),
-        BlastVisual.WorldPosition,
-        BlastVisual.RadiusUnrealUnits,
-        18,
-        BlastVisual.Color,
-        false,
-        -1.0f,
-        0,
-        2.6f);
-    if (BlastVisual.RemainingSeconds <= 0.0) {
+    BlastVisual.AgeSeconds += DeltaSeconds;
+    const double Alpha =
+        BlastVisual.LifetimeSeconds <= 0.0 ? 1.0 : BlastVisual.AgeSeconds / BlastVisual.LifetimeSeconds;
+    if (Alpha >= 1.0) {
       this->BlastVisuals.RemoveAt(BlastIndex);
       continue;
     }
@@ -546,17 +754,136 @@ void AProjectAirDefenseBattleManager::UpdateBlastVisuals(double DeltaSeconds) {
   }
 }
 
-void AProjectAirDefenseBattleManager::ApplyStepEvents(const FProjectAirDefenseStepEvents& Events) {
-  for (const FProjectAirDefenseBlastEvent& BlastEvent : Events.BlastEvents) {
-    FBlastVisual BlastVisual;
-    BlastVisual.WorldPosition = this->ToWorldPosition(BlastEvent.PositionMeters);
-    BlastVisual.RadiusUnrealUnits = BlastEvent.RadiusMeters * MetersToUnrealUnits;
-    BlastVisual.RemainingSeconds = AutoBlastVisualSeconds;
-    BlastVisual.Color = BlastEvent.Kind == EProjectAirDefenseBlastKind::HostileImpact
-                            ? FColor(255, 128, 48)
-                            : FColor(96, 255, 255);
-    this->BlastVisuals.Add(BlastVisual);
+void AProjectAirDefenseBattleManager::UpdateTrailVisuals(double DeltaSeconds) {
+  int32 TrailIndex = 0;
+  while (TrailIndex < this->TrailVisuals.Num()) {
+    FTrailVisual& TrailVisual = this->TrailVisuals[TrailIndex];
+    TrailVisual.AgeSeconds += DeltaSeconds;
+    const double Alpha =
+        TrailVisual.LifetimeSeconds <= 0.0 ? 1.0 : TrailVisual.AgeSeconds / TrailVisual.LifetimeSeconds;
+    if (Alpha >= 1.0) {
+      this->TrailVisuals.RemoveAt(TrailIndex);
+      continue;
+    }
+    ++TrailIndex;
   }
+}
+
+void AProjectAirDefenseBattleManager::RefreshTransientVisualInstances() {
+  auto ClearInstances = [](TObjectPtr<UInstancedStaticMeshComponent>& Instances) {
+    if (Instances != nullptr) {
+      Instances->ClearInstances();
+    }
+  };
+  ClearInstances(this->HostileTrailInstances);
+  ClearInstances(this->InterceptorTrailInstances);
+  ClearInstances(this->HostileBlastCoreInstances);
+  ClearInstances(this->InterceptBlastCoreInstances);
+  ClearInstances(this->HostileBlastShockwaveInstances);
+  ClearInstances(this->InterceptBlastShockwaveInstances);
+
+  for (const FTrailVisual& TrailVisual : this->TrailVisuals) {
+    UInstancedStaticMeshComponent* TargetInstances =
+        TrailVisual.bHostile ? this->HostileTrailInstances.Get() : this->InterceptorTrailInstances.Get();
+    if (TargetInstances == nullptr) {
+      continue;
+    }
+    const double Alpha =
+        TrailVisual.LifetimeSeconds <= 0.0 ? 1.0 : TrailVisual.AgeSeconds / TrailVisual.LifetimeSeconds;
+    TargetInstances->AddInstance(
+        FTransform(
+            FRotator::ZeroRotator,
+            TrailVisual.WorldPosition,
+            TrailVisual.BaseScale * FMath::Lerp(1.0, 0.18, Alpha)),
+        true);
+  }
+
+  for (const FBlastVisual& BlastVisual : this->BlastVisuals) {
+    const bool bHostile = BlastVisual.Kind == EProjectAirDefenseBlastKind::HostileImpact;
+    UInstancedStaticMeshComponent* CoreInstances =
+        bHostile ? this->HostileBlastCoreInstances.Get() : this->InterceptBlastCoreInstances.Get();
+    UInstancedStaticMeshComponent* ShockwaveInstances =
+        bHostile ? this->HostileBlastShockwaveInstances.Get() : this->InterceptBlastShockwaveInstances.Get();
+    const double Alpha =
+        BlastVisual.LifetimeSeconds <= 0.0 ? 1.0 : BlastVisual.AgeSeconds / BlastVisual.LifetimeSeconds;
+    if (CoreInstances != nullptr) {
+      CoreInstances->AddInstance(
+          FTransform(
+              FRotator::ZeroRotator,
+              BlastVisual.WorldPosition,
+              BlastVisual.CoreScale * FMath::Lerp(0.35, 1.0, Alpha)),
+          true);
+    }
+    if (ShockwaveInstances != nullptr) {
+      ShockwaveInstances->AddInstance(
+          FTransform(
+              FRotator::ZeroRotator,
+              BlastVisual.WorldPosition,
+              FVector(
+                  BlastVisual.ShockwaveScale.X * FMath::Lerp(0.2, 1.0, Alpha),
+                  BlastVisual.ShockwaveScale.Y * FMath::Lerp(0.2, 1.0, Alpha),
+                  BlastVisual.ShockwaveScale.Z)),
+          true);
+    }
+  }
+}
+
+void AProjectAirDefenseBattleManager::ApplyStepEvents(const FProjectAirDefenseStepEvents& Events) {
+  for (const FProjectAirDefenseTrailEvent& TrailEvent : Events.TrailEvents) {
+    this->SpawnTrailVisual(TrailEvent);
+  }
+  for (const FProjectAirDefenseInterceptorLaunchEvent& LaunchEvent : Events.LaunchedInterceptors) {
+    FProjectAirDefenseTrailEvent LaunchTrailEvent;
+    LaunchTrailEvent.PositionMeters = LaunchEvent.LauncherPositionMeters;
+    LaunchTrailEvent.bHostile = false;
+    this->SpawnTrailVisual(LaunchTrailEvent);
+  }
+  for (const FProjectAirDefenseBlastEvent& BlastEvent : Events.BlastEvents) {
+    this->SpawnBlastVisual(BlastEvent);
+  }
+}
+
+void AProjectAirDefenseBattleManager::SpawnTrailVisual(const FProjectAirDefenseTrailEvent& TrailEvent) {
+  if (this->TrailVisualSpawnsThisFrame >= MaxTrailVisualSpawnsPerFrame) {
+    return;
+  }
+  while (this->TrailVisuals.Num() >= MaxTrailVisuals && !this->TrailVisuals.IsEmpty()) {
+    this->TrailVisuals.RemoveAt(0);
+  }
+
+  const double RadiusMeters = TrailEvent.bHostile ? ThreatTrailRadiusMeters : InterceptorTrailRadiusMeters;
+  ++this->TrailVisualSpawnsThisFrame;
+
+  FTrailVisual TrailVisual;
+  TrailVisual.WorldPosition = this->ToWorldPosition(TrailEvent.PositionMeters);
+  TrailVisual.BaseScale = ScaleSphereToRadius(RadiusMeters);
+  TrailVisual.LifetimeSeconds = TrailVisualSeconds;
+  TrailVisual.bHostile = TrailEvent.bHostile;
+  this->TrailVisuals.Add(TrailVisual);
+}
+
+void AProjectAirDefenseBattleManager::SpawnBlastVisual(const FProjectAirDefenseBlastEvent& BlastEvent) {
+  if (this->BlastVisualSpawnsThisFrame >= MaxBlastVisualSpawnsPerFrame) {
+    return;
+  }
+  while (this->BlastVisuals.Num() >= MaxBlastVisuals && !this->BlastVisuals.IsEmpty()) {
+    this->BlastVisuals.RemoveAt(0);
+  }
+
+  const FVector WorldPosition = this->ToWorldPosition(BlastEvent.PositionMeters);
+  const double CoreRadiusMeters =
+      FMath::Min(BlastEvent.RadiusMeters * BlastCoreRadiusScale, BlastCoreMaxRadiusMeters);
+  ++this->BlastVisualSpawnsThisFrame;
+
+  FBlastVisual BlastVisual;
+  BlastVisual.WorldPosition = WorldPosition;
+  BlastVisual.CoreScale = ScaleSphereToRadius(CoreRadiusMeters);
+  BlastVisual.ShockwaveScale = this->CylinderMesh != nullptr
+                                   ? ScaleCylinder(BlastEvent.RadiusMeters, BlastShockwaveHalfHeightMeters)
+                                   : ScaleSphereToRadius(BlastEvent.RadiusMeters);
+  BlastVisual.LifetimeSeconds = AutoBlastVisualSeconds;
+  BlastVisual.Kind = BlastEvent.Kind;
+  this->BlastVisuals.Add(BlastVisual);
 }
 
 UStaticMeshComponent* AProjectAirDefenseBattleManager::CreateStaticMarker(
@@ -578,6 +905,29 @@ UStaticMeshComponent* AProjectAirDefenseBattleManager::CreateStaticMarker(
   MeshComponent->RegisterComponent();
   MeshComponent->SetWorldLocation(WorldLocation);
   MeshComponent->SetWorldScale3D(WorldScale);
+  if (this->BasicShapeMaterial != nullptr) {
+    MeshComponent->SetMaterial(0, this->BasicShapeMaterial);
+  }
+  this->ApplyColor(MeshComponent, Color);
+  this->AddInstanceComponent(MeshComponent);
+  return MeshComponent;
+}
+
+UInstancedStaticMeshComponent* AProjectAirDefenseBattleManager::CreateInstancedMarker(
+    const FString& DebugName,
+    UStaticMesh* Mesh,
+    const FLinearColor& Color) {
+  if (Mesh == nullptr) {
+    return nullptr;
+  }
+
+  UInstancedStaticMeshComponent* MeshComponent =
+      NewObject<UInstancedStaticMeshComponent>(this, *DebugName);
+  MeshComponent->SetStaticMesh(Mesh);
+  MeshComponent->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+  MeshComponent->SetMobility(EComponentMobility::Movable);
+  MeshComponent->SetupAttachment(this->SceneRoot);
+  MeshComponent->RegisterComponent();
   if (this->BasicShapeMaterial != nullptr) {
     MeshComponent->SetMaterial(0, this->BasicShapeMaterial);
   }

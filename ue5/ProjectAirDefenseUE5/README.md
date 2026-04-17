@@ -4,20 +4,23 @@ This is the UE5 migration scaffold for Project Air Defense.
 
 ## Scope
 
-- primary city pilot: Helsinki Kalasatama
+- primary runtime city pilot: Helsinki Kalasatama
+- evaluated remote city candidate: 3DBAG Rotterdam LoD2.2
 - real 3D district ingestion, not a fake skyline
 - UE5 is the only future runtime target
-- current runtime proof path: official local 3D Tiles plus Cesium for Unreal
-- current photoreal bake target: official OBJ mesh plus Blender cleanup plus Nanite
+- current runtime proof path: official Helsinki Kalasatama 3D Tiles dataset plus Cesium for Unreal
+- current photoreal bake target: selected official OBJ or mesh source plus Blender cleanup plus Nanite
 
 ## Local Expectations
 
 - use Unreal Engine `5.7`
 - use Blender `5.1.0`
 - install Cesium for Unreal `2.25.0` with `..\..\scripts\install-cesium-for-unreal.ps1`
-- ingest the pilot district from `data/ue5_city_pilot/helsinki_kalasatama/pilot_manifest.json`
+- load the active pilot from `ExternalData/helsinki_kalasatama_3dtiles/tileset.json`
+- credit the active source as City of Helsinki / Helsinki 3D
+- use `data/ue5_city_pilot/helsinki_kalasatama/pilot_manifest.json` when rebuilding or auditing the Helsinki source
 - keep raw downloads outside git in `data/external/`
-- keep the generated master 3D Tiles entry point at `data/external/helsinki_kalasatama_3dtiles/tileset.json`
+- keep fallback generated 3D Tiles entry points outside git
 
 ## Scene Policy
 
@@ -39,6 +42,7 @@ This is the UE5 migration scaffold for Project Air Defense.
 - systems drawer `TACTICS`: battle state and doctrine controls
 - systems drawer `VIEW`: hold-touch pan, turn, look, zoom, and reset
 - systems drawer `GRAPHICS`: overall quality plus AA, AO, blur, shadow, reflection, and post-process controls
+- systems drawer `TIME`: solar-hour step, day/night cycle speed, and pause/resume controls
 
 ## Debug-Only Keyboard Fallback
 

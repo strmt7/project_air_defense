@@ -1,8 +1,10 @@
 # UE5 City Pilot: Helsinki Kalasatama
 
+Status: active local UE5 city pilot. The runtime loads the prepared Helsinki Kalasatama 3D Tiles dataset from `ue5/ProjectAirDefenseUE5/ExternalData/helsinki_kalasatama_3dtiles/tileset.json` through Cesium for Unreal.
+
 ## Pilot Choice
 
-The first UE5 photoreal district pilot is Helsinki Kalasatama.
+The active UE5 photoreal district pilot is Helsinki Kalasatama.
 
 ## Why This District
 
@@ -32,7 +34,7 @@ Primary sources:
 
 Storage policy for this pilot:
 - keep the original upstream zip under `data/external/downloads/` as the reproducible source of truth
-- keep one active upgraded runtime dataset under `data/external/helsinki_kalasatama_3dtiles/`
+- keep one active upgraded runtime dataset under `data/external/helsinki_kalasatama_3dtiles/` and the runtime copy under `ue5/ProjectAirDefenseUE5/ExternalData/helsinki_kalasatama_3dtiles/`
 - do not keep `helsinki_kalasatama_3dtiles_legacy_backup/` after the upgraded runtime is verified
 - do not keep `Saved/StagedBuilds/` after packaging unless a task explicitly requires staged-only inspection
 

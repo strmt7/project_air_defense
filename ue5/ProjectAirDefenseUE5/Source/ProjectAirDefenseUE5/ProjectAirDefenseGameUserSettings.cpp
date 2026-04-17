@@ -18,13 +18,15 @@ void SetConsoleVariableValue(const TCHAR* Name, int32 Value) {
 UProjectAirDefenseGameUserSettings::UProjectAirDefenseGameUserSettings()
     : PreferredAntiAliasingMethod(EProjectAirDefenseAntiAliasingMethod::TSR),
       bAmbientOcclusionEnabled(true),
-      bMotionBlurEnabled(false) {}
+      bMotionBlurEnabled(false),
+      bRayTracingEnabled(false) {}
 
 void UProjectAirDefenseGameUserSettings::SetToDefaults() {
   Super::SetToDefaults();
   this->PreferredAntiAliasingMethod = EProjectAirDefenseAntiAliasingMethod::TSR;
   this->bAmbientOcclusionEnabled = true;
   this->bMotionBlurEnabled = false;
+  this->bRayTracingEnabled = false;
   this->ApplyHighQualityDefaults();
 }
 
@@ -72,6 +74,14 @@ bool UProjectAirDefenseGameUserSettings::IsMotionBlurEnabled() const {
   return this->bMotionBlurEnabled;
 }
 
+void UProjectAirDefenseGameUserSettings::SetRayTracingEnabled(bool bEnabled) {
+  this->bRayTracingEnabled = bEnabled;
+}
+
+bool UProjectAirDefenseGameUserSettings::IsRayTracingEnabled() const {
+  return this->bRayTracingEnabled;
+}
+
 void UProjectAirDefenseGameUserSettings::ApplyHighQualityDefaults() {
   this->SetOverallScalabilityLevel(DefaultQualityLevel);
   this->SetAntiAliasingQuality(DefaultQualityLevel);
@@ -93,6 +103,14 @@ UProjectAirDefenseGameUserSettings::GetProjectAirDefenseGameUserSettings() {
 }
 
 void UProjectAirDefenseGameUserSettings::ApplyProjectSpecificCvars() const {
+  const int32 RayTracingValue = this->bRayTracingEnabled ? 1 : 0;
+  static constexpr const TCHAR* RayTracingCvars[] = {
+      TEXT("r.RayTracing"),
+      TEXT("r.RayTracing.Reflections"),
+      TEXT("r.Lumen.HardwareRayTracing"),
+      TEXT("r.Lumen.Reflections.HardwareRayTracing"),
+  };
+
   SetConsoleVariableValue(
       TEXT("r.AntiAliasingMethod"),
       static_cast<int32>(this->PreferredAntiAliasingMethod));
@@ -102,6 +120,9 @@ void UProjectAirDefenseGameUserSettings::ApplyProjectSpecificCvars() const {
   SetConsoleVariableValue(
       TEXT("r.DefaultFeature.MotionBlur"),
       this->bMotionBlurEnabled ? 1 : 0);
+  for (const TCHAR* RayTracingCvar : RayTracingCvars) {
+    SetConsoleVariableValue(RayTracingCvar, RayTracingValue);
+  }
 }
 
 void UProjectAirDefenseGameUserSettings::ClampProjectSpecificSettings() {
@@ -120,7 +141,7 @@ void UProjectAirDefenseGameUserSettings::LogActiveGraphicsSettings() const {
   UE_LOG(
       LogTemp,
       Log,
-      TEXT("[ProjectAirDefense] Graphics settings applied: overall=%d aaMethod=%d aaQuality=%d gi=%d reflections=%d post=%d view=%d shadows=%d textures=%d foliage=%d shading=%d ao=%d motionBlur=%d"),
+      TEXT("[ProjectAirDefense] Graphics settings applied: overall=%d aaMethod=%d aaQuality=%d gi=%d reflections=%d post=%d view=%d shadows=%d textures=%d foliage=%d shading=%d ao=%d motionBlur=%d rayTracing=%d"),
       this->GetOverallScalabilityLevel(),
       static_cast<int32>(this->PreferredAntiAliasingMethod),
       this->GetAntiAliasingQuality(),
@@ -133,5 +154,6 @@ void UProjectAirDefenseGameUserSettings::LogActiveGraphicsSettings() const {
       this->GetFoliageQuality(),
       this->GetShadingQuality(),
       this->bAmbientOcclusionEnabled ? 1 : 0,
-      this->bMotionBlurEnabled ? 1 : 0);
+      this->bMotionBlurEnabled ? 1 : 0,
+      this->bRayTracingEnabled ? 1 : 0);
 }

@@ -139,7 +139,8 @@ try {
     $processExited = $false
     $screenshotFound = $false
 
-    for ($i = 0; $i -lt 240; $i++) {
+    $maxPollIterations = [Math]::Max(240, [int][Math]::Ceiling(($DelaySeconds + 45) * 2))
+    for ($i = 0; $i -lt $maxPollIterations; $i++) {
         Start-Sleep -Milliseconds 500
 
         if (Test-Path $screenshotFilePath) {

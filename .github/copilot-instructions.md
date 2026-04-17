@@ -2,6 +2,7 @@
 
 Use `AGENTS.md` as the repo baseline.
 
+- Single-session mandate: do not spawn, delegate to, coordinate, or recommend background agents, subagents, parallel agents, or separate agent sessions for this repo.
 - Load `docs/reference/ai-agent-context-routing.md` before broadening context.
 - Use repo-local skills in `.agents/skills/` when they match the task.
 - Keep responses concise by default.

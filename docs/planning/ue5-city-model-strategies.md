@@ -22,6 +22,7 @@ Use an official textured mesh or official OBJ district whenever it exists.
 - Helsinki also exposes district mesh downloads such as Kalasatama OBJ: [Kalasatama mesh OBJ zip](https://3d.hel.ninja/data/mesh/Kalasatama/Helsinki3D_MESH_Kalasatama_2017_OBJ_ZIP.zip)
 - Berlin publishes a free 3D model with OBJ geometry and textures through its official portal: [Berlin 3D download portal](https://www.businesslocationcenter.de/en/economic-atlas/download-portal)
 - 3DBAG publishes OBJ exports and 3D Tiles for Dutch city data: [3DBAG OBJ delivery](https://docs.3dbag.nl/en/delivery/obj/), [3DBAG web services](https://docs.3dbag.nl/en/delivery/webservices/)
+- 3DBAG data and documentation are CC BY 4.0 and require the credit `© 3DBAG by tudelft3d and 3DGI`: [3DBAG copyright](https://docs.3dbag.nl/en/copyright/)
 
 Recommended use:
 
@@ -50,8 +51,9 @@ Use this path for:
 
 Current repo state:
 
-- the active Helsinki pilot uses this strategy first, with a local official 3D Tiles package, a generated master `tileset.json`, and Cesium for Unreal
-- the later shipping-quality district path still moves toward cleaned mesh assets and UE5-native scene ownership
+- the active runtime pilot loads local Helsinki Kalasatama 3D Tiles through Cesium for Unreal
+- 3DBAG Rotterdam LoD2.2 remains an evaluated remote candidate, not the default runtime
+- the later shipping-quality district path still moves toward cleaned Helsinki OBJ or another official mesh source with UE5-native scene ownership
 
 Do not treat this as the default final shipping path unless licensing, offline behavior, packaging, and performance are proven.
 
@@ -98,12 +100,12 @@ These links are not the plan. They are the warning label for the plan.
 
 ## Recommended Path
 
-1. Start with Strategy 1 on a district that already has an official mesh. Helsinki Kalasatama is the cleanest first candidate. Berlin is a strong second candidate.
-2. Use Strategy 2 in parallel only for truth-checking and camera/layout validation.
+1. Keep the current Helsinki Kalasatama Strategy 2 local 3D Tiles path as the default runtime truth-check path.
+2. Move to Strategy 1 for shipping-quality offline scenes by cleaning a bounded official mesh/OBJ district and attributing it.
 3. Fall back to Strategy 3 when no official textured mesh exists.
 4. Use Strategy 4 only after the base district is proven in-engine.
 5. Reject Strategy 5 outright.
 
 ## Immediate Next Step After This Plan
 
-Keep the current Helsinki pilot truthful with Strategy 2, then graduate the same district into Strategy 1 when the mesh-bake path is ready. Do not resume libGDX city rendering work.
+Keep the current Helsinki Kalasatama pilot truthful with Strategy 2, use 3DBAG only as an explicit remote candidate, and graduate to Strategy 1 only after a specific official mesh district is selected. Do not resume libGDX city rendering work.

@@ -9,6 +9,10 @@
 
 A repo in transition from a legacy Android/libGDX prototype to a UE5-first air-defense game with real 3D city ingestion, photoreal material targets, and no static gameplay backdrops.
 
+## Early Alpha Notice
+
+This project is an early alpha test. Many systems are experimental, incomplete, or actively being migrated, and many or most features may not work as intended. The project is provided as-is, without any responsibility or liability for failures, incorrect behavior, data loss, compatibility issues, or other consequences from using or testing it.
+
 ## AI-Friendly Docs
 - Agent operating guide: `AGENTS.md`
 - Docs index: `docs/index.md`
@@ -19,7 +23,9 @@ A repo in transition from a legacy Android/libGDX prototype to a UE5-first air-d
 - Agent upstream sources: `docs/reference/ai-agent-upstream-sources.md`
 - UE5 engine mandate: `docs/planning/ue5-engine-mandate.md`
 - UE5 city sourcing plan: `docs/planning/ue5-city-model-strategies.md`
-- UE5 pilot district: `docs/planning/ue5-city-pilot-helsinki-kalasatama.md`
+- UE5 active city pilot: `docs/planning/ue5-city-pilot-helsinki-kalasatama.md`
+- UE5 evaluated city candidate: `docs/planning/ue5-city-pilot-3dbag-rotterdam.md`
+- UE5 regression root cause log: `docs/planning/ue5-regression-root-cause-2026-04-17.md`
 - UE5 visual acceptance: `docs/planning/ue5-visual-acceptance.md`
 - Architecture reference: `docs/architecture.md`
 - Release/install behavior: `docs/release-and-install.md`
@@ -38,34 +44,29 @@ A repo in transition from a legacy Android/libGDX prototype to a UE5-first air-d
 ## Current Direction
 - UE5 is the only permitted engine for new runtime, rendering, tooling, editor, prototype, and shipping work.
 - The Android/libGDX codebase remains in-repo only as migration input and gameplay reference.
-- The active runtime city pilot is Helsinki Kalasatama using the official 3D Tiles package and Cesium for Unreal.
-- The photoreal shipping path for the same district remains official mesh -> Blender cleanup -> UE5 Nanite.
+- The active runtime city pilot uses the local Helsinki Kalasatama 3D Tiles dataset through Cesium for Unreal.
+- The offline photoreal shipping path remains official mesh or OBJ source -> Blender cleanup -> UE5 Nanite; Helsinki Kalasatama is also the current best candidate for that bake because an official OBJ mesh exists.
 - Direct geospatial runtime rendering via Cesium or ArcGIS is allowed for truth-checking, inspection, and bootstrap validation. It is not automatic permission to skip the later shipping bake.
 
 ## UE5 Pilot Tooling
 1. Install the verified Cesium for Unreal plugin locally:
    `.\scripts\install-cesium-for-unreal.cmd`
-2. Generate the checked-in pilot manifest:
-   `.\scripts\generate-ue5-city-pilot.cmd`
-3. Dry-run the official source download:
-   `.\scripts\download-ue5-city-source.cmd`
-4. Prepare the extracted 3D Tiles package and generate the master `tileset.json`:
-   `.\scripts\prepare-ue5-city-tiles.cmd`
-5. Upgrade the official Helsinki 3D Tiles runtime package in place:
-   `.\scripts\upgrade-ue5-city-tiles.cmd`
-6. Validate the UE5 pipeline:
+2. Validate the UE5 city pipeline:
    `py -3 .\tools\ue5_city_pipeline\test_ue5_city_pipeline.py`
-7. Verify the UE5 bootstrap path headlessly:
+3. Verify the UE5 bootstrap path headlessly:
    `.\scripts\verify-ue5-bootstrap.cmd`
-8. Build one storage-safe packaged runtime:
+4. Build one storage-safe packaged runtime:
    `.\scripts\package-ue5-runtime.cmd`
-9. Capture the packaged runtime:
+5. Capture the packaged runtime:
    `.\scripts\capture-ue5-runtime-screenshot.cmd -Exe packaged/Win64/ProjectAirDefenseUE5.exe`
-10. Capture the packaged menu, battle, and systems states serially:
+6. Capture the packaged menu, battle, and systems states serially:
    `.\scripts\run-ue5-mobile-ui-proof.cmd`
-11. Capture the editor-game runtime without repackaging:
+7. Capture the editor-game runtime without repackaging:
    `.\scripts\capture-ue5-editor-runtime-screenshot.cmd`
-12. Open the UE5 scaffold under `ue5\ProjectAirDefenseUE5\`.
+8. Open the UE5 scaffold under `ue5\ProjectAirDefenseUE5\`.
+
+Local Helsinki tooling, when the active source needs to be rebuilt or refreshed:
+`.\scripts\generate-ue5-city-pilot.cmd`, `.\scripts\download-ue5-city-source.cmd`, `.\scripts\prepare-ue5-city-tiles.cmd`, and `.\scripts\upgrade-ue5-city-tiles.cmd`.
 
 ## Verified UE5 Toolchain
 - Unreal Engine `5.7`
@@ -73,9 +74,10 @@ A repo in transition from a legacy Android/libGDX prototype to a UE5-first air-d
 - Cesium for Unreal `2.25.0`
 
 ## Verified UE5 Runtime Controls
-- Default runtime city source: local upgraded Helsinki Kalasatama 3D Tiles
+- Default runtime city source: local Helsinki Kalasatama 3D Tiles
+- Runtime time controls: systems drawer `TIME` controls step solar hour, slow/fast cycle rate, and pause/resume day/night progression through `ACesiumSunSky`.
 - Runtime camera controls: `W/A/S/D` or arrow keys to pan, `Q/E` to yaw, `T/G` or `Numpad8/Numpad5` to pitch, `PageUp/PageDown` or mouse wheel to zoom, `R/F` to raise/lower, `Home` to reset
-- Runtime graphics settings backend: `UProjectAirDefenseGameUserSettings` owns AA method, AO, motion blur, and UE scalability groups on startup for both editor-game and packaged runtime lanes; those toggles are no longer hard-forced in `DefaultEngine.ini`
+- Runtime graphics settings backend: `UProjectAirDefenseGameUserSettings` owns AA method, AO, motion blur, ray-tracing request state, and UE scalability groups on startup for both editor-game and packaged runtime lanes; those toggles are no longer hard-forced in `DefaultEngine.ini`
 - Runtime camera settings remain authored in meters in `UProjectAirDefenseRuntimeSettings`, but `AProjectAirDefenseCityCameraPawn` converts them to Unreal units internally. This avoids the 100x framing error that produced roof-level closeups from Cesium tileset bounds.
 
 ## Legacy Android Prototype Snapshot
@@ -105,6 +107,13 @@ These bullets describe the outgoing renderer only. They are not the target UE5 c
   Imported from the MIT-licensed [Ladybug Tools / 3D Models](https://github.com/ladybug-tools/3d-models) repository.
   Source asset: `obj/engel-house/AngelHouse_Bauhaus-in-Israel-r2.obj`
   Reference notes in the source repo identify it as Engel House / Beit Engel, a Bauhaus-in-Israel model associated with Tel Aviv.
+- Runtime 3D Tiles dataset:
+  [Helsinki Kalasatama 3D Tiles](https://3d.hel.ninja/data/mesh/Kalasatama/Helsinki3D_MESH_Kalasatama_2017_3D_Tiles_ZIP.zip), licensed under [CC BY 4.0](https://www.hel.fi/en/decision-making/information-on-helsinki/maps-and-geospatial-data/helsinki-3d).
+  Required credit: City of Helsinki / Helsinki 3D.
+  The game loads the local prepared dataset through Cesium for Unreal.
+- Evaluated remote 3D Tiles candidate:
+  [3DBAG Rotterdam LoD2.2](https://data.3dbag.nl/v20250903/cesium3dtiles/lod22/tileset.json), licensed under [CC BY 4.0](https://docs.3dbag.nl/en/copyright/).
+  Required credit: `© 3DBAG by tudelft3d and 3DGI`.
 
 ## Security And Performance
 - **ProGuard/R8 enabled**: minification and obfuscation for production security.
@@ -170,14 +179,14 @@ Production signing variables can be set in `~/.gradle/gradle.properties`, CI sec
 ## Notes
 - This is still a gameplay prototype, not a military simulator.
 - Static background images are not allowed in the gameplay battlespace going forward.
-- The current UE5 city proof path is real 3D Tiles data streamed locally through Cesium for Unreal. It is not a static panorama and not a fake skyline.
+- The current UE5 city proof path is real local Helsinki 3D Tiles data through Cesium for Unreal. It is not a static panorama and not a fake skyline.
 - The official Helsinki 3D Tiles package requires an explicit Cesium `3d-tiles-tools upgrade` pass before packaged runtime use because the upstream district payload contains legacy `b3dm` content.
-- The upgraded runtime path keeps one canonical raw archive under `data/external/downloads/` and one active runtime dataset under `data/external/helsinki_kalasatama_3dtiles/`. Do not keep a long-lived duplicate legacy backup once the upgraded runtime is verified.
+- Keep one canonical raw Helsinki archive under `data/external/downloads/` and one active runtime dataset, then remove temporary backups after verification.
 - `.\scripts\package-ue5-runtime.ps1` removes `ue5/ProjectAirDefenseUE5/Saved/StagedBuilds` after a successful archive by default because it is a duplicate of the packaged build.
 - `.\scripts\run-ue5-mobile-ui-proof.ps1` is the trusted packaged UI proof lane because it runs menu, battle, and systems captures serially under a per-build mutex. Do not launch parallel packaged captures against the same build.
 - `.\scripts\capture-ue5-editor-runtime-screenshot.ps1` is the low-waste iteration lane. Use editor-game capture first; repackage only after a verified scene or runtime change worth shipping.
-- The current pilot uses the native UE5/Cesium exposure path. Do not force a global unbound post-process exposure override unless a measured regression proves the native path is insufficient.
-- The current renderer targets a high-quality mobile approximation of premium night lighting; it does not use true hardware ray tracing.
+- The current pilot uses the native UE5/Cesium exposure path by default. `PostExposureBias` only becomes an override when intentionally set to a non-zero value after measured visual proof.
+- The current renderer targets a high-quality mobile approximation of premium night lighting. Ray tracing is opt-in, off by default, and not the mobile baseline.
 - Waterfront building placement and radar orientation are now validated in tests so the city stays inland and the radar reads top-down toward the horizon.
 - Android is intentionally wide-only. `AndroidLauncher` stays on `sensorLandscape`, and the manifest carries a targeted `DiscouragedApi` lint suppression on that activity because the game is not intended to support portrait operation.
 - Android quality selection is now capability-based. High-capacity Android 15 emulator lanes can resolve above `PERFORMANCE`, while genuinely low-memory devices still fall back safely.

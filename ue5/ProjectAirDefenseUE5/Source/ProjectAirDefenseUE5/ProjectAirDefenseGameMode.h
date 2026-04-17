@@ -18,6 +18,17 @@ public:
   AProjectAirDefenseGameMode();
 
   virtual void BeginPlay() override;
+  virtual void Tick(float DeltaSeconds) override;
+
+  void AdjustSolarTime(double DeltaHours);
+  void SetSolarTime(double SolarTimeHours);
+  void AdjustTimeScale(double DeltaHoursPerMinute);
+  void SetTimeScale(double HoursPerMinute);
+  void ToggleTimeCycle();
+  double GetSolarTime() const;
+  double GetTimeScale() const;
+  double GetTimeScaleMax() const;
+  FString BuildTimeSummaryText() const;
 
 private:
   void BootstrapPilotScene();
@@ -35,7 +46,8 @@ private:
       const ACesiumGeoreference& Georeference,
       FVector& OutFocusPoint,
       double& OutRadiusMeters) const;
-  void ApplyPilotSceneLighting(ACesiumSunSky& SunSky) const;
+  void ApplyPilotSceneLighting(ACesiumSunSky& SunSky);
+  void ApplyRuntimeSolarLighting();
   AProjectAirDefenseBattleManager* EnsureBattleManager();
 
   template <typename TActorType>
@@ -52,4 +64,10 @@ private:
 
   UPROPERTY(Transient)
   TObjectPtr<AProjectAirDefenseBattleManager> BattleManager;
+
+  UPROPERTY(Transient)
+  TObjectPtr<ACesiumSunSky> RuntimeSunSky;
+
+  double RuntimeSolarTime = 0.0;
+  double RuntimeTimeScaleHoursPerMinute = 0.0;
 };
