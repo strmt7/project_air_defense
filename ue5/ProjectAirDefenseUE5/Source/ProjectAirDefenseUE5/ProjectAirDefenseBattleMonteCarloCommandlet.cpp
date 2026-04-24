@@ -246,6 +246,42 @@ int32 UProjectAirDefenseBattleMonteCarloCommandlet::Main(const FString& Params) 
           ? SingleShotKillProbabilitySum / static_cast<double>(SingleShotKillProbabilityRuns)
           : 0.0);
 
+  // Percentile stats give a much better picture of worst-case and
+  // best-case runs than the average alone. Tail behavior is the thing
+  // tuning sessions actually care about.
+  auto Percentile = [](TArray<double>& Samples, double Percentile01) -> double {
+    if (Samples.IsEmpty()) {
+      return 0.0;
+    }
+    Samples.Sort();
+    const int32 Index =
+        FMath::Clamp(static_cast<int32>(Percentile01 * static_cast<double>(Samples.Num() - 1)),
+                     0,
+                     Samples.Num() - 1);
+    return Samples[Index];
+  };
+
+  TArray<double> InterceptRateSamples;
+  TArray<double> CityIntegritySamples;
+  InterceptRateSamples.Reserve(Summaries.Num());
+  CityIntegritySamples.Reserve(Summaries.Num());
+  for (const FProjectAirDefenseBattleRunSummary& Summary : Summaries) {
+    InterceptRateSamples.Add(Summary.InterceptRate());
+    CityIntegritySamples.Add(Summary.CityIntegrity);
+  }
+  RootObject->SetNumberField(
+      TEXT("interceptRateMedian"), Percentile(InterceptRateSamples, 0.50));
+  RootObject->SetNumberField(
+      TEXT("interceptRateP05"), Percentile(InterceptRateSamples, 0.05));
+  RootObject->SetNumberField(
+      TEXT("interceptRateP95"), Percentile(InterceptRateSamples, 0.95));
+  RootObject->SetNumberField(
+      TEXT("cityIntegrityMedian"), Percentile(CityIntegritySamples, 0.50));
+  RootObject->SetNumberField(
+      TEXT("cityIntegrityP05"), Percentile(CityIntegritySamples, 0.05));
+  RootObject->SetNumberField(
+      TEXT("cityIntegrityP95"), Percentile(CityIntegritySamples, 0.95));
+
   TArray<TSharedPtr<FJsonValue>> RunValues;
   RunValues.Reserve(Summaries.Num());
   for (const FProjectAirDefenseBattleRunSummary& Summary : Summaries) {

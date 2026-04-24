@@ -457,4 +457,78 @@ bool FProjectAirDefenseBattleSeekerConeTest::RunTest(const FString& Parameters) 
   return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+    FProjectAirDefenseBattleSettingsSanitizationTest,
+    "ProjectAirDefense.BattleSimulation.SettingsSanitization",
+    EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FProjectAirDefenseBattleSettingsSanitizationTest::RunTest(const FString& Parameters) {
+  // Confirm that grossly-out-of-range settings values are clamped to
+  // physically sensible ranges by the simulation constructor. Protects the
+  // rest of the codebase from assuming a caller-provided probability is in
+  // [0, 1] or that a kill-probability floor is at or below the zero-miss
+  // value.
+  FProjectAirDefenseDefenseSettings Bad;
+  Bad.EngagementRangeMeters = -1000.0;
+  Bad.InterceptorSpeedMetersPerSecond = -50.0;
+  Bad.LaunchCooldownSeconds = -5.0;
+  Bad.BlastRadiusMeters = -10.0;
+  Bad.InterceptorBoostSeconds = -2.0;
+  Bad.InterceptorBoostVerticalBias = 5.0;
+  Bad.TerminalPhaseThresholdSeconds = -0.5;
+  Bad.TerminalTurnRateMultiplier = 0.0;
+  Bad.InterceptorProportionalNavConstant = -2.0;
+  Bad.KillProbabilityAtZeroMiss = -0.3;
+  Bad.KillProbabilityFuseFloor = 5.0;
+  Bad.SeekerConeDegrees = -90.0;
+
+  FProjectAirDefenseBattleSimulation Sim(MakeDistrictCells(), MakeLauncherPositions(), Bad, 1);
+  const FProjectAirDefenseDefenseSettings& After = Sim.GetSettings();
+
+  TestTrue(TEXT("engagement range clamped above zero"), After.EngagementRangeMeters >= 100.0);
+  TestTrue(TEXT("interceptor speed clamped above zero"), After.InterceptorSpeedMetersPerSecond >= 50.0);
+  TestTrue(TEXT("launch cooldown clamped above zero"), After.LaunchCooldownSeconds > 0.0);
+  TestTrue(TEXT("blast radius clamped above zero"), After.BlastRadiusMeters > 0.0);
+  TestTrue(TEXT("boost seconds non-negative"), After.InterceptorBoostSeconds >= 0.0);
+  TestTrue(TEXT("boost vertical bias in [0,1]"),
+      After.InterceptorBoostVerticalBias >= 0.0 && After.InterceptorBoostVerticalBias <= 1.0);
+  TestTrue(TEXT("terminal threshold non-negative"), After.TerminalPhaseThresholdSeconds >= 0.0);
+  TestTrue(TEXT("terminal turn multiplier above zero"), After.TerminalTurnRateMultiplier > 0.0);
+  TestTrue(TEXT("proportional nav constant at least one"), After.InterceptorProportionalNavConstant >= 1.0);
+  TestTrue(TEXT("kill probability at zero miss in [0,1]"),
+      After.KillProbabilityAtZeroMiss >= 0.0 && After.KillProbabilityAtZeroMiss <= 1.0);
+  TestTrue(TEXT("kill probability floor in [0,1]"),
+      After.KillProbabilityFuseFloor >= 0.0 && After.KillProbabilityFuseFloor <= 1.0);
+  TestTrue(
+      TEXT("kill probability floor does not exceed zero-miss probability"),
+      After.KillProbabilityFuseFloor <= After.KillProbabilityAtZeroMiss);
+  TestTrue(TEXT("seeker cone degrees in [1, 179]"),
+      After.SeekerConeDegrees >= 1.0 && After.SeekerConeDegrees <= 179.0);
+  return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+    FProjectAirDefenseBattleEmptyLauncherTest,
+    "ProjectAirDefense.BattleSimulation.EmptyLauncherArrayTolerated",
+    EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FProjectAirDefenseBattleEmptyLauncherTest::RunTest(const FString& Parameters) {
+  // The constructor synthesizes a single origin-launcher when the caller
+  // passes an empty array. This must remain stable: the simulation must still
+  // step without crashing and must still spawn threats. No intercepts are
+  // expected because the synthetic launcher has no real hardware behind it,
+  // so we only assert on liveness invariants.
+  FProjectAirDefenseBattleSimulation Sim(
+      MakeDistrictCells(), TArray<FVector3d>(), MakeSettings(EProjectAirDefenseDefenseDoctrine::Adaptive), 77);
+  TestTrue(TEXT("wave starts with empty launcher array"), Sim.StartNextWave());
+  for (int32 Index = 0; Index < 200; ++Index) {
+    Sim.Step(0.05);
+  }
+  const FProjectAirDefenseBattleRunSummary Summary = Sim.BuildRunSummary(0, 10.0);
+  TestTrue(TEXT("threats still spawned"), Summary.ThreatsSpawned > 0);
+  TestTrue(TEXT("no out-of-bounds integrity"),
+      Summary.CityIntegrity >= 0.0 && Summary.CityIntegrity <= 100.0);
+  return true;
+}
+
 #endif

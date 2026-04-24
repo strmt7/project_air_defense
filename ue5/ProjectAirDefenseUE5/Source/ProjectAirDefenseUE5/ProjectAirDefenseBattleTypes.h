@@ -47,6 +47,26 @@ struct FProjectAirDefenseDefenseSettings {
   // this half-angle of its own velocity direction. Models the physical
   // constraint that a terminal seeker cannot see targets behind it.
   double SeekerConeDegrees = 80.0;
+
+  // Clamps all tunables to physically reasonable ranges so no caller can
+  // feed the simulation a negative probability, a zero engagement range, or
+  // a floor that exceeds the zero-miss kill probability. Safe to call
+  // repeatedly; idempotent after the first invocation.
+  void Sanitize() {
+    EngagementRangeMeters = FMath::Clamp(EngagementRangeMeters, 100.0, 20000.0);
+    InterceptorSpeedMetersPerSecond = FMath::Clamp(InterceptorSpeedMetersPerSecond, 50.0, 5000.0);
+    LaunchCooldownSeconds = FMath::Clamp(LaunchCooldownSeconds, 0.01, 30.0);
+    BlastRadiusMeters = FMath::Clamp(BlastRadiusMeters, 1.0, 2000.0);
+    InterceptorBoostSeconds = FMath::Clamp(InterceptorBoostSeconds, 0.0, 30.0);
+    InterceptorBoostVerticalBias = FMath::Clamp(InterceptorBoostVerticalBias, 0.0, 1.0);
+    TerminalPhaseThresholdSeconds = FMath::Clamp(TerminalPhaseThresholdSeconds, 0.0, 60.0);
+    TerminalTurnRateMultiplier = FMath::Clamp(TerminalTurnRateMultiplier, 0.1, 20.0);
+    InterceptorProportionalNavConstant = FMath::Clamp(InterceptorProportionalNavConstant, 1.0, 10.0);
+    KillProbabilityAtZeroMiss = FMath::Clamp(KillProbabilityAtZeroMiss, 0.0, 1.0);
+    KillProbabilityFuseFloor =
+        FMath::Clamp(KillProbabilityFuseFloor, 0.0, KillProbabilityAtZeroMiss);
+    SeekerConeDegrees = FMath::Clamp(SeekerConeDegrees, 1.0, 179.0);
+  }
 };
 
 struct FProjectAirDefenseDistrictCell {

@@ -591,6 +591,7 @@ FProjectAirDefenseBattleSimulation::FProjectAirDefenseBattleSimulation(
       GravityMetersPerSecondSquared(0.0, 0.0, ThreatGravityMetersPerSecondSquared),
       Credits(StartingCredits),
       CityIntegrity(StartingCityIntegrity) {
+  this->Settings.Sanitize();
   this->LauncherReadyInSeconds.Init(0.0, FMath::Max(this->LauncherPositionsMeters.Num(), 1));
   if (this->LauncherPositionsMeters.IsEmpty()) {
     this->LauncherPositionsMeters.Add(FVector3d::ZeroVector);
