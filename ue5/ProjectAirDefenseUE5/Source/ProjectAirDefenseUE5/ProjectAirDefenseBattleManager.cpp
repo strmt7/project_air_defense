@@ -913,7 +913,7 @@ void AProjectAirDefenseBattleManager::RefreshTransientVisualInstances() {
         FTransform(
             FRotator::ZeroRotator,
             TrailVisual.WorldPosition,
-            TrailVisual.BaseScale * FMath::Lerp(1.0, 0.18, Alpha)),
+            TrailVisual.BaseScale * FMath::Lerp(1.0, 2.6, Alpha)),
         true);
   }
 
