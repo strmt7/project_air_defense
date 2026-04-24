@@ -966,7 +966,7 @@ void FProjectAirDefenseBattleSimulation::UpdateInterceptors(
           (Target->PositionMeters - Interceptor.PositionMeters).GetSafeNormal();
       const FVector3d ForwardUnit = Interceptor.VelocityMetersPerSecond.GetSafeNormal();
       const bool bWithinSeekerCone =
-          ForwardUnit.IsNearlyZero() || (ForwardUnit | ToTargetUnit) >= SeekerConeCosine;
+          !ForwardUnit.IsNearlyZero() && (ForwardUnit | ToTargetUnit) >= SeekerConeCosine;
 
       this->TotalMissDistanceMetersSum += MinSeparationMeters;
       ++this->TotalMissDistanceSamples;

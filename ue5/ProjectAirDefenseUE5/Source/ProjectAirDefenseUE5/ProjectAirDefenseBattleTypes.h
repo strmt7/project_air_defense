@@ -33,6 +33,10 @@ struct FProjectAirDefenseDefenseSettings {
   double InterceptorBoostVerticalBias = 0.62;
   double TerminalPhaseThresholdSeconds = 1.35;
   double TerminalTurnRateMultiplier = 1.85;
+  // Proportional-navigation constant N. Industry standard is N=4 (Palumbo
+  // 2018, JHU APL Technical Digest). Lower values are more sluggish; higher
+  // values amplify seeker noise into command chatter.
+  double InterceptorProportionalNavConstant = 4.0;
   // Miss-distance kill probability. At zero miss a hit is nearly certain; at
   // the fuse envelope the kill chance falls to the fuse-floor value, and
   // outside the fuse envelope the interceptor cannot kill at all. The roll
