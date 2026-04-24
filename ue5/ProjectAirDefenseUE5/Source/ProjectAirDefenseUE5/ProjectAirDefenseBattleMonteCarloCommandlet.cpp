@@ -125,6 +125,21 @@ TSharedRef<FJsonObject> SummaryToJsonObject(const FProjectAirDefenseBattleRunSum
   Object->SetNumberField(TEXT("interceptsInTerminalPhase"), Summary.InterceptsInTerminalPhase);
   Object->SetNumberField(TEXT("averageMissDistanceMeters"), Summary.AverageMissDistanceMeters());
   Object->SetNumberField(TEXT("singleShotKillProbability"), Summary.SingleShotKillProbability());
+  static constexpr int32 BallisticIndex = static_cast<int32>(EProjectAirDefenseThreatType::Ballistic);
+  static constexpr int32 GlideIndex = static_cast<int32>(EProjectAirDefenseThreatType::Glide);
+  static constexpr int32 CruiseIndex = static_cast<int32>(EProjectAirDefenseThreatType::Cruise);
+  Object->SetNumberField(TEXT("ballisticSpawned"), Summary.SpawnedByType[BallisticIndex]);
+  Object->SetNumberField(TEXT("ballisticIntercepted"), Summary.InterceptedByType[BallisticIndex]);
+  Object->SetNumberField(TEXT("ballisticImpacted"), Summary.ImpactedByType[BallisticIndex]);
+  Object->SetNumberField(TEXT("ballisticInterceptRate"), Summary.InterceptRateForType(BallisticIndex));
+  Object->SetNumberField(TEXT("glideSpawned"), Summary.SpawnedByType[GlideIndex]);
+  Object->SetNumberField(TEXT("glideIntercepted"), Summary.InterceptedByType[GlideIndex]);
+  Object->SetNumberField(TEXT("glideImpacted"), Summary.ImpactedByType[GlideIndex]);
+  Object->SetNumberField(TEXT("glideInterceptRate"), Summary.InterceptRateForType(GlideIndex));
+  Object->SetNumberField(TEXT("cruiseSpawned"), Summary.SpawnedByType[CruiseIndex]);
+  Object->SetNumberField(TEXT("cruiseIntercepted"), Summary.InterceptedByType[CruiseIndex]);
+  Object->SetNumberField(TEXT("cruiseImpacted"), Summary.ImpactedByType[CruiseIndex]);
+  Object->SetNumberField(TEXT("cruiseInterceptRate"), Summary.InterceptRateForType(CruiseIndex));
   return Object;
 }
 } // namespace

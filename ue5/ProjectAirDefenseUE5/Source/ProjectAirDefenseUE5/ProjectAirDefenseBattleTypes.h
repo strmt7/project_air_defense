@@ -169,6 +169,23 @@ struct FProjectAirDefenseBattleRunSummary {
                ? 0.0
                : static_cast<double>(this->InterceptorsKilledTarget) / static_cast<double>(Attempts);
   }
+
+  // Per-threat-type counters indexed by static_cast<int32> of
+  // EProjectAirDefenseThreatType. Size must stay synchronized with the enum.
+  static constexpr int32 ThreatTypeCount = 3;
+  int32 SpawnedByType[ThreatTypeCount] = {0, 0, 0};
+  int32 InterceptedByType[ThreatTypeCount] = {0, 0, 0};
+  int32 ImpactedByType[ThreatTypeCount] = {0, 0, 0};
+
+  double InterceptRateForType(int32 TypeIndex) const {
+    if (TypeIndex < 0 || TypeIndex >= ThreatTypeCount) {
+      return 0.0;
+    }
+    const int32 Spawned = this->SpawnedByType[TypeIndex];
+    return Spawned == 0 ? 0.0
+                        : static_cast<double>(this->InterceptedByType[TypeIndex]) /
+                              static_cast<double>(Spawned);
+  }
 };
 
 struct FProjectAirDefenseRuntimeSnapshot {

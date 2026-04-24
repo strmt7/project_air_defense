@@ -233,4 +233,228 @@ bool FProjectAirDefenseBattleHostileImpactTest::RunTest(const FString& Parameter
   return false;
 }
 
+namespace {
+FProjectAirDefenseBattleRunSummary RunWithOverrideSettings(
+    int32 Seed,
+    const FProjectAirDefenseDefenseSettings& Settings,
+    int32 Waves,
+    double MaxSecondsPerWave) {
+  FProjectAirDefenseBattleSimulation Simulation(
+      MakeDistrictCells(), MakeLauncherPositions(), Settings, Seed);
+
+  double SimulatedSeconds = 0.0;
+  for (int32 WaveIndex = 0; WaveIndex < Waves; ++WaveIndex) {
+    if (!Simulation.StartNextWave()) {
+      break;
+    }
+    const int32 MaxSteps = static_cast<int32>(MaxSecondsPerWave / 0.05);
+    for (int32 StepIndex = 0; StepIndex < MaxSteps; ++StepIndex) {
+      Simulation.Step(0.05);
+      SimulatedSeconds += 0.05;
+      if ((!Simulation.IsWaveInProgress() && Simulation.GetThreats().IsEmpty()) ||
+          Simulation.IsGameOver()) {
+        break;
+      }
+    }
+    if (Simulation.IsGameOver()) {
+      break;
+    }
+  }
+
+  return Simulation.BuildRunSummary(Seed, SimulatedSeconds);
+}
+} // namespace
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+    FProjectAirDefenseBattleKillProbabilityZeroTest,
+    "ProjectAirDefense.BattleSimulation.KillProbabilityZero",
+    EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FProjectAirDefenseBattleKillProbabilityZeroTest::RunTest(const FString& Parameters) {
+  // With kill probability clamped to zero at both miss-distance endpoints, every
+  // fuse-closure roll must fail. The simulation must still launch interceptors
+  // and still record miss-distance samples; only the kill count must stay at 0.
+  FProjectAirDefenseDefenseSettings Settings =
+      MakeSettings(EProjectAirDefenseDefenseDoctrine::Adaptive);
+  Settings.KillProbabilityAtZeroMiss = 0.0;
+  Settings.KillProbabilityFuseFloor = 0.0;
+
+  const FProjectAirDefenseBattleRunSummary Summary =
+      RunWithOverrideSettings(51234, Settings, 1, 48.0);
+
+  TestTrue(TEXT("interceptors still launched"), Summary.InterceptorsLaunched > 0);
+  TestEqual(TEXT("no kills when Pk is zero"), Summary.ThreatsIntercepted, 0);
+  TestEqual(
+      TEXT("InterceptorsKilledTarget mirrors ThreatsIntercepted"),
+      Summary.InterceptorsKilledTarget,
+      Summary.ThreatsIntercepted);
+  TestTrue(
+      TEXT("at least one fuse roll recorded as miss"),
+      Summary.InterceptorsFuseRollMissed > 0);
+  TestTrue(
+      TEXT("miss-distance samples recorded when fuse closed"),
+      Summary.MissDistanceSampleCount > 0);
+  return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+    FProjectAirDefenseBattleKillProbabilityOneTest,
+    "ProjectAirDefense.BattleSimulation.KillProbabilityOne",
+    EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FProjectAirDefenseBattleKillProbabilityOneTest::RunTest(const FString& Parameters) {
+  // With kill probability pinned to one at both endpoints, every fuse-closure
+  // that survives the seeker-cone check must kill its target. No fuse roll may
+  // register as a miss.
+  FProjectAirDefenseDefenseSettings Settings =
+      MakeSettings(EProjectAirDefenseDefenseDoctrine::Adaptive);
+  Settings.KillProbabilityAtZeroMiss = 1.0;
+  Settings.KillProbabilityFuseFloor = 1.0;
+
+  const FProjectAirDefenseBattleRunSummary Summary =
+      RunWithOverrideSettings(88442, Settings, 1, 48.0);
+
+  TestTrue(TEXT("interceptors launched"), Summary.InterceptorsLaunched > 0);
+  TestTrue(TEXT("at least one kill registered"), Summary.ThreatsIntercepted > 0);
+  TestEqual(TEXT("no fuse-roll misses when Pk is one"), Summary.InterceptorsFuseRollMissed, 0);
+  return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+    FProjectAirDefenseBattleTerminalPhaseTest,
+    "ProjectAirDefense.BattleSimulation.TerminalPhaseActivation",
+    EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FProjectAirDefenseBattleTerminalPhaseTest::RunTest(const FString& Parameters) {
+  // Over a normal run, at least some kills must complete while the interceptor
+  // is in proportional-navigation terminal phase. If the threshold or
+  // activation logic regresses, this counter goes to zero.
+  constexpr int32 RunCount = 8;
+  int32 TerminalKillsTotal = 0;
+  int32 AnyInterceptsTotal = 0;
+  for (int32 RunIndex = 0; RunIndex < RunCount; ++RunIndex) {
+    const FProjectAirDefenseBattleRunSummary Summary =
+        RunSingleSimulation(
+            70000 + RunIndex, EProjectAirDefenseDefenseDoctrine::Adaptive, 1, 48.0);
+    TerminalKillsTotal += Summary.InterceptsInTerminalPhase;
+    AnyInterceptsTotal += Summary.ThreatsIntercepted;
+  }
+  TestTrue(TEXT("intercepts occurred during run set"), AnyInterceptsTotal > 0);
+  TestTrue(
+      TEXT("terminal-phase PN still active in at least one kill"),
+      TerminalKillsTotal > 0);
+  TestTrue(
+      TEXT("terminal-phase kills do not exceed total intercepts"),
+      TerminalKillsTotal <= AnyInterceptsTotal);
+  return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+    FProjectAirDefenseBattleShootLookShootTest,
+    "ProjectAirDefense.BattleSimulation.ShootLookShootAdvantage",
+    EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FProjectAirDefenseBattleShootLookShootTest::RunTest(const FString& Parameters) {
+  // With a deliberately low per-shot kill probability, the two-interceptor
+  // ShieldWall doctrine must outperform the one-interceptor Disciplined doctrine.
+  // Analytically: if single-shot Pk = 0.5, combined kill chance per threat is
+  // 1 - (1-0.5)^2 = 0.75, so ShieldWall's intercept rate should comfortably
+  // exceed Disciplined's.
+  FProjectAirDefenseDefenseSettings BaseSettings = MakeSettings(EProjectAirDefenseDefenseDoctrine::Disciplined);
+  BaseSettings.KillProbabilityAtZeroMiss = 0.50;
+  BaseSettings.KillProbabilityFuseFloor = 0.50;
+
+  constexpr int32 RunCount = 16;
+  double DisciplinedInterceptSum = 0.0;
+  double ShieldWallInterceptSum = 0.0;
+  for (int32 RunIndex = 0; RunIndex < RunCount; ++RunIndex) {
+    FProjectAirDefenseDefenseSettings Disciplined = BaseSettings;
+    Disciplined.Doctrine = EProjectAirDefenseDefenseDoctrine::Disciplined;
+    FProjectAirDefenseDefenseSettings ShieldWall = BaseSettings;
+    ShieldWall.Doctrine = EProjectAirDefenseDefenseDoctrine::ShieldWall;
+
+    DisciplinedInterceptSum +=
+        RunWithOverrideSettings(31000 + RunIndex, Disciplined, 1, 48.0).InterceptRate();
+    ShieldWallInterceptSum +=
+        RunWithOverrideSettings(31000 + RunIndex, ShieldWall, 1, 48.0).InterceptRate();
+  }
+
+  const double DisciplinedAverage = DisciplinedInterceptSum / static_cast<double>(RunCount);
+  const double ShieldWallAverage = ShieldWallInterceptSum / static_cast<double>(RunCount);
+  TestTrue(
+      TEXT("ShieldWall intercept rate beats Disciplined at low Pk"),
+      ShieldWallAverage > DisciplinedAverage + 0.05);
+  TestTrue(
+      TEXT("Disciplined average above the theoretical floor"),
+      DisciplinedAverage > 0.15);
+  TestTrue(
+      TEXT("ShieldWall average below one (Pk is still 0.5)"),
+      ShieldWallAverage < 0.99);
+  return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+    FProjectAirDefenseBattleDeterminismTest,
+    "ProjectAirDefense.BattleSimulation.DeterminismOnSameSeed",
+    EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FProjectAirDefenseBattleDeterminismTest::RunTest(const FString& Parameters) {
+  // Critical objective-benchmarking invariant: the seeded simulation must
+  // produce the same summary counters across two independent runs. If the new
+  // threat-motion uncertainty or fuse-roll randomness accidentally draws from
+  // a non-seeded source, this test fails.
+  const FProjectAirDefenseBattleRunSummary First =
+      RunSingleSimulation(424242, EProjectAirDefenseDefenseDoctrine::Adaptive, 1, 48.0);
+  const FProjectAirDefenseBattleRunSummary Second =
+      RunSingleSimulation(424242, EProjectAirDefenseDefenseDoctrine::Adaptive, 1, 48.0);
+  TestEqual(TEXT("threats spawned match"), First.ThreatsSpawned, Second.ThreatsSpawned);
+  TestEqual(TEXT("threats intercepted match"), First.ThreatsIntercepted, Second.ThreatsIntercepted);
+  TestEqual(TEXT("hostile impacts match"), First.HostileImpacts, Second.HostileImpacts);
+  TestEqual(TEXT("fuse-roll misses match"), First.InterceptorsFuseRollMissed, Second.InterceptorsFuseRollMissed);
+  TestEqual(
+      TEXT("terminal-phase kills match"),
+      First.InterceptsInTerminalPhase,
+      Second.InterceptsInTerminalPhase);
+  TestEqual(
+      TEXT("miss-distance sample counts match"),
+      First.MissDistanceSampleCount,
+      Second.MissDistanceSampleCount);
+  return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+    FProjectAirDefenseBattleSeekerConeTest,
+    "ProjectAirDefense.BattleSimulation.SeekerConeGate",
+    EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FProjectAirDefenseBattleSeekerConeTest::RunTest(const FString& Parameters) {
+  // With a vanishingly narrow seeker cone, the terminal seeker almost never
+  // gets a valid lock and intercepts collapse to near zero. A wide cone
+  // restores normal performance. This exercises the new seeker-cone gate and
+  // proves it is a live parameter, not ignored.
+  FProjectAirDefenseDefenseSettings NarrowConeSettings =
+      MakeSettings(EProjectAirDefenseDefenseDoctrine::Adaptive);
+  NarrowConeSettings.SeekerConeDegrees = 2.0;
+  FProjectAirDefenseDefenseSettings WideConeSettings =
+      MakeSettings(EProjectAirDefenseDefenseDoctrine::Adaptive);
+  WideConeSettings.SeekerConeDegrees = 170.0;
+
+  constexpr int32 RunCount = 6;
+  double NarrowInterceptSum = 0.0;
+  double WideInterceptSum = 0.0;
+  for (int32 RunIndex = 0; RunIndex < RunCount; ++RunIndex) {
+    NarrowInterceptSum +=
+        RunWithOverrideSettings(91000 + RunIndex, NarrowConeSettings, 1, 48.0).InterceptRate();
+    WideInterceptSum +=
+        RunWithOverrideSettings(91000 + RunIndex, WideConeSettings, 1, 48.0).InterceptRate();
+  }
+  const double NarrowAverage = NarrowInterceptSum / static_cast<double>(RunCount);
+  const double WideAverage = WideInterceptSum / static_cast<double>(RunCount);
+  TestTrue(
+      TEXT("wide seeker cone outperforms narrow cone"),
+      WideAverage > NarrowAverage + 0.15);
+  TestTrue(TEXT("narrow cone still below reasonable ceiling"), NarrowAverage < 0.5);
+  return true;
+}
+
 #endif

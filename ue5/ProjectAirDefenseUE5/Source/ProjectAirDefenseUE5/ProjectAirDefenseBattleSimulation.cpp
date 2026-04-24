@@ -695,6 +695,10 @@ FProjectAirDefenseRuntimeSnapshot FProjectAirDefenseBattleSimulation::BuildRunti
 
 FProjectAirDefenseBattleRunSummary
 FProjectAirDefenseBattleSimulation::BuildRunSummary(int32 RunIndex, double SimulatedSeconds) const {
+  static_assert(
+      FProjectAirDefenseBattleSimulation::ThreatTypeCount ==
+          FProjectAirDefenseBattleRunSummary::ThreatTypeCount,
+      "Threat-type counters must stay synchronized between simulation and summary.");
   FProjectAirDefenseBattleRunSummary Summary;
   Summary.RunIndex = RunIndex;
   Summary.WavesCompleted = this->Wave - 1;
@@ -712,6 +716,11 @@ FProjectAirDefenseBattleSimulation::BuildRunSummary(int32 RunIndex, double Simul
   Summary.InterceptsInTerminalPhase = this->TotalInterceptsInTerminalPhase;
   Summary.MissDistanceSumMeters = this->TotalMissDistanceMetersSum;
   Summary.MissDistanceSampleCount = this->TotalMissDistanceSamples;
+  for (int32 TypeIndex = 0; TypeIndex < ThreatTypeCount; ++TypeIndex) {
+    Summary.SpawnedByType[TypeIndex] = this->TotalSpawnedByType[TypeIndex];
+    Summary.InterceptedByType[TypeIndex] = this->TotalInterceptedByType[TypeIndex];
+    Summary.ImpactedByType[TypeIndex] = this->TotalImpactedByType[TypeIndex];
+  }
   return Summary;
 }
 
@@ -830,6 +839,10 @@ void FProjectAirDefenseBattleSimulation::UpdateThreats(
 
     this->ResolveImpact(ImpactPointMeters, ThreatImpactRadiusMeters, true, Events);
     ++this->TotalHostileImpacts;
+    const int32 ImpactTypeIndex = static_cast<int32>(Threat.ThreatType);
+    if (ImpactTypeIndex >= 0 && ImpactTypeIndex < ThreatTypeCount) {
+      ++this->TotalImpactedByType[ImpactTypeIndex];
+    }
     Events.RemovedThreatIds.Add(Threat.Id);
     this->Threats.RemoveAt(ThreatIndex);
   }
@@ -987,6 +1000,10 @@ void FProjectAirDefenseBattleSimulation::UpdateInterceptors(
           if (bInTerminalPhase) {
             ++this->TotalInterceptsInTerminalPhase;
           }
+          const int32 KilledTypeIndex = static_cast<int32>(Target->ThreatType);
+          if (KilledTypeIndex >= 0 && KilledTypeIndex < ThreatTypeCount) {
+            ++this->TotalInterceptedByType[KilledTypeIndex];
+          }
           const FString TargetId = Target->Id;
           Events.RemovedThreatIds.Add(TargetId);
           Events.RemovedInterceptorIds.Add(Interceptor.Id);
@@ -1086,6 +1103,10 @@ FProjectAirDefenseThreatState FProjectAirDefenseBattleSimulation::SpawnThreat() 
   Threat.TrailCooldownSeconds = this->RandomStream.FRandRange(0.0, ThreatTrailIntervalSeconds);
   this->Threats.Add(Threat);
   ++this->TotalThreatsSpawned;
+  const int32 TypeIndex = static_cast<int32>(Threat.ThreatType);
+  if (TypeIndex >= 0 && TypeIndex < ThreatTypeCount) {
+    ++this->TotalSpawnedByType[TypeIndex];
+  }
   return Threat;
 }
 

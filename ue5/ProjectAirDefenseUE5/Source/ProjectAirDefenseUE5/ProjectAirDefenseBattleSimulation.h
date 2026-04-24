@@ -104,6 +104,12 @@ private:
   int32 TotalInterceptsInTerminalPhase = 0;
   double TotalMissDistanceMetersSum = 0.0;
   int32 TotalMissDistanceSamples = 0;
+  // Per-threat-type accounting (indexed by static_cast<int32> of the enum).
+  // Array size must stay synchronized with EProjectAirDefenseThreatType.
+  static constexpr int32 ThreatTypeCount = 3;
+  int32 TotalSpawnedByType[ThreatTypeCount] = {0, 0, 0};
+  int32 TotalInterceptedByType[ThreatTypeCount] = {0, 0, 0};
+  int32 TotalImpactedByType[ThreatTypeCount] = {0, 0, 0};
   double SpawnTimerSeconds = 0.0;
   double TimeSinceLastLaunchSeconds = 0.0;
   int32 NextThreatOrdinal = 1;
