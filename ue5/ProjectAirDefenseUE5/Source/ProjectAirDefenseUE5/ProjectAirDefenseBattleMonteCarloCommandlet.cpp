@@ -120,6 +120,11 @@ TSharedRef<FJsonObject> SummaryToJsonObject(const FProjectAirDefenseBattleRunSum
   Object->SetNumberField(TEXT("destroyedDistricts"), Summary.DestroyedDistricts);
   Object->SetNumberField(TEXT("simulatedSeconds"), Summary.SimulatedSeconds);
   Object->SetNumberField(TEXT("interceptRate"), Summary.InterceptRate());
+  Object->SetNumberField(TEXT("interceptorsKilledTarget"), Summary.InterceptorsKilledTarget);
+  Object->SetNumberField(TEXT("interceptorsFuseRollMissed"), Summary.InterceptorsFuseRollMissed);
+  Object->SetNumberField(TEXT("interceptsInTerminalPhase"), Summary.InterceptsInTerminalPhase);
+  Object->SetNumberField(TEXT("averageMissDistanceMeters"), Summary.AverageMissDistanceMeters());
+  Object->SetNumberField(TEXT("singleShotKillProbability"), Summary.SingleShotKillProbability());
   return Object;
 }
 } // namespace
@@ -155,11 +160,18 @@ int32 UProjectAirDefenseBattleMonteCarloCommandlet::Main(const FString& Params) 
   Summaries.Reserve(Runs);
   double InterceptRateSum = 0.0;
   double CityIntegritySum = 0.0;
+  double MissDistanceSum = 0.0;
+  double SingleShotKillProbabilitySum = 0.0;
+  int32 MissDistanceRuns = 0;
+  int32 SingleShotKillProbabilityRuns = 0;
   int32 GameOverRuns = 0;
   int32 TotalThreatsSpawned = 0;
   int32 TotalThreatsIntercepted = 0;
   int32 TotalHostileImpacts = 0;
   int32 TotalInterceptorsLaunched = 0;
+  int32 TotalInterceptorsKilledTarget = 0;
+  int32 TotalInterceptorsFuseRollMissed = 0;
+  int32 TotalInterceptsInTerminalPhase = 0;
 
   for (int32 RunIndex = 0; RunIndex < Runs; ++RunIndex) {
     const FProjectAirDefenseBattleRunSummary Summary =
@@ -178,6 +190,17 @@ int32 UProjectAirDefenseBattleMonteCarloCommandlet::Main(const FString& Params) 
     TotalThreatsIntercepted += Summary.ThreatsIntercepted;
     TotalHostileImpacts += Summary.HostileImpacts;
     TotalInterceptorsLaunched += Summary.InterceptorsLaunched;
+    TotalInterceptorsKilledTarget += Summary.InterceptorsKilledTarget;
+    TotalInterceptorsFuseRollMissed += Summary.InterceptorsFuseRollMissed;
+    TotalInterceptsInTerminalPhase += Summary.InterceptsInTerminalPhase;
+    if (Summary.MissDistanceSampleCount > 0) {
+      MissDistanceSum += Summary.AverageMissDistanceMeters();
+      ++MissDistanceRuns;
+    }
+    if (Summary.InterceptorsKilledTarget + Summary.InterceptorsFuseRollMissed > 0) {
+      SingleShotKillProbabilitySum += Summary.SingleShotKillProbability();
+      ++SingleShotKillProbabilityRuns;
+    }
   }
 
   TSharedRef<FJsonObject> RootObject = MakeShared<FJsonObject>();
@@ -196,6 +219,17 @@ int32 UProjectAirDefenseBattleMonteCarloCommandlet::Main(const FString& Params) 
   RootObject->SetNumberField(TEXT("totalThreatsIntercepted"), TotalThreatsIntercepted);
   RootObject->SetNumberField(TEXT("totalHostileImpacts"), TotalHostileImpacts);
   RootObject->SetNumberField(TEXT("totalInterceptorsLaunched"), TotalInterceptorsLaunched);
+  RootObject->SetNumberField(TEXT("totalInterceptorsKilledTarget"), TotalInterceptorsKilledTarget);
+  RootObject->SetNumberField(TEXT("totalInterceptorsFuseRollMissed"), TotalInterceptorsFuseRollMissed);
+  RootObject->SetNumberField(TEXT("totalInterceptsInTerminalPhase"), TotalInterceptsInTerminalPhase);
+  RootObject->SetNumberField(
+      TEXT("averageMissDistanceMeters"),
+      MissDistanceRuns > 0 ? MissDistanceSum / static_cast<double>(MissDistanceRuns) : 0.0);
+  RootObject->SetNumberField(
+      TEXT("averageSingleShotKillProbability"),
+      SingleShotKillProbabilityRuns > 0
+          ? SingleShotKillProbabilitySum / static_cast<double>(SingleShotKillProbabilityRuns)
+          : 0.0);
 
   TArray<TSharedPtr<FJsonValue>> RunValues;
   RunValues.Reserve(Summaries.Num());

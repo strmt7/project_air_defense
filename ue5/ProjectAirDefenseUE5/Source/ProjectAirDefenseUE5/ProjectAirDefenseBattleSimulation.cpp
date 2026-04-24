@@ -356,7 +356,8 @@ bool ClosesWithinFuse(
     const FMotionSample& Interceptor,
     const FMotionSample& Target,
     double DeltaSeconds,
-    double FuseRadiusMeters) {
+    double FuseRadiusMeters,
+    double& OutMinSeparationMeters) {
   const FVector3d RelativePosition = Target.PositionMeters - Interceptor.PositionMeters;
   const FVector3d RelativeVelocity =
       Target.VelocityMetersPerSecond - Interceptor.VelocityMetersPerSecond;
@@ -369,7 +370,9 @@ bool ClosesWithinFuse(
                 0.0,
                 DeltaSeconds);
   const FVector3d Separation = RelativePosition + RelativeVelocity * SampleTime;
-  return Separation.SquaredLength() <= FMath::Square(FuseRadiusMeters);
+  const double SeparationLength = Separation.Length();
+  OutMinSeparationMeters = SeparationLength;
+  return SeparationLength <= FuseRadiusMeters;
 }
 
 FVector3d ImpactPointFor(const FProjectAirDefenseThreatState& Threat) {
@@ -704,6 +707,11 @@ FProjectAirDefenseBattleSimulation::BuildRunSummary(int32 RunIndex, double Simul
   Summary.InterceptorsLaunched = this->TotalInterceptorsLaunched;
   Summary.DestroyedDistricts = this->TotalDestroyedDistricts;
   Summary.SimulatedSeconds = SimulatedSeconds;
+  Summary.InterceptorsKilledTarget = this->TotalThreatsIntercepted;
+  Summary.InterceptorsFuseRollMissed = this->TotalInterceptorsFuseRollMissed;
+  Summary.InterceptsInTerminalPhase = this->TotalInterceptsInTerminalPhase;
+  Summary.MissDistanceSumMeters = this->TotalMissDistanceMetersSum;
+  Summary.MissDistanceSampleCount = this->TotalMissDistanceSamples;
   return Summary;
 }
 
@@ -775,6 +783,26 @@ void FProjectAirDefenseBattleSimulation::UpdateThreats(
   int32 ThreatIndex = 0;
   while (ThreatIndex < this->Threats.Num()) {
     FProjectAirDefenseThreatState& Threat = this->Threats[ThreatIndex];
+    // Per-type pre-motion uncertainty. Ballistic missiles inherit launch and
+    // wind error as a slow yaw drift (contributing to real-world CEP around
+    // the aim point). Glide and cruise threats overlay a larger random yaw
+    // drift that reads as terminal evasion under defender fire. All drift is
+    // driven by the seeded RandomStream so runs remain deterministic.
+    const double YawJitterDegreesPerSecond =
+        Threat.ThreatType == EProjectAirDefenseThreatType::Ballistic
+            ? 0.45
+            : Threat.ThreatType == EProjectAirDefenseThreatType::Glide ? 1.8
+                                                                        : 2.8;
+    const double YawJitterRadians = FMath::DegreesToRadians(YawJitterDegreesPerSecond) *
+                                    DeltaSeconds * (2.0 * this->RandomStream.FRand() - 1.0);
+    const double CosYaw = FMath::Cos(YawJitterRadians);
+    const double SinYaw = FMath::Sin(YawJitterRadians);
+    const double RotatedVelocityX =
+        Threat.VelocityMetersPerSecond.X * CosYaw - Threat.VelocityMetersPerSecond.Y * SinYaw;
+    const double RotatedVelocityY =
+        Threat.VelocityMetersPerSecond.X * SinYaw + Threat.VelocityMetersPerSecond.Y * CosYaw;
+    Threat.VelocityMetersPerSecond.X = RotatedVelocityX;
+    Threat.VelocityMetersPerSecond.Y = RotatedVelocityY;
     UpdateThreatMotion(Threat, DeltaSeconds, this->GravityMetersPerSecondSquared);
 
     Threat.TrailCooldownSeconds -= DeltaSeconds;
@@ -811,9 +839,22 @@ void FProjectAirDefenseBattleSimulation::UpdateInterceptors(
     double DeltaSeconds,
     double EffectiveBlastRadiusMeters,
     FStepAccumulator& Events) {
+  const double BoostSeconds = FMath::Max(this->Settings.InterceptorBoostSeconds, 0.0);
+  const double TerminalThresholdSeconds = FMath::Max(this->Settings.TerminalPhaseThresholdSeconds, 0.0);
+  const double BaseTurnRate = EffectiveTurnRate(this->Settings);
+  const double TerminalTurnRate =
+      FMath::Max(BaseTurnRate * this->Settings.TerminalTurnRateMultiplier, BaseTurnRate);
+  const double NavigationConstant =
+      FMath::Max(this->Settings.InterceptorProportionalNavConstant, 1.0);
+  const double SeekerConeCosine = FMath::Cos(FMath::DegreesToRadians(
+      FMath::Clamp(this->Settings.SeekerConeDegrees, 1.0, 179.0)));
+  const double InterceptorSpeedMetersPerSecond =
+      FMath::Max(this->Settings.InterceptorSpeedMetersPerSecond, 1.0);
+
   int32 InterceptorIndex = 0;
   while (InterceptorIndex < this->Interceptors.Num()) {
     FProjectAirDefenseInterceptorState& Interceptor = this->Interceptors[InterceptorIndex];
+    Interceptor.AgeSeconds += DeltaSeconds;
     FProjectAirDefenseThreatState* Target = this->FindThreat(Interceptor.TargetId);
     if (Target == nullptr) {
       Events.RemovedInterceptorIds.Add(Interceptor.Id);
@@ -821,20 +862,70 @@ void FProjectAirDefenseBattleSimulation::UpdateInterceptors(
       continue;
     }
 
-    const FVector3d AimPoint =
-        PredictInterceptPoint(
-            Interceptor.PositionMeters,
-            Target->PositionMeters,
-            Target->VelocityMetersPerSecond,
-            this->Settings.InterceptorSpeedMetersPerSecond);
-    const FVector3d DesiredVelocity =
-        (AimPoint - Interceptor.PositionMeters).GetSafeNormal() *
-        this->Settings.InterceptorSpeedMetersPerSecond;
-    const double LerpAlpha = FMath::Min(DeltaSeconds * EffectiveTurnRate(this->Settings), 1.0);
-    Interceptor.VelocityMetersPerSecond =
-        FMath::Lerp(Interceptor.VelocityMetersPerSecond, DesiredVelocity, LerpAlpha)
-            .GetSafeNormal() *
-        this->Settings.InterceptorSpeedMetersPerSecond;
+    // Predicted aim point for midcourse pure-pursuit and boost-phase bias.
+    const FVector3d AimPoint = PredictInterceptPoint(
+        Interceptor.PositionMeters,
+        Target->PositionMeters,
+        Target->VelocityMetersPerSecond,
+        InterceptorSpeedMetersPerSecond);
+
+    const FVector3d LineOfSight = Target->PositionMeters - Interceptor.PositionMeters;
+    const double RangeMeters = FMath::Max(LineOfSight.Length(), 1.0);
+    const FVector3d LineOfSightUnit = LineOfSight / RangeMeters;
+    const FVector3d RelativeVelocity =
+        Interceptor.VelocityMetersPerSecond - Target->VelocityMetersPerSecond;
+    const double ClosingSpeedMetersPerSecond =
+        FMath::Max(RelativeVelocity | LineOfSightUnit, 1.0);
+    const double TimeToGoSeconds = RangeMeters / ClosingSpeedMetersPerSecond;
+
+    FVector3d DesiredDirection;
+    double PhaseTurnRate = BaseTurnRate;
+    bool bInTerminalPhase = false;
+
+    if (Interceptor.AgeSeconds < BoostSeconds) {
+      // Boost phase: climb out of the canister while already biasing toward
+      // the predicted aim point. Models the motor-burn / tip-over profile so
+      // the launch trajectory is not a pure flat shot.
+      const double VerticalBias =
+          FMath::Clamp(this->Settings.InterceptorBoostVerticalBias, 0.0, 1.0);
+      const FVector3d ToAimUnit = (AimPoint - Interceptor.PositionMeters).GetSafeNormal();
+      const FVector3d Up(0.0, 0.0, 1.0);
+      FVector3d Blend = ToAimUnit * (1.0 - VerticalBias) + Up * VerticalBias;
+      DesiredDirection = Blend.GetSafeNormal();
+    } else if (TimeToGoSeconds <= TerminalThresholdSeconds &&
+               Interceptor.bLineOfSightInitialized) {
+      // Terminal phase: proportional-navigation guidance.
+      // Commanded acceleration: a = N * V_c * (LOS-rate perpendicular to LOS).
+      // Industry-standard navigation constant N = 4 (Palumbo, JHU APL).
+      const FVector3d RawLosRate =
+          (LineOfSightUnit - Interceptor.LastLineOfSightUnit) / FMath::Max(DeltaSeconds, 0.0001);
+      const FVector3d LosRatePerpendicular =
+          RawLosRate - LineOfSightUnit * (RawLosRate | LineOfSightUnit);
+      const FVector3d CommandedAcceleration =
+          LosRatePerpendicular * (NavigationConstant * ClosingSpeedMetersPerSecond);
+      const FVector3d SteeredVelocity =
+          Interceptor.VelocityMetersPerSecond + CommandedAcceleration * DeltaSeconds;
+      DesiredDirection = SteeredVelocity.IsNearlyZero()
+                              ? LineOfSightUnit
+                              : SteeredVelocity.GetSafeNormal();
+      PhaseTurnRate = TerminalTurnRate;
+      bInTerminalPhase = true;
+    } else {
+      // Midcourse phase: pure pursuit against the predicted aim point.
+      DesiredDirection = (AimPoint - Interceptor.PositionMeters).GetSafeNormal();
+    }
+
+    Interceptor.LastLineOfSightUnit = LineOfSightUnit;
+    Interceptor.bLineOfSightInitialized = true;
+
+    const FVector3d DesiredVelocity = DesiredDirection * InterceptorSpeedMetersPerSecond;
+    const double LerpAlpha = FMath::Clamp(DeltaSeconds * PhaseTurnRate, 0.0, 1.0);
+    FVector3d BlendedVelocity =
+        FMath::Lerp(Interceptor.VelocityMetersPerSecond, DesiredVelocity, LerpAlpha);
+    if (BlendedVelocity.SquaredLength() > TrackingEpsilon) {
+      BlendedVelocity = BlendedVelocity.GetSafeNormal() * InterceptorSpeedMetersPerSecond;
+    }
+    Interceptor.VelocityMetersPerSecond = BlendedVelocity;
     Interceptor.PositionMeters += Interceptor.VelocityMetersPerSecond * DeltaSeconds;
 
     Interceptor.TrailCooldownSeconds -= DeltaSeconds;
@@ -847,45 +938,77 @@ void FProjectAirDefenseBattleSimulation::UpdateInterceptors(
     }
 
     const FMotionSample InterceptorSample{
-        Interceptor.PositionMeters,
-        Interceptor.VelocityMetersPerSecond,
-    };
+        Interceptor.PositionMeters, Interceptor.VelocityMetersPerSecond};
     const FMotionSample ThreatSample{
-        Target->PositionMeters,
-        Target->VelocityMetersPerSecond,
-    };
-    if (ClosesWithinFuse(
-            InterceptorSample,
-            ThreatSample,
-            DeltaSeconds,
-            EffectiveBlastRadiusMeters)) {
-      this->Score += InterceptScoreBonus;
-      this->Credits += InterceptCreditBonus;
-      ++this->TotalThreatsIntercepted;
+        Target->PositionMeters, Target->VelocityMetersPerSecond};
+    double MinSeparationMeters = TNumericLimits<double>::Max();
+    const bool bClosedWithinFuse = ClosesWithinFuse(
+        InterceptorSample, ThreatSample, DeltaSeconds, EffectiveBlastRadiusMeters, MinSeparationMeters);
 
-      FProjectAirDefenseBlastEvent BlastEvent;
-      BlastEvent.PositionMeters = Interceptor.PositionMeters;
-      BlastEvent.RadiusMeters = EffectiveBlastRadiusMeters * InterceptBlastScale;
-      BlastEvent.GroundCoupling = BlastGroundCoupling(BlastEvent.PositionMeters);
-      BlastEvent.PeakDamage = 0.0;
-      BlastEvent.Kind = EProjectAirDefenseBlastKind::Intercept;
-      BlastEvent.bGroundImpact = BlastEvent.GroundCoupling >= 0.95;
-      Events.BlastEvents.Add(BlastEvent);
+    if (bClosedWithinFuse) {
+      // Seeker cone: the terminal seeker cannot lock targets outside its
+      // forward field of view. Outside the cone the interceptor flies past
+      // without detonating and may still re-engage.
+      const FVector3d ToTargetUnit =
+          (Target->PositionMeters - Interceptor.PositionMeters).GetSafeNormal();
+      const FVector3d ForwardUnit = Interceptor.VelocityMetersPerSecond.GetSafeNormal();
+      const bool bWithinSeekerCone =
+          ForwardUnit.IsNearlyZero() || (ForwardUnit | ToTargetUnit) >= SeekerConeCosine;
 
-      const FString TargetId = Target->Id;
-      Events.RemovedThreatIds.Add(TargetId);
-      Events.RemovedInterceptorIds.Add(Interceptor.Id);
-      this->Threats.RemoveAll([&TargetId](const FProjectAirDefenseThreatState& Threat) {
-        return Threat.Id == TargetId;
-      });
-      this->Interceptors.RemoveAt(InterceptorIndex);
-      continue;
+      this->TotalMissDistanceMetersSum += MinSeparationMeters;
+      ++this->TotalMissDistanceSamples;
+
+      if (bWithinSeekerCone) {
+        // Kill probability: linear falloff from zero-miss Pk to the fuse-floor
+        // Pk at the edge of the fuse envelope. This replaces the deterministic
+        // "inside fuse means certain kill" gate with a richer miss-distance
+        // model and makes shoot-look-shoot doctrines meaningful.
+        const double MissRatio = FMath::Clamp(
+            MinSeparationMeters / FMath::Max(EffectiveBlastRadiusMeters, 0.0001), 0.0, 1.0);
+        const double KillProbability = FMath::Lerp(
+            this->Settings.KillProbabilityAtZeroMiss,
+            this->Settings.KillProbabilityFuseFloor,
+            MissRatio);
+        const double Roll = this->RandomStream.FRand();
+
+        FProjectAirDefenseBlastEvent BlastEvent;
+        BlastEvent.PositionMeters = Interceptor.PositionMeters;
+        BlastEvent.RadiusMeters = EffectiveBlastRadiusMeters * InterceptBlastScale;
+        BlastEvent.GroundCoupling = BlastGroundCoupling(BlastEvent.PositionMeters);
+        BlastEvent.PeakDamage = 0.0;
+        BlastEvent.Kind = EProjectAirDefenseBlastKind::Intercept;
+        BlastEvent.bGroundImpact = BlastEvent.GroundCoupling >= 0.95;
+        Events.BlastEvents.Add(BlastEvent);
+
+        if (Roll <= KillProbability) {
+          this->Score += InterceptScoreBonus;
+          this->Credits += InterceptCreditBonus;
+          ++this->TotalThreatsIntercepted;
+          if (bInTerminalPhase) {
+            ++this->TotalInterceptsInTerminalPhase;
+          }
+          const FString TargetId = Target->Id;
+          Events.RemovedThreatIds.Add(TargetId);
+          Events.RemovedInterceptorIds.Add(Interceptor.Id);
+          this->Threats.RemoveAll([&TargetId](const FProjectAirDefenseThreatState& Threat) {
+            return Threat.Id == TargetId;
+          });
+          this->Interceptors.RemoveAt(InterceptorIndex);
+          continue;
+        }
+
+        // Fuse roll missed: interceptor self-destructs but the threat survives
+        // for a potential second-salvo engagement under ShieldWall doctrine.
+        ++this->TotalInterceptorsFuseRollMissed;
+        Events.RemovedInterceptorIds.Add(Interceptor.Id);
+        this->Interceptors.RemoveAt(InterceptorIndex);
+        continue;
+      }
+      // Outside the seeker cone the interceptor stays alive and keeps guiding.
     }
 
     const FVector3d HorizontalInterceptor(
-        Interceptor.PositionMeters.X,
-        Interceptor.PositionMeters.Y,
-        0.0);
+        Interceptor.PositionMeters.X, Interceptor.PositionMeters.Y, 0.0);
     if (Interceptor.PositionMeters.Z > InterceptorMaxAltitudeMeters ||
         (HorizontalInterceptor - this->DefenseOriginMeters).SquaredLength() >
             FMath::Square(InterceptorMaxRangeMeters)) {

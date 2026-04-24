@@ -99,6 +99,11 @@ private:
   int32 TotalHostileImpacts = 0;
   int32 TotalInterceptorsLaunched = 0;
   int32 TotalDestroyedDistricts = 0;
+  // Engagement diagnostics surfaced through FProjectAirDefenseBattleRunSummary.
+  int32 TotalInterceptorsFuseRollMissed = 0;
+  int32 TotalInterceptsInTerminalPhase = 0;
+  double TotalMissDistanceMetersSum = 0.0;
+  int32 TotalMissDistanceSamples = 0;
   double SpawnTimerSeconds = 0.0;
   double TimeSinceLastLaunchSeconds = 0.0;
   int32 NextThreatOrdinal = 1;

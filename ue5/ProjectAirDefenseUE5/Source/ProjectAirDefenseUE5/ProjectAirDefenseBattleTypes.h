@@ -25,6 +25,24 @@ struct FProjectAirDefenseDefenseSettings {
   double LaunchCooldownSeconds = 0.46;
   double BlastRadiusMeters = 62.0;
   EProjectAirDefenseDefenseDoctrine Doctrine = EProjectAirDefenseDefenseDoctrine::ShieldWall;
+  // Interceptor flight-phase tuning. Boost makes the missile climb out of the
+  // canister before committing to terminal pursuit. Terminal-phase turn rate
+  // sharpens the end-game maneuver the way a real seeker does when the target
+  // is inside its field of view.
+  double InterceptorBoostSeconds = 0.75;
+  double InterceptorBoostVerticalBias = 0.62;
+  double TerminalPhaseThresholdSeconds = 1.35;
+  double TerminalTurnRateMultiplier = 1.85;
+  // Miss-distance kill probability. At zero miss a hit is nearly certain; at
+  // the fuse envelope the kill chance falls to the fuse-floor value, and
+  // outside the fuse envelope the interceptor cannot kill at all. The roll
+  // replaces the old deterministic "inside fuse means instant kill" gate.
+  double KillProbabilityAtZeroMiss = 0.96;
+  double KillProbabilityFuseFloor = 0.70;
+  // Seeker cone: interceptor can only detonate on a target that is within
+  // this half-angle of its own velocity direction. Models the physical
+  // constraint that a terminal seeker cannot see targets behind it.
+  double SeekerConeDegrees = 80.0;
 };
 
 struct FProjectAirDefenseDistrictCell {
@@ -59,6 +77,11 @@ struct FProjectAirDefenseInterceptorState {
   FString TargetId;
   int32 LauncherIndex = 0;
   double TrailCooldownSeconds = 0.0;
+  // Flight-age for boost/midcourse/terminal phase selection and last
+  // line-of-sight unit vector for proportional-navigation rate estimation.
+  double AgeSeconds = 0.0;
+  FVector3d LastLineOfSightUnit = FVector3d::ZeroVector;
+  bool bLineOfSightInitialized = false;
 };
 
 struct FProjectAirDefenseTrailEvent {
@@ -118,11 +141,33 @@ struct FProjectAirDefenseBattleRunSummary {
   int32 InterceptorsLaunched = 0;
   int32 DestroyedDistricts = 0;
   double SimulatedSeconds = 0.0;
+  // Engagement diagnostics: how many interceptors actually produced a kill,
+  // how many came inside the fuse envelope but lost the probability roll,
+  // how many reached terminal-phase guidance, and the mean miss distance in
+  // meters of all attempts that closed within the fuse envelope.
+  int32 InterceptorsKilledTarget = 0;
+  int32 InterceptorsFuseRollMissed = 0;
+  int32 InterceptsInTerminalPhase = 0;
+  double MissDistanceSumMeters = 0.0;
+  int32 MissDistanceSampleCount = 0;
 
   double InterceptRate() const {
     return this->ThreatsSpawned == 0 ? 0.0
                                      : static_cast<double>(this->ThreatsIntercepted) /
                                            static_cast<double>(this->ThreatsSpawned);
+  }
+
+  double AverageMissDistanceMeters() const {
+    return this->MissDistanceSampleCount == 0
+               ? 0.0
+               : this->MissDistanceSumMeters / static_cast<double>(this->MissDistanceSampleCount);
+  }
+
+  double SingleShotKillProbability() const {
+    const int32 Attempts = this->InterceptorsKilledTarget + this->InterceptorsFuseRollMissed;
+    return Attempts == 0
+               ? 0.0
+               : static_cast<double>(this->InterceptorsKilledTarget) / static_cast<double>(Attempts);
   }
 };
 

@@ -12,8 +12,11 @@
 
 namespace {
 constexpr double MetersToUnrealUnits = 100.0;
-constexpr double AutoBlastVisualSeconds = 1.15;
-constexpr double TrailVisualSeconds = 1.35;
+// Persistence tuning: longer trail and blast lifetimes make smoke plumes and
+// explosion afterburns read as real ordnance instead of flashes. The per-frame
+// spawn caps keep pooled draw counts bounded even on crowded waves.
+constexpr double AutoBlastVisualSeconds = 2.4;
+constexpr double TrailVisualSeconds = 2.8;
 // Slender missile proportions: game-scaled but proportionally near PAC-3 and SCUD-B class geometry.
 // Real PAC-3 is 5.2 m by 0.255 m (L/D ~= 20); real SCUD-B class threats are ~11 m by ~0.9 m (L/D ~= 12).
 // Game-scale visibility requires a modest size boost, so these values oversize length and diameter
@@ -48,10 +51,13 @@ constexpr double DistrictBeaconRadiusMeters = 7.0;
 constexpr double DistrictBeaconMinHalfHeightMeters = 8.0;
 constexpr double DistrictBeaconMaxHalfHeightMeters = 32.0;
 constexpr int32 MaxSimulationStepsPerFrame = 4;
-constexpr int32 MaxTrailVisuals = 160;
-constexpr int32 MaxBlastVisuals = 36;
-constexpr int32 MaxTrailVisualSpawnsPerFrame = 24;
-constexpr int32 MaxBlastVisualSpawnsPerFrame = 6;
+// Higher trail and blast pool sizes support denser smoke and longer explosion
+// afterburns without exceeding mobile GPU budgets. Per-frame spawn caps keep
+// worst-case frame-time spikes under control during heavy salvos.
+constexpr int32 MaxTrailVisuals = 320;
+constexpr int32 MaxBlastVisuals = 64;
+constexpr int32 MaxTrailVisualSpawnsPerFrame = 40;
+constexpr int32 MaxBlastVisualSpawnsPerFrame = 10;
 constexpr int32 DistrictDamageFloorCount = 12;
 constexpr double DistrictDamageTowerOffsetXMeters = 46.0;
 constexpr double DistrictDamageTowerOffsetYMeters = -42.0;
