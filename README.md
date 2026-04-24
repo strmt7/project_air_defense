@@ -27,6 +27,7 @@ This project is an early alpha test. Many systems are experimental, incomplete, 
 - UE5 evaluated city candidate: `docs/planning/ue5-city-pilot-3dbag-rotterdam.md`
 - UE5 regression root cause log: `docs/planning/ue5-regression-root-cause-2026-04-17.md`
 - UE5 visual acceptance: `docs/planning/ue5-visual-acceptance.md`
+- UE5 Android packaging: `docs/planning/ue5-android-packaging.md`
 - Architecture reference: `docs/architecture.md`
 - Release/install behavior: `docs/release-and-install.md`
 - Benchmark suite: `docs/benchmark-suite.md`
@@ -55,8 +56,10 @@ This project is an early alpha test. Many systems are experimental, incomplete, 
    `py -3 .\tools\ue5_city_pipeline\test_ue5_city_pipeline.py`
 3. Verify the UE5 bootstrap path headlessly:
    `.\scripts\verify-ue5-bootstrap.cmd`
-4. Build one storage-safe packaged runtime:
+4. Build one storage-safe packaged Win64 runtime:
    `.\scripts\package-ue5-runtime.cmd`
+4b. Build an Android APK from the UE5 runtime (requires UE 5.7, Android NDK r25b, JDK 17; see `docs/planning/ue5-android-packaging.md`):
+   `.\scripts\package-ue5-runtime-android.cmd`
 5. Capture the packaged runtime:
    `.\scripts\capture-ue5-runtime-screenshot.cmd -Exe packaged/Win64/ProjectAirDefenseUE5.exe`
 6. Capture the packaged menu, battle, and systems states serially:

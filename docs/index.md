@@ -10,6 +10,8 @@ Central navigation hub for Project Air Defense documentation. Start here, then l
 - `planning/ue5-city-pilot-3dbag-rotterdam.md` -- evaluated remote 3DBAG Rotterdam LoD2.2 candidate and UE5 runtime contract
 - `planning/ue5-regression-root-cause-2026-04-17.md` -- current root-cause log for the dark/flat/fake-city regression loop
 - `planning/ue5-visual-acceptance.md` -- non-negotiable visual and camera acceptance criteria for the UE5 city scene
+- `planning/ue5-audit-2026-04-24.md` -- menu polish, interception-physics rehaul, Patriot silhouettes, and cross-repo review
+- `planning/ue5-android-packaging.md` -- how to build the UE5 runtime as an Android APK, including the external UE5 and NDK requirements
 - `reference/ue5-city-model-source-map.md` -- official docs, datasets, and forum/community evidence behind the UE5 city plan
 
 ## 2. Architecture And Gameplay
