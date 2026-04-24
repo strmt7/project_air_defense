@@ -14,17 +14,36 @@ namespace {
 constexpr double MetersToUnrealUnits = 100.0;
 constexpr double AutoBlastVisualSeconds = 1.15;
 constexpr double TrailVisualSeconds = 1.35;
-constexpr double ThreatMarkerRadiusMeters = 5.5;
-constexpr double ThreatMarkerLengthMeters = 30.0;
-constexpr double InterceptorMarkerRadiusMeters = 3.8;
-constexpr double InterceptorMarkerLengthMeters = 18.0;
+// Slender missile proportions: game-scaled but proportionally near PAC-3 and SCUD-B class geometry.
+// Real PAC-3 is 5.2 m by 0.255 m (L/D ~= 20); real SCUD-B class threats are ~11 m by ~0.9 m (L/D ~= 12).
+// Game-scale visibility requires a modest size boost, so these values oversize length and diameter
+// by roughly 1.5-2x while preserving a recognizable slender silhouette.
+constexpr double ThreatMarkerRadiusMeters = 0.9;
+constexpr double ThreatMarkerLengthMeters = 14.0;
+constexpr double InterceptorMarkerRadiusMeters = 0.55;
+constexpr double InterceptorMarkerLengthMeters = 9.0;
 constexpr double ThreatTrailRadiusMeters = 3.0;
 constexpr double InterceptorTrailRadiusMeters = 2.0;
 constexpr double BlastCoreRadiusScale = 0.28;
 constexpr double BlastCoreMaxRadiusMeters = 88.0;
 constexpr double BlastShockwaveHalfHeightMeters = 1.6;
-constexpr double LauncherMarkerRadiusMeters = 22.0;
-constexpr double LauncherMarkerHalfHeightMeters = 7.5;
+// M901 Patriot launcher station dimensions (game-scale; PAC-3 configuration).
+// Real M901 trailer is approximately 10 m long and supports four canisters that each hold four PAC-3 missiles.
+// HEMTT M983 cab is approximately 9.9 m by 2.6 m by 2.9 m but is represented here as a compact cab block for silhouette.
+constexpr double LauncherTrailerLengthMeters = 10.5;
+constexpr double LauncherTrailerWidthMeters = 3.0;
+constexpr double LauncherTrailerHeightMeters = 1.2;
+constexpr double LauncherCabLengthMeters = 3.2;
+constexpr double LauncherCabWidthMeters = 2.6;
+constexpr double LauncherCabHeightMeters = 2.8;
+constexpr double LauncherCabForwardOffsetMeters = 5.4;
+constexpr double LauncherCanisterLengthMeters = 6.0;
+constexpr double LauncherCanisterCrossSectionMeters = 0.72;
+constexpr double LauncherCanisterElevationDegrees = 20.0;
+constexpr double LauncherCanisterLateralHalfSpacingMeters = 0.55;
+constexpr double LauncherCanisterVerticalSpacingMeters = 0.82;
+constexpr double LauncherCanisterRearBaseOffsetMeters = -4.4;
+constexpr double LauncherCanisterBaseHeightMeters = 1.45;
 constexpr double DistrictBeaconRadiusMeters = 7.0;
 constexpr double DistrictBeaconMinHalfHeightMeters = 8.0;
 constexpr double DistrictBeaconMaxHalfHeightMeters = 32.0;
@@ -612,8 +631,92 @@ void AProjectAirDefenseBattleManager::SyncStaticVisuals() {
   this->InterceptBlastShockwaveInstances =
       this->CreateInstancedMarker(TEXT("BlastShockwave-Interceptor"), this->CylinderMesh != nullptr ? this->CylinderMesh : this->SphereMesh, FLinearColor(0.22f, 0.95f, 1.0f, 1.0f));
 
-  // District and launcher state belongs in the radar/HUD. Rendering those
-  // anchors in-world makes the real city mesh look like synthetic debug art.
+  const FLinearColor PatriotOliveColor(0.20f, 0.24f, 0.14f, 1.0f);
+  const FLinearColor PatriotDarkOliveColor(0.12f, 0.14f, 0.09f, 1.0f);
+  const FLinearColor PatriotCanisterColor(0.15f, 0.18f, 0.11f, 1.0f);
+
+  // Build each launching station as a composite of engine-primitive cubes so
+  // the silhouette reads as a recognizable M901 (trailer plus cab plus four
+  // elevated PAC-3 canisters in a 2x2 cluster). District beacons remain
+  // suppressed to avoid synthetic city geometry over the real mesh.
+  if (this->CubeMesh != nullptr) {
+    const double ElevationRadians = FMath::DegreesToRadians(LauncherCanisterElevationDegrees);
+    const FVector CanisterForward(
+        0.0, -FMath::Cos(ElevationRadians), FMath::Sin(ElevationRadians));
+    const FRotator CanisterRotation = FRotationMatrix::MakeFromZ(CanisterForward).Rotator();
+    const double CanisterHalfLengthMeters = LauncherCanisterLengthMeters * 0.5;
+
+    auto AttachLauncherPart = [this](
+                                  int32 LauncherIndex,
+                                  const FString& Suffix,
+                                  const FVector& LocalOffsetMeters,
+                                  const FVector& Scale,
+                                  const FRotator& Rotation,
+                                  const FLinearColor& Color,
+                                  const FVector& WorldBase) {
+      const FString Name =
+          FString::Printf(TEXT("Launcher-%d-%s"), LauncherIndex, *Suffix);
+      const FVector WorldOffset(
+          LocalOffsetMeters.X * MetersToUnrealUnits,
+          LocalOffsetMeters.Y * MetersToUnrealUnits,
+          LocalOffsetMeters.Z * MetersToUnrealUnits);
+      UStaticMeshComponent* Component =
+          this->CreateStaticMarker(Name, this->CubeMesh, WorldBase + WorldOffset, Scale, Color);
+      if (Component != nullptr) {
+        Component->SetWorldRotation(Rotation);
+        this->LauncherVisuals.Add(Component);
+      }
+    };
+
+    for (int32 LauncherIndex = 0;
+         LauncherIndex < this->LauncherPositionsMeters.Num();
+         ++LauncherIndex) {
+      const FVector WorldBase = this->ToWorldPosition(this->LauncherPositionsMeters[LauncherIndex]);
+
+      AttachLauncherPart(
+          LauncherIndex,
+          TEXT("Trailer"),
+          FVector(0.0, 0.0, LauncherTrailerHeightMeters * 0.5),
+          ScaleBox(LauncherTrailerWidthMeters, LauncherTrailerLengthMeters, LauncherTrailerHeightMeters),
+          FRotator::ZeroRotator,
+          PatriotOliveColor,
+          WorldBase);
+
+      AttachLauncherPart(
+          LauncherIndex,
+          TEXT("Cab"),
+          FVector(0.0, LauncherCabForwardOffsetMeters, LauncherCabHeightMeters * 0.5),
+          ScaleBox(LauncherCabWidthMeters, LauncherCabLengthMeters, LauncherCabHeightMeters),
+          FRotator::ZeroRotator,
+          PatriotDarkOliveColor,
+          WorldBase);
+
+      for (int32 Row = 0; Row < 2; ++Row) {
+        for (int32 Col = 0; Col < 2; ++Col) {
+          const double BaseX =
+              (Col == 0 ? -LauncherCanisterLateralHalfSpacingMeters : LauncherCanisterLateralHalfSpacingMeters);
+          const double BaseY = LauncherCanisterRearBaseOffsetMeters;
+          const double BaseZ =
+              LauncherCanisterBaseHeightMeters + static_cast<double>(Row) * LauncherCanisterVerticalSpacingMeters;
+          const FVector BaseLocalMeters(BaseX, BaseY, BaseZ);
+          const FVector CenterLocalMeters =
+              BaseLocalMeters + CanisterForward * CanisterHalfLengthMeters;
+          const FString Suffix = FString::Printf(TEXT("Canister-%d%d"), Row, Col);
+          AttachLauncherPart(
+              LauncherIndex,
+              Suffix,
+              CenterLocalMeters,
+              ScaleBox(
+                  LauncherCanisterCrossSectionMeters,
+                  LauncherCanisterCrossSectionMeters,
+                  LauncherCanisterLengthMeters),
+              CanisterRotation,
+              PatriotCanisterColor,
+              WorldBase);
+        }
+      }
+    }
+  }
 }
 
 void AProjectAirDefenseBattleManager::SyncDynamicVisuals() {
@@ -621,6 +724,12 @@ void AProjectAirDefenseBattleManager::SyncDynamicVisuals() {
     return;
   }
 
+  // Sub-step visual interpolation: the simulation advances in fixed steps
+  // (typically 50 ms), but the renderer can run at 120 Hz or higher on modern
+  // smartphones. Extrapolate each marker forward by the residual accumulator
+  // time so motion stays fluid at any refresh rate instead of snapping at
+  // simulation-step boundaries.
+  const double VisualLeadSeconds = FMath::Max(this->StepAccumulatorSeconds, 0.0);
   TSet<FString> LiveThreatIds;
   for (const FProjectAirDefenseThreatState& Threat : this->Simulation->GetThreats()) {
     LiveThreatIds.Add(Threat.Id);
@@ -635,7 +744,9 @@ void AProjectAirDefenseBattleManager::SyncDynamicVisuals() {
       continue;
     }
     this->ApplyColor(ThreatMarker, ThreatVisualColor);
-    const FVector WorldPosition = this->ToWorldPosition(Threat.PositionMeters);
+    const FVector3d InterpolatedPosition =
+        Threat.PositionMeters + Threat.VelocityMetersPerSecond * VisualLeadSeconds;
+    const FVector WorldPosition = this->ToWorldPosition(InterpolatedPosition);
     ThreatMarker->SetWorldLocation(WorldPosition);
     ThreatMarker->SetWorldScale3D(
         this->ConeMesh != nullptr
@@ -659,7 +770,9 @@ void AProjectAirDefenseBattleManager::SyncDynamicVisuals() {
     if (InterceptorMarker == nullptr) {
       continue;
     }
-    const FVector WorldPosition = this->ToWorldPosition(Interceptor.PositionMeters);
+    const FVector3d InterpolatedInterceptorPosition =
+        Interceptor.PositionMeters + Interceptor.VelocityMetersPerSecond * VisualLeadSeconds;
+    const FVector WorldPosition = this->ToWorldPosition(InterpolatedInterceptorPosition);
     InterceptorMarker->SetWorldLocation(WorldPosition);
     InterceptorMarker->SetWorldScale3D(
         this->ConeMesh != nullptr

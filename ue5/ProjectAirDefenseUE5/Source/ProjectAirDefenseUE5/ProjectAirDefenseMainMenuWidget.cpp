@@ -90,7 +90,7 @@ UButton* CreatePrimaryButton(
   PaddingBorder->SetBrushColor(FLinearColor::Transparent);
   PaddingBorder->SetPadding(FMargin(18.0f, 16.0f));
 
-  OutLabel = CreateText(WidgetTree, Label, 24, FLinearColor::White, ETextJustify::Center);
+  OutLabel = CreateText(WidgetTree, Label, 26, FLinearColor::White, ETextJustify::Center);
   PaddingBorder->SetContent(OutLabel);
   Button->AddChild(PaddingBorder);
   return Button;
@@ -190,16 +190,16 @@ void UProjectAirDefenseMainMenuWidget::BuildWidgetTree() {
   SurfaceBox->SetContent(Content);
 
   UTextBlock* TitleText =
-      CreateText(this->WidgetTree, MainMenuTitleText, 40, FLinearColor(0.96f, 0.98f, 1.0f, 1.0f));
+      CreateText(this->WidgetTree, MainMenuTitleText, 48, FLinearColor(0.96f, 0.98f, 1.0f, 1.0f));
   if (UVerticalBoxSlot* VerticalSlot = Content->AddChildToVerticalBox(TitleText)) {
-    VerticalSlot->SetPadding(FMargin(0.0f, 0.0f, 0.0f, 8.0f));
+    VerticalSlot->SetPadding(FMargin(0.0f, 0.0f, 0.0f, 6.0f));
   }
 
   UTextBlock* SubtitleText = CreateText(
       this->WidgetTree,
       TEXT("3D city defense"),
-      22,
-      FLinearColor(0.73f, 0.90f, 1.0f, 1.0f));
+      20,
+      FLinearColor(0.70f, 0.88f, 1.0f, 1.0f));
   if (UVerticalBoxSlot* VerticalSlot = Content->AddChildToVerticalBox(SubtitleText)) {
     VerticalSlot->SetPadding(FMargin(0.0f, 0.0f, 0.0f, 18.0f));
   }
@@ -208,18 +208,18 @@ void UProjectAirDefenseMainMenuWidget::BuildWidgetTree() {
   if (UVerticalBoxSlot* VerticalSlot = Content->AddChildToVerticalBox(ChipRow)) {
     VerticalSlot->SetPadding(FMargin(0.0f, 0.0f, 0.0f, 22.0f));
   }
-  UBorder* LiveChip = CreateChip(this->WidgetTree, TEXT("LIVE 3D CITY"), FLinearColor(0.08f, 0.17f, 0.24f, 0.96f));
+  UBorder* LiveChip = CreateChip(this->WidgetTree, TEXT("LIVE 3D CITY"), FLinearColor(0.08f, 0.22f, 0.15f, 0.96f));
   if (UHorizontalBoxSlot* ChipSlot = ChipRow->AddChildToHorizontalBox(LiveChip)) {
     ChipSlot->SetPadding(FMargin(0.0f, 0.0f, ChipGap, 0.0f));
   }
-  UBorder* LandscapeChip = CreateChip(this->WidgetTree, TEXT("LANDSCAPE"), FLinearColor(0.10f, 0.10f, 0.18f, 0.96f));
+  UBorder* LandscapeChip = CreateChip(this->WidgetTree, TEXT("LANDSCAPE"), FLinearColor(0.08f, 0.12f, 0.20f, 0.96f));
   if (UHorizontalBoxSlot* ChipSlot = ChipRow->AddChildToHorizontalBox(LandscapeChip)) {
     ChipSlot->SetPadding(FMargin(0.0f, 0.0f, ChipGap, 0.0f));
   }
   ChipRow->AddChildToHorizontalBox(CreateChip(
       this->WidgetTree,
       TEXT("TOUCH HUD"),
-      FLinearColor(0.10f, 0.16f, 0.13f, 0.96f)));
+      FLinearColor(0.18f, 0.12f, 0.06f, 0.96f)));
 
   UTextBlock* MissionText = CreateText(
       this->WidgetTree,
@@ -235,7 +235,7 @@ void UProjectAirDefenseMainMenuWidget::BuildWidgetTree() {
   this->StartButton = CreatePrimaryButton(
       this->WidgetTree,
       TEXT("START DEFENSE"),
-      FLinearColor(0.08f, 0.17f, 0.24f, 0.98f),
+      FLinearColor(0.10f, 0.26f, 0.34f, 0.98f),
       StartLabel);
   this->StartButton->OnClicked.AddDynamic(this, &UProjectAirDefenseMainMenuWidget::HandleStartPressed);
   if (UVerticalBoxSlot* VerticalSlot = Content->AddChildToVerticalBox(this->StartButton)) {
@@ -246,7 +246,7 @@ void UProjectAirDefenseMainMenuWidget::BuildWidgetTree() {
   this->GraphicsButton = CreatePrimaryButton(
       this->WidgetTree,
       TEXT("SYSTEMS"),
-      FLinearColor(0.10f, 0.10f, 0.18f, 0.98f),
+      FLinearColor(0.07f, 0.08f, 0.14f, 0.98f),
       GraphicsLabel);
   this->GraphicsButton->OnClicked.AddDynamic(this, &UProjectAirDefenseMainMenuWidget::HandleGraphicsPressed);
   if (UVerticalBoxSlot* VerticalSlot = Content->AddChildToVerticalBox(this->GraphicsButton)) {
@@ -300,6 +300,15 @@ void UProjectAirDefenseMainMenuWidget::BuildWidgetTree() {
   SourceValue->SetAutoWrapText(true);
   if (UVerticalBoxSlot* VerticalSlot = SourceContent->AddChildToVerticalBox(SourceValue)) {
     VerticalSlot->SetPadding(FMargin(0.0f, 6.0f, 0.0f, 0.0f));
+  }
+  UTextBlock* SourceCredit = CreateText(
+      this->WidgetTree,
+      TEXT("City of Helsinki / Helsinki 3D  CC BY 4.0"),
+      14,
+      FLinearColor(0.70f, 0.80f, 0.90f, 1.0f));
+  SourceCredit->SetAutoWrapText(true);
+  if (UVerticalBoxSlot* VerticalSlot = SourceContent->AddChildToVerticalBox(SourceCredit)) {
+    VerticalSlot->SetPadding(FMargin(0.0f, 4.0f, 0.0f, 0.0f));
   }
 
   this->RefreshGraphicsSummary();

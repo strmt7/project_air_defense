@@ -981,7 +981,9 @@ FProjectAirDefenseThreatState* FProjectAirDefenseBattleSimulation::SelectNextThr
   double BestScore = -TNumericLimits<double>::Max();
   const FDoctrineProfile Profile = DoctrineProfile(this->Settings.Doctrine);
   for (FProjectAirDefenseThreatState& Threat : this->Threats) {
-    if (!Threat.bIsTracked || Threat.PositionMeters.SquaredLength() > EngagementRangeSquared) {
+    const FVector3d HorizontalThreat(Threat.PositionMeters.X, Threat.PositionMeters.Y, 0.0);
+    if (!Threat.bIsTracked ||
+        (HorizontalThreat - this->DefenseOriginMeters).SquaredLength() > EngagementRangeSquared) {
       continue;
     }
 
