@@ -11,11 +11,18 @@
 #include "Styling/AppStyle.h"
 
 namespace {
-constexpr float RadarPadding = 18.0f;
+constexpr float RadarPadding = 22.0f;
 constexpr float SweepSpeedDegreesPerSecond = 70.0f;
 
-FSlateFontInfo MakeFont(int32 Size) {
-  FSlateFontInfo FontInfo = FAppStyle::GetFontStyle(TEXT("NormalFont"));
+// Tactical palette tuned for outdoor / high-ambient phone screens. The main
+// menu uses a cool cyan title over a near-black panel; the radar mirrors that
+// by leaning on saturated cyan for friendlies, amber/red for hostiles and a
+// low-chroma slate for neutral chrome like the grid.
+constexpr float RadarRingSegments = 48.0f;
+constexpr float RadarInnerRingSegments = 32.0f;
+
+FSlateFontInfo MakeFont(int32 Size, const TCHAR* Style = TEXT("NormalFont")) {
+  FSlateFontInfo FontInfo = FAppStyle::GetFontStyle(Style);
   FontInfo.Size = Size;
   return FontInfo;
 }
@@ -126,23 +133,35 @@ int32 UProjectAirDefenseRadarWidget::NativePaint(
       FMath::Min(LocalSize.X, LocalSize.Y) * 0.5f - RadarPadding,
       24.0f);
 
-  const TArray<FVector2D> OuterRing = BuildCirclePoints(RadarCenter, RadarRadius, 44);
-  const TArray<FVector2D> InnerRing = BuildCirclePoints(RadarCenter, RadarRadius * 0.55f, 28);
+  const TArray<FVector2D> OuterRing =
+      BuildCirclePoints(RadarCenter, RadarRadius, static_cast<int32>(RadarRingSegments));
+  const TArray<FVector2D> MidRing =
+      BuildCirclePoints(RadarCenter, RadarRadius * 0.77f, static_cast<int32>(RadarInnerRingSegments));
+  const TArray<FVector2D> InnerRing =
+      BuildCirclePoints(RadarCenter, RadarRadius * 0.40f, static_cast<int32>(RadarInnerRingSegments));
   DrawPolyline(
       OutDrawElements,
       LayerId + 1,
       AllottedGeometry,
       OuterRing,
-      FLinearColor(0.24f, 0.86f, 0.98f, 0.86f),
-      1.9f,
+      FLinearColor(0.30f, 0.92f, 1.0f, 0.94f),
+      2.1f,
+      true);
+  DrawPolyline(
+      OutDrawElements,
+      LayerId + 1,
+      AllottedGeometry,
+      MidRing,
+      FLinearColor(0.22f, 0.74f, 0.90f, 0.62f),
+      1.3f,
       true);
   DrawPolyline(
       OutDrawElements,
       LayerId + 1,
       AllottedGeometry,
       InnerRing,
-      FLinearColor(0.18f, 0.62f, 0.76f, 0.52f),
-      1.2f,
+      FLinearColor(0.18f, 0.62f, 0.80f, 0.48f),
+      1.1f,
       true);
 
   DrawPolyline(
@@ -150,27 +169,38 @@ int32 UProjectAirDefenseRadarWidget::NativePaint(
       LayerId + 1,
       AllottedGeometry,
       {FVector2D(RadarCenter.X - RadarRadius, RadarCenter.Y), FVector2D(RadarCenter.X + RadarRadius, RadarCenter.Y)},
-      FLinearColor(0.18f, 0.54f, 0.68f, 0.40f),
+      FLinearColor(0.22f, 0.60f, 0.74f, 0.46f),
       1.0f);
   DrawPolyline(
       OutDrawElements,
       LayerId + 1,
       AllottedGeometry,
       {FVector2D(RadarCenter.X, RadarCenter.Y - RadarRadius), FVector2D(RadarCenter.X, RadarCenter.Y + RadarRadius)},
-      FLinearColor(0.18f, 0.54f, 0.68f, 0.40f),
+      FLinearColor(0.22f, 0.60f, 0.74f, 0.46f),
       1.0f);
 
   const float SweepRadians =
       FMath::DegreesToRadians(
           FMath::Fmod(this->GetWorld() == nullptr ? 0.0f : this->GetWorld()->GetTimeSeconds() * SweepSpeedDegreesPerSecond, 360.0f));
   const FVector2D SweepDirection(FMath::Cos(SweepRadians), FMath::Sin(SweepRadians));
+  // Leading edge: bright; trailing edge: dim, simulating a phosphor afterglow.
   DrawPolyline(
       OutDrawElements,
       LayerId + 2,
       AllottedGeometry,
       {RadarCenter, RadarCenter + SweepDirection * RadarRadius},
-      FLinearColor(0.32f, 0.96f, 1.0f, 0.55f),
-      1.6f);
+      FLinearColor(0.40f, 1.0f, 1.0f, 0.78f),
+      2.0f);
+  const FVector2D TrailDirection(
+      FMath::Cos(SweepRadians - FMath::DegreesToRadians(14.0f)),
+      FMath::Sin(SweepRadians - FMath::DegreesToRadians(14.0f)));
+  DrawPolyline(
+      OutDrawElements,
+      LayerId + 2,
+      AllottedGeometry,
+      {RadarCenter, RadarCenter + TrailDirection * RadarRadius},
+      FLinearColor(0.28f, 0.86f, 0.98f, 0.28f),
+      1.3f);
 
   for (const FProjectAirDefenseRadarDistrictSnapshot& District : Snapshot.Districts) {
     const FVector2D DistrictCenter =
@@ -190,7 +220,7 @@ int32 UProjectAirDefenseRadarWidget::NativePaint(
   for (const FProjectAirDefenseRadarLauncherSnapshot& Launcher : Snapshot.Launchers) {
     const FVector2D Position =
         ProjectRadarPoint(Launcher.LocalPositionMeters, RadarCenter, RadarRadius, Snapshot.ExtentMeters);
-    const float Size = 4.5f;
+    const float Size = 5.0f;
     DrawPolyline(
         OutDrawElements,
         LayerId + 3,
@@ -201,15 +231,23 @@ int32 UProjectAirDefenseRadarWidget::NativePaint(
             Position + FVector2D(Size, Size),
             Position + FVector2D(-Size, Size),
         },
-        FLinearColor(0.18f, 0.92f, 1.0f, 0.92f),
-        1.8f,
+        FLinearColor(0.22f, 0.98f, 1.0f, 0.96f),
+        2.0f,
         true);
+    // Inner dot for legibility at small radar sizes.
+    DrawPolyline(
+        OutDrawElements,
+        LayerId + 3,
+        AllottedGeometry,
+        {Position + FVector2D(-1.2f, 0.0f), Position + FVector2D(1.2f, 0.0f)},
+        FLinearColor(0.40f, 1.0f, 1.0f, 1.0f),
+        2.0f);
   }
 
   for (const FProjectAirDefenseRadarThreatSnapshot& Threat : Snapshot.Threats) {
     const FVector2D Position =
         ProjectRadarPoint(Threat.LocalPositionMeters, RadarCenter, RadarRadius, Snapshot.ExtentMeters);
-    const float Size = Threat.bIsTracked ? 6.0f : 4.0f;
+    const float Size = Threat.bIsTracked ? 6.5f : 4.2f;
     const FLinearColor Color = ThreatColor(Threat.ThreatType, Threat.bIsTracked);
     DrawPolyline(
         OutDrawElements,
@@ -217,14 +255,26 @@ int32 UProjectAirDefenseRadarWidget::NativePaint(
         AllottedGeometry,
         {Position + FVector2D(-Size, 0.0f), Position + FVector2D(Size, 0.0f)},
         Color,
-        1.9f);
+        2.1f);
     DrawPolyline(
         OutDrawElements,
         LayerId + 4,
         AllottedGeometry,
         {Position + FVector2D(0.0f, -Size), Position + FVector2D(0.0f, Size)},
         Color,
-        1.9f);
+        2.1f);
+    // Tracked threats get a containment ring so the player can tell "locked"
+    // from "detected" at a glance.
+    if (Threat.bIsTracked) {
+      DrawPolyline(
+          OutDrawElements,
+          LayerId + 4,
+          AllottedGeometry,
+          BuildCirclePoints(Position, Size + 2.4f, 16),
+          FLinearColor(Color.R, Color.G, Color.B, 0.75f),
+          1.3f,
+          true);
+    }
   }
 
   return LayerId + 4;
@@ -237,22 +287,37 @@ void UProjectAirDefenseRadarWidget::BuildWidgetTree() {
 
   this->bTreeBuilt = true;
 
+  // Deeper, more opaque panel with a subtle cyan cast to match the main-menu
+  // glass-card look and lift the radar off the 3D city.
   UBorder* RootBorder = this->WidgetTree->ConstructWidget<UBorder>();
-  RootBorder->SetBrushColor(FLinearColor(0.03f, 0.07f, 0.11f, 0.78f));
-  RootBorder->SetPadding(FMargin(10.0f));
+  RootBorder->SetBrushColor(FLinearColor(0.02f, 0.06f, 0.10f, 0.84f));
+  RootBorder->SetPadding(FMargin(12.0f));
   this->WidgetTree->RootWidget = RootBorder;
 
   UOverlay* Overlay = this->WidgetTree->ConstructWidget<UOverlay>();
   RootBorder->SetContent(Overlay);
 
+  // Title chip: brighter, heavier, anchored top-left for tight corner cluster.
   UTextBlock* Label = this->WidgetTree->ConstructWidget<UTextBlock>();
   Label->SetText(FText::FromString(TEXT("RADAR")));
-  Label->SetFont(MakeFont(18));
-  Label->SetColorAndOpacity(FSlateColor(FLinearColor(0.84f, 0.94f, 1.0f, 1.0f)));
+  Label->SetFont(MakeFont(20));
+  Label->SetColorAndOpacity(FSlateColor(FLinearColor(0.92f, 0.99f, 1.0f, 1.0f)));
   if (UOverlaySlot* LabelSlot = Overlay->AddChildToOverlay(Label)) {
     LabelSlot->SetHorizontalAlignment(HAlign_Left);
     LabelSlot->SetVerticalAlignment(VAlign_Top);
     LabelSlot->SetPadding(FMargin(4.0f, 0.0f, 0.0f, 0.0f));
+  }
+
+  // Secondary caption reinforces scale/mode; kept static (no data feed wiring)
+  // because the radar paints live metrics through NativePaint.
+  UTextBlock* Caption = this->WidgetTree->ConstructWidget<UTextBlock>();
+  Caption->SetText(FText::FromString(TEXT("AREA TRACK")));
+  Caption->SetFont(MakeFont(10));
+  Caption->SetColorAndOpacity(FSlateColor(FLinearColor(0.56f, 0.82f, 0.96f, 0.85f)));
+  if (UOverlaySlot* CaptionSlot = Overlay->AddChildToOverlay(Caption)) {
+    CaptionSlot->SetHorizontalAlignment(HAlign_Left);
+    CaptionSlot->SetVerticalAlignment(VAlign_Top);
+    CaptionSlot->SetPadding(FMargin(4.0f, 24.0f, 0.0f, 0.0f));
   }
 }
 

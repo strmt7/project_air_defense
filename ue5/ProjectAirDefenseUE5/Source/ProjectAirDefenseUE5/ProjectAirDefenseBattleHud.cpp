@@ -20,25 +20,33 @@ constexpr float PrimaryAltitudeStepMeters = 150.0f;
 constexpr float PrimaryYawStepDegrees = 9.0f;
 constexpr float PrimaryPitchStepDegrees = 5.0f;
 
+// Semantic palette. Keep HUD tokens close together so anyone tweaking outdoor
+// readability touches a single cluster rather than hunting through the file.
+// - FRIENDLY (cyan)  -> player chrome, launchers, "we" state.
+// - HOSTILE  (amber/red) -> threats, damage, danger metrics.
+// - NEUTRAL  (slate) -> passive chrome, secondary labels, dividers.
+
 FName HitBoxName(const TCHAR* RawName) {
   return FName(RawName);
 }
 
 FLinearColor TacticalFill() {
-  return FLinearColor(0.03f, 0.06f, 0.10f, 0.68f);
+  // Deeper panel base bumps contrast against the bright Helsinki sky.
+  return FLinearColor(0.02f, 0.05f, 0.09f, 0.76f);
 }
 
 FLinearColor TacticalAccent() {
-  return FLinearColor(0.26f, 0.86f, 0.98f, 0.96f);
+  return FLinearColor(0.28f, 0.90f, 1.0f, 0.98f);
 }
 
 FLinearColor ActionFill() {
-  return FLinearColor(0.04f, 0.08f, 0.12f, 0.82f);
+  return FLinearColor(0.03f, 0.07f, 0.11f, 0.86f);
 }
 
 FLinearColor ActionAccent() {
-  return FLinearColor(0.93f, 0.73f, 0.31f, 0.95f);
+  return FLinearColor(0.96f, 0.76f, 0.30f, 0.98f);
 }
+
 }
 
 void AProjectAirDefenseBattleHud::DrawHUD() {
@@ -56,10 +64,13 @@ void AProjectAirDefenseBattleHud::DrawHUD() {
   AProjectAirDefensePlayerController* PlayerController = this->FindPlayerController();
   const bool bSystemsMenuVisible =
       PlayerController != nullptr && PlayerController->IsSystemsMenuVisible();
-  const float LeftPanelWidth = FMath::Clamp(this->Canvas->ClipX * 0.23f, 272.0f, 338.0f);
-  const float RightPanelWidth = FMath::Clamp(this->Canvas->ClipX * 0.19f, 246.0f, 300.0f);
-  const float LeftPanelHeight = 88.0f;
-  const float RightPanelHeight = 72.0f;
+  // Slight width bump + taller cards so we can fit an integrity bar and an
+  // extra info row without crowding the playfield. Caps stay tight so the
+  // cards remain corner clusters rather than full-width bars.
+  const float LeftPanelWidth = FMath::Clamp(this->Canvas->ClipX * 0.24f, 288.0f, 352.0f);
+  const float RightPanelWidth = FMath::Clamp(this->Canvas->ClipX * 0.20f, 262.0f, 316.0f);
+  const float LeftPanelHeight = 106.0f;
+  const float RightPanelHeight = 94.0f;
   const float BottomButtonHeight = FMath::Clamp(this->Canvas->ClipY * 0.072f, 58.0f, 76.0f);
   const float BottomButtonWidth = FMath::Clamp(this->Canvas->ClipX * 0.14f, 158.0f, 220.0f);
   const float DrawerHeight = FMath::Clamp(this->Canvas->ClipY * 0.30f, 228.0f, 296.0f);
