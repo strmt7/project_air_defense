@@ -6,6 +6,14 @@ import kotlin.test.assertTrue
 
 class AgentWorkflowDocsTest {
     private val defaultBranchGuard = "github.ref_name == github.event.repository.default_branch"
+    private val karpathyBaselineCommit =
+        listOf(
+            "2c606141",
+            "936f1eee",
+            "f17fa304",
+            "3a72095b",
+            "4765b9c2",
+        ).joinToString("")
 
     private data class SurfaceContract(
         val path: String,
@@ -34,7 +42,7 @@ class AgentWorkflowDocsTest {
                     requiredTokens =
                         listOf(
                             "Pinned Karpathy agent baseline",
-                            "2c606141936f1eeef17fa3043a72095b4765b9c2",
+                            karpathyBaselineCommit,
                             "Compact and efficient code matters",
                             "EXAMPLES.md",
                             "docs/reference/ai-agent-context-routing.md",

@@ -1,7 +1,9 @@
 {
+  "host": "github.com",
   "owner": "strmt7",
   "repo": "project_air_defense",
-  "branch": "main",
+  "branch_name": "main",
+  "remote_name": "origin",
   "badges": [
     {
       "alt": "Android APK",
