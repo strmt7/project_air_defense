@@ -6,6 +6,13 @@ import kotlin.test.assertTrue
 
 class AgentWorkflowDocsTest {
     private val defaultBranchGuard = "github.ref_name == github.event.repository.default_branch"
+    private val agentsPath = "AGENTS.md"
+    private val attributionPath = "android/assets/ATTRIBUTION.md"
+    private val contextRoutingPath = "docs/reference/ai-agent-context-routing.md"
+    private val levelAssetPipelinePath = "docs/level-asset-pipeline.md"
+    private val skillsPath = "docs/reference/ai-agent-skills.md"
+    private val cavemanDefaultMode = "CAVEMAN_DEFAULT_MODE"
+    private val refineLoopLimit = "Run at most 2 refine loops"
     private val karpathyBaselineCommit =
         listOf(
             "2c606141",
@@ -24,7 +31,7 @@ class AgentWorkflowDocsTest {
     private fun repoRoot(): File {
         var current = File(System.getProperty("user.dir")).absoluteFile
         repeat(5) {
-            if (File(current, "AGENTS.md").exists()) return current
+            if (File(current, agentsPath).exists()) return current
             current = current.parentFile ?: current
         }
         error("Could not resolve repository root from ${System.getProperty("user.dir")}")
@@ -37,7 +44,7 @@ class AgentWorkflowDocsTest {
         val contracts =
             listOf(
                 SurfaceContract(
-                    path = "AGENTS.md",
+                    path = agentsPath,
                     maxNonEmptyLines = 112,
                     requiredTokens =
                         listOf(
@@ -45,10 +52,10 @@ class AgentWorkflowDocsTest {
                             karpathyBaselineCommit,
                             "Compact and efficient code matters",
                             "EXAMPLES.md",
-                            "docs/reference/ai-agent-context-routing.md",
-                            "docs/reference/ai-agent-skills.md",
+                            contextRoutingPath,
+                            skillsPath,
                             "Open at most 4",
-                            "Run at most 2 refine loops",
+                            refineLoopLimit,
                             "Add at most 3 files",
                             "Hard stop at 8",
                         ),
@@ -56,25 +63,25 @@ class AgentWorkflowDocsTest {
                 SurfaceContract(
                     path = "CLAUDE.md",
                     maxNonEmptyLines = 12,
-                    requiredTokens = listOf("AGENTS.md", "docs/reference/ai-agent-context-routing.md"),
+                    requiredTokens = listOf(agentsPath, contextRoutingPath),
                 ),
                 SurfaceContract(
                     path = "GEMINI.md",
                     maxNonEmptyLines = 8,
-                    requiredTokens = listOf("AGENTS.md", "docs/reference/ai-agent-context-routing.md"),
+                    requiredTokens = listOf(agentsPath, contextRoutingPath),
                 ),
                 SurfaceContract(
                     path = ".github/copilot-instructions.md",
                     maxNonEmptyLines = 10,
-                    requiredTokens = listOf("AGENTS.md", ".agents/skills/", "android/assets/ATTRIBUTION.md"),
+                    requiredTokens = listOf(agentsPath, ".agents/skills/", attributionPath),
                 ),
                 SurfaceContract(
-                    path = "docs/reference/ai-agent-context-routing.md",
+                    path = contextRoutingPath,
                     maxNonEmptyLines = 28,
                     requiredTokens =
                         listOf(
                             "Open at most 4 task-specific files",
-                            "Run at most 2 refine loops",
+                            refineLoopLimit,
                             "Add at most 3 files per escalation round",
                             "If you have opened 8 task-specific files",
                         ),
@@ -113,18 +120,18 @@ class AgentWorkflowDocsTest {
 
     @Test
     fun cavemanDocsStayPinnedToUpstreamV150AndLocalOverride() {
-        val agents = readRepoFile("AGENTS.md")
+        val agents = readRepoFile(agentsPath)
         val caveman = readRepoFile(".agents/skills/caveman/SKILL.md")
         val help = readRepoFile(".agents/skills/caveman-help/SKILL.md")
-        val doc = readRepoFile("docs/reference/ai-agent-skills.md")
+        val doc = readRepoFile(skillsPath)
 
         assertTrue(agents.contains("Never use `caveman`-style writing in repo docs"))
         assertTrue(caveman.contains("v1.5.0"))
-        assertTrue(caveman.contains("CAVEMAN_DEFAULT_MODE"))
+        assertTrue(caveman.contains(cavemanDefaultMode))
         assertTrue(caveman.contains("off"))
         assertTrue(caveman.contains("No hooks"))
         assertTrue(caveman.contains("never to repo docs"))
-        assertTrue(help.contains("CAVEMAN_DEFAULT_MODE"))
+        assertTrue(help.contains(cavemanDefaultMode))
         assertTrue(help.contains("~/.config/caveman/config.json"))
         assertTrue(help.contains("/caveman-help"))
         assertTrue(help.contains("no flag file"))
@@ -134,16 +141,16 @@ class AgentWorkflowDocsTest {
     @Test
     fun assetAndSourceDocsStayConnected() {
         val sourceMap = readRepoFile("docs/level-asset-source-map.md")
-        val pipeline = readRepoFile("docs/level-asset-pipeline.md")
-        val attribution = readRepoFile("android/assets/ATTRIBUTION.md")
+        val pipeline = readRepoFile(levelAssetPipelinePath)
+        val attribution = readRepoFile(attributionPath)
         val repoSkill = readRepoFile("skills/android-3d-air-defense/SKILL.md")
 
         assertTrue(sourceMap.contains("awesome-citygml"))
         assertTrue(sourceMap.contains("Ladybug Tools / 3D Models"))
         assertTrue(sourceMap.contains("Poly Haven"))
-        assertTrue(pipeline.contains("android/assets/ATTRIBUTION.md"))
+        assertTrue(pipeline.contains(attributionPath))
         assertTrue(attribution.contains("engel_house.obj"))
-        assertTrue(repoSkill.contains("docs/level-asset-pipeline.md"))
+        assertTrue(repoSkill.contains(levelAssetPipelinePath))
     }
 
     @Test
