@@ -1,6 +1,6 @@
 # Claude Adapter
 
-Use `AGENTS.md` as the repo contract.
+Use `AGENTS.md` as the repo contract, including its pinned Karpathy agent baseline.
 
 Single-session mandate: do not spawn, delegate to, coordinate, or recommend background agents, subagents, parallel agents, or separate agent sessions for this repo.
 

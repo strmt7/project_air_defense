@@ -1,6 +1,6 @@
 # GitHub Copilot Instructions
 
-Use `AGENTS.md` as the repo baseline.
+Use `AGENTS.md` as the repo baseline, including its pinned Karpathy agent baseline.
 
 - Single-session mandate: do not spawn, delegate to, coordinate, or recommend background agents, subagents, parallel agents, or separate agent sessions for this repo.
 - Load `docs/reference/ai-agent-context-routing.md` before broadening context.

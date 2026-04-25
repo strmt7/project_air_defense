@@ -30,9 +30,13 @@ class AgentWorkflowDocsTest {
             listOf(
                 SurfaceContract(
                     path = "AGENTS.md",
-                    maxNonEmptyLines = 50,
+                    maxNonEmptyLines = 112,
                     requiredTokens =
                         listOf(
+                            "Pinned Karpathy agent baseline",
+                            "2c606141936f1eeef17fa3043a72095b4765b9c2",
+                            "Compact and efficient code matters",
+                            "EXAMPLES.md",
                             "docs/reference/ai-agent-context-routing.md",
                             "docs/reference/ai-agent-skills.md",
                             "Open at most 4",
@@ -90,6 +94,13 @@ class AgentWorkflowDocsTest {
         assertTrue(readme.contains("ktlint.yml"))
         assertTrue(readme.contains("quality.yml"))
         assertTrue(readme.contains("JuliusBrussee/caveman"))
+        assertTrue(
+            readme.contains(
+                "https://img.shields.io/static/v1?label=&message=andrej-karpathy-skills&color=555&logo=github&logoColor=white",
+            ),
+        )
+        assertTrue(!readme.contains("https://img.shields.io/badge/andrej-karpathy-skills"))
+        assertTrue(readme.contains("forrestchang/andrej-karpathy-skills"))
     }
 
     @Test
