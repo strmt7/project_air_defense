@@ -1,5 +1,6 @@
 #include "ProjectAirDefenseBattleManager.h"
 
+#include "Camera/PlayerCameraManager.h"
 #include "Components/InstancedStaticMeshComponent.h"
 #include "Components/SceneComponent.h"
 #include "Components/StaticMeshComponent.h"
@@ -16,22 +17,36 @@ constexpr double MetersToUnrealUnits = 100.0;
 // explosion afterburns read as real ordnance instead of flashes. The per-frame
 // spawn caps keep pooled draw counts bounded even on crowded waves.
 constexpr double AutoBlastVisualSeconds = 2.4;
-constexpr double TrailVisualSeconds = 2.8;
+constexpr double TrailVisualSeconds = 1.9;
 // Slender missile proportions: game-scaled but proportionally near PAC-3 and SCUD-B class geometry.
 // Real PAC-3 is 5.2 m by 0.255 m (L/D ~= 20); real SCUD-B class threats are ~11 m by ~0.9 m (L/D ~= 12).
-// Game-scale visibility requires a modest size boost, so these values oversize length and diameter
-// by roughly 1.5-2x while preserving a recognizable slender silhouette.
-constexpr double ThreatMarkerRadiusMeters = 0.9;
-constexpr double ThreatMarkerLengthMeters = 14.0;
-constexpr double InterceptorMarkerRadiusMeters = 0.55;
-constexpr double InterceptorMarkerLengthMeters = 9.0;
-constexpr double ThreatTrailRadiusMeters = 3.0;
-constexpr double InterceptorTrailRadiusMeters = 2.0;
+// Game-scale visibility requires enlarged markers at district-camera distance;
+// positions and guidance stay physical, while bodies and plumes are visual telemetry.
+constexpr double ThreatMarkerRadiusMeters = 1.6;
+constexpr double ThreatMarkerLengthMeters = 26.0;
+constexpr double InterceptorMarkerRadiusMeters = 1.0;
+constexpr double InterceptorMarkerLengthMeters = 16.0;
+constexpr double ThreatSmokeRadiusMeters = 0.62;
+constexpr double ThreatSmokeLengthMeters = 38.0;
+constexpr double InterceptorSmokeRadiusMeters = 0.46;
+constexpr double InterceptorSmokeLengthMeters = 30.0;
+constexpr double ThreatExhaustRadiusMeters = 0.34;
+constexpr double ThreatExhaustLengthMeters = 22.0;
+constexpr double InterceptorExhaustRadiusMeters = 0.26;
+constexpr double InterceptorExhaustLengthMeters = 18.0;
+constexpr double LaunchPlumeVisualSeconds = 1.6;
+constexpr double LaunchPlumeCoreRadiusMeters = 6.0;
+constexpr double LaunchPlumeSmokeRadiusMeters = 3.2;
+constexpr double LaunchPlumeSmokeHalfHeightMeters = 12.0;
+constexpr double LaunchPlumeCameraCullMeters = 140.0;
 constexpr double BlastCoreRadiusScale = 0.28;
-constexpr double BlastCoreMaxRadiusMeters = 88.0;
+constexpr double HostileBlastCoreMaxRadiusMeters = 88.0;
+constexpr double InterceptBlastCoreMaxRadiusMeters = 18.0;
 constexpr double BlastShockwaveHalfHeightMeters = 1.6;
-constexpr double BlastSmokeMaxRadiusMeters = 165.0;
+constexpr double HostileBlastSmokeMaxRadiusMeters = 165.0;
+constexpr double InterceptBlastSmokeMaxRadiusMeters = 24.0;
 constexpr double BlastDebrisMaxRadiusMeters = 120.0;
+constexpr int32 BlastSmokeLobeCount = 4;
 // M901 Patriot launcher station dimensions (game-scale; PAC-3 configuration).
 // Real M901 trailer is approximately 10 m long and supports four canisters that each hold four PAC-3 missiles.
 // HEMTT M983 cab is approximately 9.9 m by 2.6 m by 2.9 m but is represented here as a compact cab block for silhouette.
@@ -58,6 +73,7 @@ constexpr int32 MaxSimulationStepsPerFrame = 4;
 // worst-case frame-time spikes under control during heavy salvos.
 constexpr int32 MaxTrailVisuals = 320;
 constexpr int32 MaxBlastVisuals = 64;
+constexpr int32 MaxLaunchPlumeVisuals = 32;
 constexpr int32 MaxTrailVisualSpawnsPerFrame = 40;
 constexpr int32 MaxBlastVisualSpawnsPerFrame = 10;
 constexpr int32 DistrictDamageFloorCount = 12;
@@ -208,6 +224,7 @@ void AProjectAirDefenseBattleManager::Tick(float DeltaSeconds) {
   this->SyncDynamicVisuals();
   this->UpdateBlastVisuals(DeltaSeconds);
   this->UpdateTrailVisuals(DeltaSeconds);
+  this->UpdateLaunchPlumeVisuals(DeltaSeconds);
   this->RefreshTransientVisualInstances();
 }
 
@@ -544,6 +561,7 @@ void AProjectAirDefenseBattleManager::RebuildSimulation() {
   this->LastInterceptorWorldPositions.Empty();
   this->BlastVisuals.Empty();
   this->TrailVisuals.Empty();
+  this->LaunchPlumeVisuals.Empty();
   this->RefreshTransientVisualInstances();
   this->ElapsedBattleSeconds = 0.0;
   this->StepAccumulatorSeconds = 0.0;
@@ -617,6 +635,10 @@ void AProjectAirDefenseBattleManager::SyncStaticVisuals() {
   DestroyInstancedComponent(this->DamagedDistrictFloorInstances);
   DestroyInstancedComponent(this->HostileTrailInstances);
   DestroyInstancedComponent(this->InterceptorTrailInstances);
+  DestroyInstancedComponent(this->HostileExhaustInstances);
+  DestroyInstancedComponent(this->InterceptorExhaustInstances);
+  DestroyInstancedComponent(this->LaunchPlumeCoreInstances);
+  DestroyInstancedComponent(this->LaunchPlumeSmokeInstances);
   DestroyInstancedComponent(this->HostileBlastCoreInstances);
   DestroyInstancedComponent(this->InterceptBlastCoreInstances);
   DestroyInstancedComponent(this->HostileBlastShockwaveInstances);
@@ -630,21 +652,32 @@ void AProjectAirDefenseBattleManager::SyncStaticVisuals() {
   this->DamagedDistrictFloorInstances =
       this->CreateInstancedMarker(TEXT("DistrictFloors-Damaged"), this->CubeMesh, FLinearColor(0.92f, 0.30f, 0.12f, 1.0f));
   this->HostileTrailInstances =
-      this->CreateInstancedMarker(TEXT("Trail-Hot"), this->SphereMesh, FLinearColor(1.0f, 0.34f, 0.12f, 1.0f));
+      this->CreateInstancedMarker(TEXT("TrailSmoke-Hot"), this->CylinderMesh != nullptr ? this->CylinderMesh : this->SphereMesh, FLinearColor(0.86f, 0.84f, 0.78f, 1.0f));
   this->InterceptorTrailInstances =
-      this->CreateInstancedMarker(TEXT("Trail-Interceptor"), this->SphereMesh, FLinearColor(0.22f, 0.95f, 1.0f, 1.0f));
+      this->CreateInstancedMarker(TEXT("TrailSmoke-Interceptor"), this->CylinderMesh != nullptr ? this->CylinderMesh : this->SphereMesh, FLinearColor(0.88f, 0.91f, 0.88f, 1.0f));
+  this->HostileExhaustInstances =
+      this->CreateInstancedMarker(TEXT("Exhaust-Hot"), this->CylinderMesh != nullptr ? this->CylinderMesh : this->SphereMesh, FLinearColor(1.0f, 0.70f, 0.24f, 1.0f));
+  this->InterceptorExhaustInstances =
+      this->CreateInstancedMarker(TEXT("Exhaust-Interceptor"), this->CylinderMesh != nullptr ? this->CylinderMesh : this->SphereMesh, FLinearColor(1.0f, 0.94f, 0.62f, 1.0f));
+  this->LaunchPlumeCoreInstances =
+      this->CreateInstancedMarker(TEXT("LaunchPlume-Core"), this->SphereMesh, FLinearColor(1.0f, 0.58f, 0.16f, 1.0f));
+  this->LaunchPlumeSmokeInstances =
+      this->CreateInstancedMarker(
+          TEXT("LaunchPlume-Smoke"),
+          this->CylinderMesh != nullptr ? this->CylinderMesh : this->SphereMesh,
+          FLinearColor(0.78f, 0.76f, 0.68f, 1.0f));
   this->HostileBlastCoreInstances =
       this->CreateInstancedMarker(TEXT("BlastCore-Hot"), this->SphereMesh, FLinearColor(1.0f, 0.48f, 0.12f, 1.0f));
   this->InterceptBlastCoreInstances =
-      this->CreateInstancedMarker(TEXT("BlastCore-Interceptor"), this->SphereMesh, FLinearColor(0.22f, 0.95f, 1.0f, 1.0f));
+      this->CreateInstancedMarker(TEXT("BlastCore-Interceptor"), this->SphereMesh, FLinearColor(1.0f, 0.82f, 0.38f, 1.0f));
   this->HostileBlastShockwaveInstances =
       this->CreateInstancedMarker(TEXT("BlastShockwave-Hot"), this->CylinderMesh != nullptr ? this->CylinderMesh : this->SphereMesh, FLinearColor(1.0f, 0.48f, 0.12f, 1.0f));
   this->InterceptBlastShockwaveInstances =
-      this->CreateInstancedMarker(TEXT("BlastShockwave-Interceptor"), this->CylinderMesh != nullptr ? this->CylinderMesh : this->SphereMesh, FLinearColor(0.22f, 0.95f, 1.0f, 1.0f));
+      this->CreateInstancedMarker(TEXT("BlastShockwave-Interceptor"), this->CylinderMesh != nullptr ? this->CylinderMesh : this->SphereMesh, FLinearColor(0.86f, 0.86f, 0.80f, 1.0f));
   this->HostileBlastSmokeInstances =
       this->CreateInstancedMarker(TEXT("BlastSmoke-Hot"), this->SphereMesh, FLinearColor(0.62f, 0.55f, 0.46f, 1.0f));
   this->InterceptBlastSmokeInstances =
-      this->CreateInstancedMarker(TEXT("BlastSmoke-Interceptor"), this->SphereMesh, FLinearColor(0.36f, 0.50f, 0.62f, 1.0f));
+      this->CreateInstancedMarker(TEXT("BlastSmoke-Interceptor"), this->SphereMesh, FLinearColor(0.72f, 0.72f, 0.66f, 1.0f));
   this->HostileBlastDebrisInstances =
       this->CreateInstancedMarker(TEXT("BlastDebris-Hot"), this->CubeMesh, FLinearColor(0.34f, 0.24f, 0.17f, 1.0f));
 
@@ -916,6 +949,21 @@ void AProjectAirDefenseBattleManager::UpdateTrailVisuals(double DeltaSeconds) {
   }
 }
 
+void AProjectAirDefenseBattleManager::UpdateLaunchPlumeVisuals(double DeltaSeconds) {
+  int32 PlumeIndex = 0;
+  while (PlumeIndex < this->LaunchPlumeVisuals.Num()) {
+    FLaunchPlumeVisual& PlumeVisual = this->LaunchPlumeVisuals[PlumeIndex];
+    PlumeVisual.AgeSeconds += DeltaSeconds;
+    const double Alpha =
+        PlumeVisual.LifetimeSeconds <= 0.0 ? 1.0 : PlumeVisual.AgeSeconds / PlumeVisual.LifetimeSeconds;
+    if (Alpha >= 1.0) {
+      this->LaunchPlumeVisuals.RemoveAt(PlumeIndex);
+      continue;
+    }
+    ++PlumeIndex;
+  }
+}
+
 void AProjectAirDefenseBattleManager::RefreshTransientVisualInstances() {
   auto ClearInstances = [](TObjectPtr<UInstancedStaticMeshComponent>& Instances) {
     if (Instances != nullptr) {
@@ -924,6 +972,10 @@ void AProjectAirDefenseBattleManager::RefreshTransientVisualInstances() {
   };
   ClearInstances(this->HostileTrailInstances);
   ClearInstances(this->InterceptorTrailInstances);
+  ClearInstances(this->HostileExhaustInstances);
+  ClearInstances(this->InterceptorExhaustInstances);
+  ClearInstances(this->LaunchPlumeCoreInstances);
+  ClearInstances(this->LaunchPlumeSmokeInstances);
   ClearInstances(this->HostileBlastCoreInstances);
   ClearInstances(this->InterceptBlastCoreInstances);
   ClearInstances(this->HostileBlastShockwaveInstances);
@@ -942,10 +994,78 @@ void AProjectAirDefenseBattleManager::RefreshTransientVisualInstances() {
         TrailVisual.LifetimeSeconds <= 0.0 ? 1.0 : TrailVisual.AgeSeconds / TrailVisual.LifetimeSeconds;
     TargetInstances->AddInstance(
         FTransform(
-            FRotator::ZeroRotator,
+            TrailVisual.Rotation,
             TrailVisual.WorldPosition,
-            TrailVisual.BaseScale * FMath::Lerp(1.0, 2.6, Alpha)),
+            TrailVisual.BaseScale * FMath::Lerp(0.92, 1.08, Alpha)),
         true);
+    UInstancedStaticMeshComponent* ExhaustInstances =
+        TrailVisual.bHostile ? this->HostileExhaustInstances.Get() : this->InterceptorExhaustInstances.Get();
+    if (ExhaustInstances != nullptr && Alpha < 0.58) {
+      const double ExhaustFade = FMath::Clamp(Alpha / 0.58, 0.0, 1.0);
+      const FVector ExhaustScale =
+          TrailVisual.ExhaustScale *
+          FVector(
+              FMath::Lerp(1.0, 0.45, ExhaustFade),
+              FMath::Lerp(1.0, 0.45, ExhaustFade),
+              FMath::Lerp(1.0, 0.70, ExhaustFade));
+      ExhaustInstances->AddInstance(
+          FTransform(
+              TrailVisual.Rotation,
+              TrailVisual.WorldPosition,
+              ExhaustScale),
+          true);
+    }
+  }
+
+  bool bHasCameraLocation = false;
+  FVector CameraLocation = FVector::ZeroVector;
+  if (UWorld* World = this->GetWorld()) {
+    if (APlayerController* PlayerController = World->GetFirstPlayerController()) {
+      if (PlayerController->PlayerCameraManager != nullptr) {
+        CameraLocation = PlayerController->PlayerCameraManager->GetCameraLocation();
+        bHasCameraLocation = true;
+      }
+    }
+  }
+
+  for (const FLaunchPlumeVisual& PlumeVisual : this->LaunchPlumeVisuals) {
+    if (bHasCameraLocation &&
+        FVector::DistSquared(CameraLocation, PlumeVisual.WorldPosition) <
+            FMath::Square(LaunchPlumeCameraCullMeters * MetersToUnrealUnits)) {
+      continue;
+    }
+    const double Alpha =
+        PlumeVisual.LifetimeSeconds <= 0.0 ? 1.0 : PlumeVisual.AgeSeconds / PlumeVisual.LifetimeSeconds;
+    if (this->LaunchPlumeCoreInstances != nullptr && Alpha < 0.34) {
+      const double CoreFade = FMath::Clamp(Alpha / 0.34, 0.0, 1.0);
+      this->LaunchPlumeCoreInstances->AddInstance(
+          FTransform(
+              FRotator::ZeroRotator,
+              PlumeVisual.WorldPosition + FVector(0.0, 0.0, 8.0 * MetersToUnrealUnits),
+              PlumeVisual.CoreScale * FMath::Lerp(1.0, 0.35, CoreFade)),
+          true);
+    }
+    if (this->LaunchPlumeSmokeInstances != nullptr) {
+      const double SmokeEase = 1.0 - FMath::Square(1.0 - Alpha);
+      for (int32 LobeIndex = 0; LobeIndex < 4; ++LobeIndex) {
+        const double LobeAngle =
+            static_cast<double>(LobeIndex) * 0.5 * UE_DOUBLE_PI + 0.25;
+        const double LobeDistanceMeters =
+            LobeIndex == 0 ? 0.0 : FMath::Lerp(4.0, 14.0, SmokeEase);
+        const FVector LobeOffset(
+            FMath::Cos(LobeAngle) * LobeDistanceMeters * MetersToUnrealUnits,
+            FMath::Sin(LobeAngle) * LobeDistanceMeters * MetersToUnrealUnits,
+            FMath::Lerp(2.0, 18.0, SmokeEase) * MetersToUnrealUnits);
+        const double LobeScale =
+            (LobeIndex == 0 ? 0.74 : 0.42) * FMath::Lerp(0.26, 0.82, SmokeEase);
+        this->LaunchPlumeSmokeInstances->AddInstance(
+            FTransform(
+                FRotator::ZeroRotator,
+                PlumeVisual.WorldPosition + LobeOffset,
+                PlumeVisual.SmokeScale * LobeScale),
+            true);
+      }
+    }
   }
 
   for (const FBlastVisual& BlastVisual : this->BlastVisuals) {
@@ -964,7 +1084,7 @@ void AProjectAirDefenseBattleManager::RefreshTransientVisualInstances() {
               BlastVisual.CoreScale * FMath::Lerp(0.35, 1.0, Alpha)),
           true);
     }
-    if (ShockwaveInstances != nullptr) {
+    if (ShockwaveInstances != nullptr && bHostile) {
       ShockwaveInstances->AddInstance(
           FTransform(
               FRotator::ZeroRotator,
@@ -979,15 +1099,35 @@ void AProjectAirDefenseBattleManager::RefreshTransientVisualInstances() {
         bHostile ? this->HostileBlastSmokeInstances.Get() : this->InterceptBlastSmokeInstances.Get();
     if (SmokeInstances != nullptr) {
       const double SmokeEase = 1.0 - FMath::Square(1.0 - Alpha);
-      const FVector SmokePosition =
+      const FVector SmokeCorePosition =
           BlastVisual.WorldPosition +
           FVector(0.0, 0.0, BlastVisual.SmokeRiseMeters * MetersToUnrealUnits * SmokeEase);
-      SmokeInstances->AddInstance(
-          FTransform(
-              FRotator::ZeroRotator,
-              SmokePosition,
-              BlastVisual.SmokeScale * FMath::Lerp(0.35, 1.45, SmokeEase)),
-          true);
+      const double SpreadMeters =
+          bHostile ? FMath::Lerp(8.0, BlastVisual.bGroundImpact ? 48.0 : 28.0, SmokeEase)
+                   : FMath::Lerp(3.0, 10.0, SmokeEase);
+      const int32 SmokeLobeCount = bHostile ? BlastSmokeLobeCount : 2;
+      const double SmokeScaleEnd = bHostile ? 1.28 : 0.42;
+      const double SmokeScaleStart = bHostile ? 0.35 : 0.18;
+      for (int32 LobeIndex = 0; LobeIndex < SmokeLobeCount; ++LobeIndex) {
+        const double LobeAlpha =
+            static_cast<double>(LobeIndex) / static_cast<double>(SmokeLobeCount);
+        const double LobeAngle = LobeAlpha * 2.0 * UE_DOUBLE_PI + (bHostile ? 0.35 : 1.05);
+        const double LobeOffsetMeters =
+            LobeIndex == 0 ? 0.0 : SpreadMeters * FMath::Lerp(0.55, 1.0, LobeAlpha);
+        const FVector LobeOffset(
+            FMath::Cos(LobeAngle) * LobeOffsetMeters * MetersToUnrealUnits,
+            FMath::Sin(LobeAngle) * LobeOffsetMeters * MetersToUnrealUnits,
+            -static_cast<double>(LobeIndex) * 2.5 * MetersToUnrealUnits * SmokeEase);
+        const double LobeScale =
+            (LobeIndex == 0 ? 1.0 : FMath::Lerp(0.54, 0.76, LobeAlpha)) *
+            FMath::Lerp(SmokeScaleStart, SmokeScaleEnd, SmokeEase);
+        SmokeInstances->AddInstance(
+            FTransform(
+                FRotator::ZeroRotator,
+                SmokeCorePosition + LobeOffset,
+                BlastVisual.SmokeScale * LobeScale),
+            true);
+      }
     }
     if (bHostile && BlastVisual.bGroundImpact && this->HostileBlastDebrisInstances != nullptr) {
       this->HostileBlastDebrisInstances->AddInstance(
@@ -1007,8 +1147,10 @@ void AProjectAirDefenseBattleManager::ApplyStepEvents(const FProjectAirDefenseSt
   for (const FProjectAirDefenseInterceptorLaunchEvent& LaunchEvent : Events.LaunchedInterceptors) {
     FProjectAirDefenseTrailEvent LaunchTrailEvent;
     LaunchTrailEvent.PositionMeters = LaunchEvent.LauncherPositionMeters;
+    LaunchTrailEvent.VelocityMetersPerSecond = FVector3d(0.0, 0.0, 1.0);
     LaunchTrailEvent.bHostile = false;
     this->SpawnTrailVisual(LaunchTrailEvent);
+    this->SpawnLaunchPlumeVisual(LaunchEvent.LauncherPositionMeters);
   }
   for (const FProjectAirDefenseBlastEvent& BlastEvent : Events.BlastEvents) {
     this->SpawnBlastVisual(BlastEvent);
@@ -1023,15 +1165,49 @@ void AProjectAirDefenseBattleManager::SpawnTrailVisual(const FProjectAirDefenseT
     this->TrailVisuals.RemoveAt(0);
   }
 
-  const double RadiusMeters = TrailEvent.bHostile ? ThreatTrailRadiusMeters : InterceptorTrailRadiusMeters;
+  const double SmokeRadiusMeters =
+      TrailEvent.bHostile ? ThreatSmokeRadiusMeters : InterceptorSmokeRadiusMeters;
+  const double SmokeHalfLengthMeters =
+      (TrailEvent.bHostile ? ThreatSmokeLengthMeters : InterceptorSmokeLengthMeters) * 0.5;
+  const double ExhaustRadiusMeters =
+      TrailEvent.bHostile ? ThreatExhaustRadiusMeters : InterceptorExhaustRadiusMeters;
+  const double ExhaustHalfLengthMeters =
+      (TrailEvent.bHostile ? ThreatExhaustLengthMeters : InterceptorExhaustLengthMeters) * 0.5;
+  const FVector TrailVelocity(TrailEvent.VelocityMetersPerSecond);
+  const FVector TrailDirection =
+      TrailVelocity.IsNearlyZero() ? FVector::UpVector : TrailVelocity.GetSafeNormal();
   ++this->TrailVisualSpawnsThisFrame;
 
   FTrailVisual TrailVisual;
   TrailVisual.WorldPosition = this->ToWorldPosition(TrailEvent.PositionMeters);
-  TrailVisual.BaseScale = ScaleSphereToRadius(RadiusMeters);
+  TrailVisual.BaseScale =
+      this->CylinderMesh != nullptr
+          ? ScaleCylinder(SmokeRadiusMeters, SmokeHalfLengthMeters)
+          : ScaleSphereToRadius(SmokeRadiusMeters);
+  TrailVisual.ExhaustScale =
+      this->CylinderMesh != nullptr
+          ? ScaleCylinder(ExhaustRadiusMeters, ExhaustHalfLengthMeters)
+          : ScaleSphereToRadius(ExhaustRadiusMeters);
+  TrailVisual.Rotation = MarkerRotationFromVelocity(TrailDirection);
   TrailVisual.LifetimeSeconds = TrailVisualSeconds;
   TrailVisual.bHostile = TrailEvent.bHostile;
   this->TrailVisuals.Add(TrailVisual);
+}
+
+void AProjectAirDefenseBattleManager::SpawnLaunchPlumeVisual(const FVector3d& PositionMeters) {
+  while (this->LaunchPlumeVisuals.Num() >= MaxLaunchPlumeVisuals && !this->LaunchPlumeVisuals.IsEmpty()) {
+    this->LaunchPlumeVisuals.RemoveAt(0);
+  }
+
+  FLaunchPlumeVisual PlumeVisual;
+  PlumeVisual.WorldPosition = this->ToWorldPosition(PositionMeters);
+  PlumeVisual.CoreScale = ScaleSphereToRadius(LaunchPlumeCoreRadiusMeters);
+  PlumeVisual.SmokeScale =
+      this->CylinderMesh != nullptr
+          ? ScaleCylinder(LaunchPlumeSmokeRadiusMeters, LaunchPlumeSmokeHalfHeightMeters)
+          : ScaleSphereToRadius(LaunchPlumeSmokeRadiusMeters);
+  PlumeVisual.LifetimeSeconds = LaunchPlumeVisualSeconds;
+  this->LaunchPlumeVisuals.Add(PlumeVisual);
 }
 
 void AProjectAirDefenseBattleManager::SpawnBlastVisual(const FProjectAirDefenseBlastEvent& BlastEvent) {
@@ -1047,12 +1223,12 @@ void AProjectAirDefenseBattleManager::SpawnBlastVisual(const FProjectAirDefenseB
   const double GroundCoupling = FMath::Clamp(BlastEvent.GroundCoupling, 0.0, 1.0);
   const double CoreRadiusMeters =
       FMath::Min(
-          BlastEvent.RadiusMeters * (bHostile ? BlastCoreRadiusScale : BlastCoreRadiusScale * 0.72),
-          BlastCoreMaxRadiusMeters);
+          BlastEvent.RadiusMeters * (bHostile ? BlastCoreRadiusScale : BlastCoreRadiusScale * 0.12),
+          bHostile ? HostileBlastCoreMaxRadiusMeters : InterceptBlastCoreMaxRadiusMeters);
   const double SmokeRadiusMeters =
       FMath::Min(
-          BlastEvent.RadiusMeters * FMath::Lerp(0.28, 0.72, GroundCoupling),
-          BlastSmokeMaxRadiusMeters);
+          BlastEvent.RadiusMeters * (bHostile ? FMath::Lerp(0.28, 0.72, GroundCoupling) : 0.12),
+          bHostile ? HostileBlastSmokeMaxRadiusMeters : InterceptBlastSmokeMaxRadiusMeters);
   const double DebrisRadiusMeters =
       FMath::Min(
           BlastEvent.RadiusMeters * FMath::Lerp(0.18, 0.54, GroundCoupling),
@@ -1063,14 +1239,14 @@ void AProjectAirDefenseBattleManager::SpawnBlastVisual(const FProjectAirDefenseB
   BlastVisual.WorldPosition = WorldPosition;
   BlastVisual.CoreScale = ScaleSphereToRadius(CoreRadiusMeters);
   BlastVisual.ShockwaveScale = this->CylinderMesh != nullptr
-                                   ? ScaleCylinder(BlastEvent.RadiusMeters, BlastShockwaveHalfHeightMeters)
-                                   : ScaleSphereToRadius(BlastEvent.RadiusMeters);
+                                   ? ScaleCylinder(BlastEvent.RadiusMeters * (bHostile ? 1.0 : 0.20), BlastShockwaveHalfHeightMeters)
+                                   : ScaleSphereToRadius(BlastEvent.RadiusMeters * (bHostile ? 1.0 : 0.20));
   BlastVisual.SmokeScale = ScaleSphereToRadius(SmokeRadiusMeters);
   BlastVisual.DebrisScale =
       ScaleBox(DebrisRadiusMeters, DebrisRadiusMeters * 0.72, FMath::Lerp(2.0, 7.0, GroundCoupling));
   BlastVisual.LifetimeSeconds =
-      bHostile ? FMath::Lerp(AutoBlastVisualSeconds, 5.4, GroundCoupling) : AutoBlastVisualSeconds;
-  BlastVisual.SmokeRiseMeters = FMath::Lerp(18.0, 95.0, GroundCoupling);
+      bHostile ? FMath::Lerp(AutoBlastVisualSeconds, 5.4, GroundCoupling) : 1.45;
+  BlastVisual.SmokeRiseMeters = bHostile ? FMath::Lerp(18.0, 95.0, GroundCoupling) : 10.0;
   BlastVisual.Kind = BlastEvent.Kind;
   BlastVisual.bGroundImpact = BlastEvent.bGroundImpact || GroundCoupling > 0.65;
   this->BlastVisuals.Add(BlastVisual);

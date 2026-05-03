@@ -112,6 +112,7 @@ struct FProjectAirDefenseInterceptorState {
 
 struct FProjectAirDefenseTrailEvent {
   FVector3d PositionMeters = FVector3d::ZeroVector;
+  FVector3d VelocityMetersPerSecond = FVector3d::ZeroVector;
   bool bHostile = true;
 };
 

@@ -38,7 +38,7 @@ This file is the authoritative checklist for porting the actual game from the le
 | Touch-first systems drawer and camera controls | `BattleHudController.kt` + `BattleSceneController.kt` | `ProjectAirDefenseBattleWidget.*` + `ProjectAirDefenseCityCameraPawn.*` | implemented, verified | packaged systems runtime capture |
 | Gameplay input: start wave, doctrine, graphics toggles | `BattleHudController.kt` + `StartScreen.kt` | `ProjectAirDefensePlayerController.*` | implemented, verified | runtime input exercise |
 | Radar / tactical overlay | `BattleRadarOverlayRenderer.kt` | `ProjectAirDefenseRadarWidget.*` + `ProjectAirDefenseBattleManager::BuildRadarSnapshot()` | implemented, verified | packaged runtime capture |
-| Battle VFX and blast readability | `BattleEffectsController.kt` | `ProjectAirDefenseBattleManager.*` packaged mesh VFX | implemented, verified | packaged battle runtime capture |
+| Battle VFX and blast readability | `BattleEffectsController.kt` | `ProjectAirDefenseBattleManager.*` packaged mesh VFX | implemented, verified | `docs/reference/missile-vfx-reference.md` + `benchmark-results/ue5-vfx-reference-camera-safe-intercept.png` |
 
 ## Menus And UX
 

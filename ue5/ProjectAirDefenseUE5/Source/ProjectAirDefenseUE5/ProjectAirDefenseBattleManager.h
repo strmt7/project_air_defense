@@ -66,9 +66,19 @@ private:
   struct FTrailVisual {
     FVector WorldPosition = FVector::ZeroVector;
     FVector BaseScale = FVector::OneVector;
+    FVector ExhaustScale = FVector::OneVector;
+    FRotator Rotation = FRotator::ZeroRotator;
     double AgeSeconds = 0.0;
     double LifetimeSeconds = 0.0;
     bool bHostile = true;
+  };
+
+  struct FLaunchPlumeVisual {
+    FVector WorldPosition = FVector::ZeroVector;
+    FVector CoreScale = FVector::OneVector;
+    FVector SmokeScale = FVector::OneVector;
+    double AgeSeconds = 0.0;
+    double LifetimeSeconds = 0.0;
   };
 
   void RebuildSimulation();
@@ -78,9 +88,11 @@ private:
   void SyncDistrictDamageFloorVisuals(const TArray<FProjectAirDefenseDistrictCell>& LiveDistrictCells);
   void UpdateBlastVisuals(double DeltaSeconds);
   void UpdateTrailVisuals(double DeltaSeconds);
+  void UpdateLaunchPlumeVisuals(double DeltaSeconds);
   void RefreshTransientVisualInstances();
   void ApplyStepEvents(const FProjectAirDefenseStepEvents& Events);
   void SpawnTrailVisual(const FProjectAirDefenseTrailEvent& TrailEvent);
+  void SpawnLaunchPlumeVisual(const FVector3d& PositionMeters);
   void SpawnBlastVisual(const FProjectAirDefenseBlastEvent& BlastEvent);
   UStaticMeshComponent* CreateStaticMarker(
       const FString& DebugName,
@@ -142,6 +154,18 @@ private:
   TObjectPtr<UInstancedStaticMeshComponent> InterceptorTrailInstances;
 
   UPROPERTY(Transient)
+  TObjectPtr<UInstancedStaticMeshComponent> HostileExhaustInstances;
+
+  UPROPERTY(Transient)
+  TObjectPtr<UInstancedStaticMeshComponent> InterceptorExhaustInstances;
+
+  UPROPERTY(Transient)
+  TObjectPtr<UInstancedStaticMeshComponent> LaunchPlumeCoreInstances;
+
+  UPROPERTY(Transient)
+  TObjectPtr<UInstancedStaticMeshComponent> LaunchPlumeSmokeInstances;
+
+  UPROPERTY(Transient)
   TObjectPtr<UInstancedStaticMeshComponent> HostileBlastCoreInstances;
 
   UPROPERTY(Transient)
@@ -173,6 +197,7 @@ private:
   TArray<FVector3d> LauncherPositionsMeters;
   TArray<FBlastVisual> BlastVisuals;
   TArray<FTrailVisual> TrailVisuals;
+  TArray<FLaunchPlumeVisual> LaunchPlumeVisuals;
   TMap<FString, FVector> LastThreatWorldPositions;
   TMap<FString, FVector> LastInterceptorWorldPositions;
 

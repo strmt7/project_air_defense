@@ -11,7 +11,7 @@
 #include "Styling/AppStyle.h"
 
 namespace {
-constexpr float RadarPadding = 22.0f;
+constexpr float RadarPadding = 26.0f;
 constexpr float SweepSpeedDegreesPerSecond = 70.0f;
 
 // Tactical palette tuned for outdoor / high-ambient phone screens. The main
@@ -144,24 +144,24 @@ int32 UProjectAirDefenseRadarWidget::NativePaint(
       LayerId + 1,
       AllottedGeometry,
       OuterRing,
-      FLinearColor(0.30f, 0.92f, 1.0f, 0.94f),
-      2.1f,
+      FLinearColor(0.30f, 0.92f, 1.0f, 0.82f),
+      1.8f,
       true);
   DrawPolyline(
       OutDrawElements,
       LayerId + 1,
       AllottedGeometry,
       MidRing,
-      FLinearColor(0.22f, 0.74f, 0.90f, 0.62f),
-      1.3f,
+      FLinearColor(0.22f, 0.74f, 0.90f, 0.40f),
+      1.0f,
       true);
   DrawPolyline(
       OutDrawElements,
       LayerId + 1,
       AllottedGeometry,
       InnerRing,
-      FLinearColor(0.18f, 0.62f, 0.80f, 0.48f),
-      1.1f,
+      FLinearColor(0.18f, 0.62f, 0.80f, 0.32f),
+      0.9f,
       true);
 
   DrawPolyline(
@@ -169,15 +169,15 @@ int32 UProjectAirDefenseRadarWidget::NativePaint(
       LayerId + 1,
       AllottedGeometry,
       {FVector2D(RadarCenter.X - RadarRadius, RadarCenter.Y), FVector2D(RadarCenter.X + RadarRadius, RadarCenter.Y)},
-      FLinearColor(0.22f, 0.60f, 0.74f, 0.46f),
-      1.0f);
+      FLinearColor(0.22f, 0.60f, 0.74f, 0.32f),
+      0.8f);
   DrawPolyline(
       OutDrawElements,
       LayerId + 1,
       AllottedGeometry,
       {FVector2D(RadarCenter.X, RadarCenter.Y - RadarRadius), FVector2D(RadarCenter.X, RadarCenter.Y + RadarRadius)},
-      FLinearColor(0.22f, 0.60f, 0.74f, 0.46f),
-      1.0f);
+      FLinearColor(0.22f, 0.60f, 0.74f, 0.32f),
+      0.8f);
 
   const float SweepRadians =
       FMath::DegreesToRadians(
@@ -300,23 +300,12 @@ void UProjectAirDefenseRadarWidget::BuildWidgetTree() {
   // Title chip: brighter, heavier, anchored top-left for tight corner cluster.
   UTextBlock* Label = this->WidgetTree->ConstructWidget<UTextBlock>();
   Label->SetText(FText::FromString(TEXT("RADAR")));
-  Label->SetFont(MakeFont(20));
+  Label->SetFont(MakeFont(18));
   Label->SetColorAndOpacity(FSlateColor(FLinearColor(0.92f, 0.99f, 1.0f, 1.0f)));
   if (UOverlaySlot* LabelSlot = Overlay->AddChildToOverlay(Label)) {
     LabelSlot->SetHorizontalAlignment(HAlign_Left);
     LabelSlot->SetVerticalAlignment(VAlign_Top);
     LabelSlot->SetPadding(FMargin(4.0f, 0.0f, 0.0f, 0.0f));
-  }
-
-  // Secondary caption names the circles without adding another HUD legend.
-  UTextBlock* Caption = this->WidgetTree->ConstructWidget<UTextBlock>();
-  Caption->SetText(FText::FromString(TEXT("RANGE RINGS")));
-  Caption->SetFont(MakeFont(14));
-  Caption->SetColorAndOpacity(FSlateColor(FLinearColor(0.56f, 0.82f, 0.96f, 0.85f)));
-  if (UOverlaySlot* CaptionSlot = Overlay->AddChildToOverlay(Caption)) {
-    CaptionSlot->SetHorizontalAlignment(HAlign_Left);
-    CaptionSlot->SetVerticalAlignment(VAlign_Top);
-    CaptionSlot->SetPadding(FMargin(4.0f, 24.0f, 0.0f, 0.0f));
   }
 }
 

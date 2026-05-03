@@ -18,12 +18,13 @@ The Win64 `package-ue5-runtime.{ps1,cmd}` scripts are untouched and continue to 
 ## What still needs to be done outside this repo
 
 1. Install Unreal Engine 5.7 on a Windows (or Linux) host via the Epic Games Launcher. Do not use Unreal Engine from source unless Epic's Android plugin is also built.
-2. Install the Android SDK (`platform-tools`, `platforms;android-36`, `build-tools;36.0.0`). Keep `local.properties` untracked and local-only, or set `ANDROID_HOME`; never commit a workstation-specific `sdk.dir`.
-3. Install Android NDK r25b. UE 5.7 expects r25b specifically; newer NDKs produce link errors against UE's precompiled third-party libraries. Set `NDKROOT` or `ANDROID_NDK_HOME` to the NDK path.
-4. Install JDK 17 (Android Gradle Plugin 8.x requirement for UE's Android build). Java 21 works for the legacy libGDX lane but UE's gradle scripts are pinned at Java 17.
-5. In Unreal Editor, open `ProjectAirDefenseUE5.uproject` once and accept any plugin compilation prompts. Cesium for Unreal compiles a native shared object per target, so the first open after pulling the repo takes several minutes.
-6. Run `.\scripts\package-ue5-runtime-android.cmd` from a Windows terminal. Add `-Configuration Shipping` for a release build. The output is placed in `packaged/Android/`.
-7. Install the resulting APK on a device with `adb install packaged/Android/ProjectAirDefenseUE5-arm64.apk` or transfer the `.aab` to the Play Console.
+2. In Epic Games Launcher, modify the UE 5.7 installation and enable the **Android** target-platform optional component. A host can have Android SDK/JDK/NDK installed and still fail packaging if this UE component is missing.
+3. Install the Android SDK (`platform-tools`, `platforms;android-36`, `build-tools;36.0.0`). Keep `local.properties` untracked and local-only, or set `ANDROID_HOME`; never commit a workstation-specific `sdk.dir`.
+4. Install Android NDK r25b. UE 5.7 expects r25b specifically; newer NDKs produce link errors against UE's precompiled third-party libraries. Set `NDKROOT` or `ANDROID_NDK_HOME` to the NDK path.
+5. Install JDK 17 (Android Gradle Plugin 8.x requirement for UE's Android build). Java 21 works for the legacy libGDX lane but UE's gradle scripts are pinned at Java 17.
+6. In Unreal Editor, open `ProjectAirDefenseUE5.uproject` once and accept any plugin compilation prompts. Cesium for Unreal compiles a native shared object per target, so the first open after pulling the repo takes several minutes.
+7. Run `.\scripts\package-ue5-runtime-android.cmd` from a Windows terminal. Add `-Configuration Shipping` for a release build. The output is placed in `packaged/Android/`.
+8. Install the resulting APK on a device with `adb install packaged/Android/ProjectAirDefenseUE5-arm64.apk` or transfer the `.aab` to the Play Console.
 
 ## Known caveats
 
@@ -53,3 +54,9 @@ After adding any Android-specific UE5 content:
 - `.\scripts\package-ue5-runtime-android.cmd -Configuration Development` on the developer workstation, or run the manual `Package UE5 Android Runtime` workflow on the self-hosted runner.
 - `adb install packaged/Android/...apk` on a phone with developer mode.
 - Confirm the menu renders `PROJECT AIR DEFENSE`, the Helsinki 3D Tiles load, a Patriot battery silhouette is visible, and `START DEFENSE` launches a wave.
+
+## Local Host Checkpoints
+
+- 2026-05-03: Installed Microsoft OpenJDK 17 and Android NDK r25b locally.
+- 2026-05-03: `scripts/package-ue5-runtime-android.ps1 -Configuration Development -TextureFormat ASTC` failed before project compilation with UnrealBuildTool: "Missing files required to build Android targets. Enable Android as an optional download component in the Epic Games Launcher."
+- The verified blocker is the UE 5.7 installation, not this repo's Android SDK/NDK environment.

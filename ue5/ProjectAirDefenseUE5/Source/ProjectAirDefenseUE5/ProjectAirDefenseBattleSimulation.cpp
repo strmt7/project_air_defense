@@ -819,6 +819,7 @@ void FProjectAirDefenseBattleSimulation::UpdateThreats(
     if (Threat.TrailCooldownSeconds <= 0.0) {
       FProjectAirDefenseTrailEvent TrailEvent;
       TrailEvent.PositionMeters = Threat.PositionMeters;
+      TrailEvent.VelocityMetersPerSecond = Threat.VelocityMetersPerSecond;
       TrailEvent.bHostile = true;
       Events.TrailEvents.Add(TrailEvent);
       Threat.TrailCooldownSeconds = ThreatTrailIntervalSeconds;
@@ -947,6 +948,7 @@ void FProjectAirDefenseBattleSimulation::UpdateInterceptors(
     if (Interceptor.TrailCooldownSeconds <= 0.0) {
       FProjectAirDefenseTrailEvent TrailEvent;
       TrailEvent.PositionMeters = Interceptor.PositionMeters;
+      TrailEvent.VelocityMetersPerSecond = Interceptor.VelocityMetersPerSecond;
       TrailEvent.bHostile = false;
       Events.TrailEvents.Add(TrailEvent);
       Interceptor.TrailCooldownSeconds = InterceptorTrailIntervalSeconds;

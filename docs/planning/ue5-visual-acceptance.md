@@ -13,6 +13,7 @@ The gameplay city view must read as real 3D space from multiple camera angles, n
 - skyline silhouette must remain legible from far view and near view
 - water, roads, facades, and roofs must use distinct material logic
 - lighting must be handled by UE5 scene lighting, not baked fake overlays in the gameplay camera
+- missile, launch, intercept, and impact VFX must follow `docs/reference/missile-vfx-reference.md`
 
 ## Mandatory Camera Criteria
 
@@ -32,3 +33,4 @@ Reject the build if any of these are true:
 - full-health gameplay overlays look like replacement buildings
 - the sea or shoreline is only a painted texture with no real scene depth
 - camera controls are too limited to inspect the scene
+- projectile traces read as opaque rods, bead strings, giant rings, or full-screen smoke overlays
