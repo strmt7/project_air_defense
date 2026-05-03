@@ -128,12 +128,15 @@ These bullets describe the outgoing renderer only. They are not the target UE5 c
 - **Report-oriented benchmark suite**: build timing, startup, battle entry, runtime frame telemetry, runtime health capture, simulation sweeps, KtLint, lint, detekt, dependency health, and APK size snapshots.
 
 ## Toolchain
-- Android Gradle Plugin `9.1.0`
-- Gradle `9.4.1`
-- Kotlin JVM plugin `2.3.20`
+- Android Gradle Plugin `9.2.0`
+- Gradle `9.5.0`
+- Kotlin JVM plugin `2.3.21`
+- Detekt `2.0.0-alpha.3`
 - libGDX `1.14.0`
 - Java `21`
 - Compile / target SDK `36`
+
+Version source map: [docs/reference/toolchain-source-map.md](docs/reference/toolchain-source-map.md).
 
 ## Local Development
 Android steps below are legacy maintenance and migration-reference only until the UE5 runtime replaces them.

@@ -21,6 +21,9 @@ class AgentWorkflowDocsTest {
             "3a72095b",
             "4765b9c2",
         ).joinToString("")
+    private val karpathySkillsBadgeUrl =
+        "https://img.shields.io/static/v1" +
+            "?label=&message=andrej-karpathy-skills&color=555&logo=github&logoColor=white"
 
     private data class SurfaceContract(
         val path: String,
@@ -109,11 +112,7 @@ class AgentWorkflowDocsTest {
         assertTrue(readme.contains("ktlint.yml"))
         assertTrue(readme.contains("quality.yml"))
         assertTrue(readme.contains("JuliusBrussee/caveman"))
-        assertTrue(
-            readme.contains(
-                "https://img.shields.io/static/v1?label=&message=andrej-karpathy-skills&color=555&logo=github&logoColor=white",
-            ),
-        )
+        assertTrue(readme.contains(karpathySkillsBadgeUrl))
         assertTrue(!readme.contains("https://img.shields.io/badge/andrej-karpathy-skills"))
         assertTrue(readme.contains("forrestchang/andrej-karpathy-skills"))
     }

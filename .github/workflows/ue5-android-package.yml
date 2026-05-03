@@ -45,12 +45,9 @@ jobs:
         run: |
           $project = "ue5/ProjectAirDefenseUE5/ProjectAirDefenseUE5.uproject"
           $tileset = "ue5/ProjectAirDefenseUE5/ExternalData/helsinki_kalasatama_3dtiles/tileset.json"
-          $uat = "C:/Program Files/Epic Games/UE_5.7/Engine/Build/BatchFiles/RunUAT.bat"
           if (-not (Test-Path $project)) { throw "Missing UE5 project: $project" }
-          if (-not (Test-Path $uat)) { throw "Missing Unreal Automation Tool: $uat" }
           if (-not (Test-Path $tileset)) { throw "Missing local 3D Tiles terrain: $tileset" }
-          if (-not ($env:NDKROOT -or $env:ANDROID_NDK_HOME)) { throw "Set NDKROOT or ANDROID_NDK_HOME to Android NDK r25b." }
-          if (-not $env:ANDROID_HOME) { throw "Set ANDROID_HOME to the Android SDK root." }
+          .\scripts\package-ue5-runtime-android.ps1 -PreflightOnly -Configuration "${{ inputs.configuration }}" -TextureFormat "${{ inputs.texture_format }}"
 
       - name: Package UE5 Android runtime
         shell: pwsh

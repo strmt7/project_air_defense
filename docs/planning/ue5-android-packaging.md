@@ -12,6 +12,7 @@ Shipping the UE5 runtime (real Helsinki Kalasatama 3D Tiles through Cesium, the 
 - `Config/DefaultEngine.ini` now contains an `AndroidRuntimeSettings` block that pins package name `com.airdefense.game.ue5`, landscape orientation, arm64 only, Vulkan plus ES3.1, min SDK 26, target SDK 36, gradle always on, external OBB enabled for datasets that exceed the APK limit, and `INTERNET`, `ACCESS_NETWORK_STATE`, `WAKE_LOCK` extra permissions so Cesium can stream 3D Tiles at runtime.
 - `Config/Android/AndroidEngine.ini` sets mobile-specific renderer defaults: forward shading, mobile virtual textures on, mobile AA on (TAA), mobile HDR on, distance fields off (too expensive on phone GPUs), local lights allowed, movable spotlights allowed including shadows.
 - `scripts/package-ue5-runtime-android.ps1` and `.cmd` wrap the UAT `BuildCookRun` invocation for the Android platform with ASTC or ETC2 texture cook flavor, Development or Shipping configuration, and archive directory `packaged/Android`.
+- The PowerShell wrapper now performs the authoritative preflight before deleting `Saved/StagedBuilds` or `packaged/Android`: JDK 17, Android SDK `android-36` plus build-tools `36.0.0`, NDK r25b `25.1.8937393`, RunUAT, and the UE 5.7 Android target-platform template files. Use `-PreflightOnly` for CI runner validation without packaging.
 
 The Win64 `package-ue5-runtime.{ps1,cmd}` scripts are untouched and continue to work.
 
@@ -59,4 +60,5 @@ After adding any Android-specific UE5 content:
 
 - 2026-05-03: Installed Microsoft OpenJDK 17 and Android NDK r25b locally.
 - 2026-05-03: `scripts/package-ue5-runtime-android.ps1 -Configuration Development -TextureFormat ASTC` failed before project compilation with UnrealBuildTool: "Missing files required to build Android targets. Enable Android as an optional download component in the Epic Games Launcher."
-- The verified blocker is the UE 5.7 installation, not this repo's Android SDK/NDK environment.
+- 2026-05-03: The local workstation has Microsoft OpenJDK 17 and NDK r25b installed, but the default `java` on `PATH` is still Java 8 and this UE 5.7 installation still lacks `Engine/Build/Android/Java`. The wrapper now reports those host issues before invoking UAT or deleting prior package output.
+- The verified blocker is the UE 5.7 installation and active Java selection, not this repo's Android SDK/NDK project configuration.

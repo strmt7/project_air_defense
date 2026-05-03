@@ -1,8 +1,11 @@
 #include "ProjectAirDefenseBattleSimulation.h"
+#include "ProjectAirDefenseRuntimeSettings.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "Misc/AutomationTest.h"
+
+#include <limits>
 
 namespace {
 TArray<FProjectAirDefenseDistrictCell> MakeDistrictCells() {
@@ -508,6 +511,39 @@ bool FProjectAirDefenseBattleSettingsSanitizationTest::RunTest(const FString& Pa
       After.KillProbabilityFuseFloor <= After.KillProbabilityAtZeroMiss);
   TestTrue(TEXT("seeker cone degrees in [1, 179]"),
       After.SeekerConeDegrees >= 1.0 && After.SeekerConeDegrees <= 179.0);
+  return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+    FProjectAirDefenseRuntimeDistrictConfigSanitizationTest,
+    "ProjectAirDefense.RuntimeSettings.DistrictConfigSanitization",
+    EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FProjectAirDefenseRuntimeDistrictConfigSanitizationTest::RunTest(const FString& Parameters) {
+  FProjectAirDefenseDistrictRuntimeInputs Bad;
+  Bad.DistrictHalfExtentMeters = -1.0;
+  Bad.DistrictTilesetCoverageRatio = std::numeric_limits<double>::quiet_NaN();
+  Bad.DistrictMinHalfExtentMeters = std::numeric_limits<double>::infinity();
+  Bad.DistrictCellRadiusMeters = -10.0;
+  Bad.LauncherRingDistanceMeters = std::numeric_limits<double>::infinity();
+  Bad.LauncherLateralSpacingMeters = -100.0;
+
+  const FProjectAirDefenseDistrictRuntimeConfig BadConfig =
+      BuildProjectAirDefenseDistrictRuntimeConfig(
+          Bad,
+          std::numeric_limits<double>::infinity());
+  TestTrue(TEXT("bad half extent remains finite"), FMath::IsFinite(BadConfig.HalfExtentMeters));
+  TestTrue(TEXT("bad half extent clamped above minimum"), BadConfig.HalfExtentMeters >= 700.0);
+  TestTrue(TEXT("bad cell radius clamped above minimum"), BadConfig.CellRadiusMeters >= 80.0);
+  TestTrue(TEXT("bad launcher ring remains finite"), FMath::IsFinite(BadConfig.LauncherRingDistanceMeters));
+  TestTrue(TEXT("bad launcher spacing non-negative"), BadConfig.LauncherLateralSpacingMeters >= 0.0);
+
+  FProjectAirDefenseDistrictRuntimeInputs Defaults;
+  const FProjectAirDefenseDistrictRuntimeConfig DefaultConfig =
+      BuildProjectAirDefenseDistrictRuntimeConfig(Defaults, 3000.0);
+  TestTrue(TEXT("tileset coverage frames the city"), DefaultConfig.HalfExtentMeters > 2400.0);
+  TestTrue(TEXT("default launcher ring preserved"), DefaultConfig.LauncherRingDistanceMeters == 2400.0);
+  TestTrue(TEXT("default cell radius preserved"), DefaultConfig.CellRadiusMeters == 260.0);
   return true;
 }
 

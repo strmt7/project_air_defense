@@ -1,5 +1,27 @@
 #include "ProjectAirDefenseRuntimeSettings.h"
 
+namespace {
+constexpr double DistrictHalfExtentDefaultMeters = 7000.0;
+constexpr double DistrictHalfExtentMinMeters = 700.0;
+constexpr double DistrictHalfExtentMaxMeters = 20000.0;
+constexpr double DistrictTilesetCoverageDefaultRatio = 0.82;
+constexpr double DistrictTilesetCoverageMinRatio = 0.25;
+constexpr double DistrictTilesetCoverageMaxRatio = 1.0;
+constexpr double DistrictMinHalfExtentDefaultMeters = 1600.0;
+constexpr double DistrictCellRadiusDefaultMeters = 260.0;
+constexpr double DistrictCellRadiusMinMeters = 80.0;
+constexpr double DistrictCellRadiusMaxMeters = 1000.0;
+constexpr double DistrictLauncherRingDefaultMeters = 2400.0;
+constexpr double DistrictLauncherLateralDefaultMeters = 1000.0;
+constexpr double DistrictLauncherLateralMaxMeters = 5000.0;
+constexpr double TilesetRadiusMaxMeters = 50000.0;
+
+double ClampFiniteDouble(double Value, double Fallback, double MinValue, double MaxValue) {
+  const double Candidate = FMath::IsFinite(Value) ? Value : Fallback;
+  return FMath::Clamp(Candidate, MinValue, MaxValue);
+}
+} // namespace
+
 UProjectAirDefenseRuntimeSettings::UProjectAirDefenseRuntimeSettings() {
   this->bEnablePilotCityScene = true;
   this->PreferredSourceId = TEXT("helsinki_kalasatama_3dtiles");
@@ -74,4 +96,80 @@ UProjectAirDefenseRuntimeSettings::UProjectAirDefenseRuntimeSettings() {
   this->DistrictCellRadiusMeters = 260.0;
   this->LauncherRingDistanceMeters = 2400.0;
   this->LauncherLateralSpacingMeters = 1000.0;
+}
+
+FProjectAirDefenseDistrictRuntimeInputs
+MakeProjectAirDefenseDistrictRuntimeInputs(const UProjectAirDefenseRuntimeSettings* Settings) {
+  FProjectAirDefenseDistrictRuntimeInputs Inputs;
+  if (Settings == nullptr) {
+    return Inputs;
+  }
+
+  Inputs.DistrictHalfExtentMeters = Settings->DistrictHalfExtentMeters;
+  Inputs.DistrictTilesetCoverageRatio = Settings->DistrictTilesetCoverageRatio;
+  Inputs.DistrictMinHalfExtentMeters = Settings->DistrictMinHalfExtentMeters;
+  Inputs.DistrictCellRadiusMeters = Settings->DistrictCellRadiusMeters;
+  Inputs.LauncherRingDistanceMeters = Settings->LauncherRingDistanceMeters;
+  Inputs.LauncherLateralSpacingMeters = Settings->LauncherLateralSpacingMeters;
+  return Inputs;
+}
+
+FProjectAirDefenseDistrictRuntimeConfig BuildProjectAirDefenseDistrictRuntimeConfig(
+    const FProjectAirDefenseDistrictRuntimeInputs& Inputs,
+    double TilesetRadiusMeters) {
+  FProjectAirDefenseDistrictRuntimeConfig Config;
+  const double DefaultHalfExtentMeters = ClampFiniteDouble(
+      Inputs.DistrictHalfExtentMeters,
+      DistrictHalfExtentDefaultMeters,
+      DistrictHalfExtentMinMeters,
+      DistrictHalfExtentMaxMeters);
+  const double MinHalfExtentMeters = FMath::Min(
+      ClampFiniteDouble(
+          Inputs.DistrictMinHalfExtentMeters,
+          DistrictMinHalfExtentDefaultMeters,
+          DistrictHalfExtentMinMeters,
+          DistrictHalfExtentMaxMeters),
+      DefaultHalfExtentMeters);
+  const double TilesetCoverageRatio = ClampFiniteDouble(
+      Inputs.DistrictTilesetCoverageRatio,
+      DistrictTilesetCoverageDefaultRatio,
+      DistrictTilesetCoverageMinRatio,
+      DistrictTilesetCoverageMaxRatio);
+  const double SanitizedTilesetRadiusMeters = ClampFiniteDouble(
+      TilesetRadiusMeters,
+      0.0,
+      0.0,
+      TilesetRadiusMaxMeters);
+
+  Config.HalfExtentMeters =
+      SanitizedTilesetRadiusMeters > 0.0
+          ? FMath::Clamp(
+                SanitizedTilesetRadiusMeters * TilesetCoverageRatio,
+                MinHalfExtentMeters,
+                DefaultHalfExtentMeters)
+          : DefaultHalfExtentMeters;
+  Config.CellStepMeters = Config.HalfExtentMeters * 0.9;
+
+  const double CellRadiusMaxMeters =
+      FMath::Max(DistrictCellRadiusMinMeters, FMath::Min(DistrictCellRadiusMaxMeters, Config.HalfExtentMeters * 0.35));
+  Config.CellRadiusMeters = ClampFiniteDouble(
+      Inputs.DistrictCellRadiusMeters,
+      DistrictCellRadiusDefaultMeters,
+      DistrictCellRadiusMinMeters,
+      CellRadiusMaxMeters);
+
+  const double LauncherRingMinMeters = Config.CellRadiusMeters + 300.0;
+  const double LauncherRingMaxMeters =
+      FMath::Min(DistrictHalfExtentMaxMeters, FMath::Max(3000.0, Config.HalfExtentMeters + 2000.0));
+  Config.LauncherRingDistanceMeters = ClampFiniteDouble(
+      Inputs.LauncherRingDistanceMeters,
+      DistrictLauncherRingDefaultMeters,
+      LauncherRingMinMeters,
+      LauncherRingMaxMeters);
+  Config.LauncherLateralSpacingMeters = ClampFiniteDouble(
+      Inputs.LauncherLateralSpacingMeters,
+      DistrictLauncherLateralDefaultMeters,
+      0.0,
+      FMath::Min(DistrictLauncherLateralMaxMeters, Config.HalfExtentMeters));
+  return Config;
 }

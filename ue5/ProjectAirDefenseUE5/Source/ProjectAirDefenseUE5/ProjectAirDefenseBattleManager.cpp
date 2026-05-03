@@ -109,30 +109,48 @@ int32 AntiAliasingMethodIndex(EProjectAirDefenseAntiAliasingMethod Method) {
   return 0;
 }
 
+double ClampFiniteDouble(double Value, double Fallback, double MinValue, double MaxValue) {
+  const double Candidate = FMath::IsFinite(Value) ? Value : Fallback;
+  return FMath::Clamp(Candidate, MinValue, MaxValue);
+}
+
+double ClampVisualDimensionMeters(double Value) {
+  constexpr double MinVisualDimensionMeters = 0.01;
+  constexpr double MaxVisualDimensionMeters = 10000.0;
+  return ClampFiniteDouble(Value, MinVisualDimensionMeters, MinVisualDimensionMeters, MaxVisualDimensionMeters);
+}
+
 FVector ScaleSphereToRadius(double RadiusMeters) {
-  const double RadiusUnrealUnits = RadiusMeters * MetersToUnrealUnits;
+  const double RadiusUnrealUnits = ClampVisualDimensionMeters(RadiusMeters) * MetersToUnrealUnits;
   return FVector(RadiusUnrealUnits / 50.0);
 }
 
 FVector ScaleCylinder(double RadiusMeters, double HalfHeightMeters) {
+  const double RadiusUnrealUnits = ClampVisualDimensionMeters(RadiusMeters) * MetersToUnrealUnits;
+  const double HalfHeightUnrealUnits = ClampVisualDimensionMeters(HalfHeightMeters) * MetersToUnrealUnits;
   return FVector(
-      (RadiusMeters * MetersToUnrealUnits) / 50.0,
-      (RadiusMeters * MetersToUnrealUnits) / 50.0,
-      (HalfHeightMeters * MetersToUnrealUnits) / 100.0);
+      RadiusUnrealUnits / 50.0,
+      RadiusUnrealUnits / 50.0,
+      HalfHeightUnrealUnits / 100.0);
 }
 
 FVector ScaleCone(double RadiusMeters, double LengthMeters) {
+  const double RadiusUnrealUnits = ClampVisualDimensionMeters(RadiusMeters) * MetersToUnrealUnits;
+  const double LengthUnrealUnits = ClampVisualDimensionMeters(LengthMeters) * MetersToUnrealUnits;
   return FVector(
-      (RadiusMeters * MetersToUnrealUnits) / 50.0,
-      (RadiusMeters * MetersToUnrealUnits) / 50.0,
-      (LengthMeters * MetersToUnrealUnits) / 100.0);
+      RadiusUnrealUnits / 50.0,
+      RadiusUnrealUnits / 50.0,
+      LengthUnrealUnits / 100.0);
 }
 
 FVector ScaleBox(double WidthMeters, double DepthMeters, double HeightMeters) {
+  const double WidthUnrealUnits = ClampVisualDimensionMeters(WidthMeters) * MetersToUnrealUnits;
+  const double DepthUnrealUnits = ClampVisualDimensionMeters(DepthMeters) * MetersToUnrealUnits;
+  const double HeightUnrealUnits = ClampVisualDimensionMeters(HeightMeters) * MetersToUnrealUnits;
   return FVector(
-      (WidthMeters * MetersToUnrealUnits) / 100.0,
-      (DepthMeters * MetersToUnrealUnits) / 100.0,
-      (HeightMeters * MetersToUnrealUnits) / 100.0);
+      WidthUnrealUnits / 100.0,
+      DepthUnrealUnits / 100.0,
+      HeightUnrealUnits / 100.0);
 }
 
 FLinearColor ThreatColor(const FProjectAirDefenseThreatState& Threat) {
@@ -208,10 +226,13 @@ void AProjectAirDefenseBattleManager::Tick(float DeltaSeconds) {
     }
   }
 
+  const double FrameDeltaSeconds = ClampFiniteDouble(DeltaSeconds, 0.0, 0.0, 0.25);
   const double FixedStepSeconds =
-      Settings == nullptr ? 0.05 : FMath::Max(Settings->SimulationFixedStepSeconds, 0.01);
+      Settings == nullptr
+          ? 0.05
+          : ClampFiniteDouble(Settings->SimulationFixedStepSeconds, 0.05, 0.01, 0.2);
   this->StepAccumulatorSeconds =
-      FMath::Min(this->StepAccumulatorSeconds + DeltaSeconds, FixedStepSeconds * MaxSimulationStepsPerFrame);
+      FMath::Min(this->StepAccumulatorSeconds + FrameDeltaSeconds, FixedStepSeconds * MaxSimulationStepsPerFrame);
   this->TrailVisualSpawnsThisFrame = 0;
   this->BlastVisualSpawnsThisFrame = 0;
   while (this->StepAccumulatorSeconds >= FixedStepSeconds) {
@@ -222,9 +243,9 @@ void AProjectAirDefenseBattleManager::Tick(float DeltaSeconds) {
   }
 
   this->SyncDynamicVisuals();
-  this->UpdateBlastVisuals(DeltaSeconds);
-  this->UpdateTrailVisuals(DeltaSeconds);
-  this->UpdateLaunchPlumeVisuals(DeltaSeconds);
+  this->UpdateBlastVisuals(FrameDeltaSeconds);
+  this->UpdateTrailVisuals(FrameDeltaSeconds);
+  this->UpdateLaunchPlumeVisuals(FrameDeltaSeconds);
   this->RefreshTransientVisualInstances();
 }
 
@@ -571,23 +592,10 @@ void AProjectAirDefenseBattleManager::RebuildSimulation() {
 
 void AProjectAirDefenseBattleManager::BuildDistrictCells() {
   const UProjectAirDefenseRuntimeSettings* Settings = GetDefault<UProjectAirDefenseRuntimeSettings>();
-  const double DefaultHalfExtentMeters = Settings == nullptr ? 1050.0 : Settings->DistrictHalfExtentMeters;
-  const double TilesetCoverageRatio =
-      Settings == nullptr ? 0.82 : FMath::Clamp(Settings->DistrictTilesetCoverageRatio, 0.25, 1.0);
-  const double MinHalfExtentMeters =
-      Settings == nullptr ? 1600.0 : FMath::Max(Settings->DistrictMinHalfExtentMeters, 700.0);
-  const double HalfExtentMeters = this->TilesetRadiusMeters > 0.0
-                                      ? FMath::Clamp(
-                                            this->TilesetRadiusMeters * TilesetCoverageRatio,
-                                            MinHalfExtentMeters,
-                                            DefaultHalfExtentMeters)
-                                      : DefaultHalfExtentMeters;
-  const double CellStepMeters = HalfExtentMeters * 0.9;
-  const double CellRadiusMeters = Settings == nullptr ? 180.0 : Settings->DistrictCellRadiusMeters;
-  const double LauncherRingDistanceMeters =
-      Settings == nullptr ? 1450.0 : Settings->LauncherRingDistanceMeters;
-  const double LauncherLateralSpacingMeters =
-      Settings == nullptr ? 850.0 : Settings->LauncherLateralSpacingMeters;
+  const FProjectAirDefenseDistrictRuntimeConfig DistrictConfig =
+      BuildProjectAirDefenseDistrictRuntimeConfig(
+          MakeProjectAirDefenseDistrictRuntimeInputs(Settings),
+          this->TilesetRadiusMeters);
 
   this->DistrictCells.Empty();
   int32 Ordinal = 0;
@@ -596,17 +604,20 @@ void AProjectAirDefenseBattleManager::BuildDistrictCells() {
       FProjectAirDefenseDistrictCell Cell;
       Cell.Id = FString::Printf(TEXT("D-%02d"), ++Ordinal);
       Cell.LocalPositionMeters =
-          FVector3d(static_cast<double>(XIndex) * CellStepMeters, static_cast<double>(YIndex) * CellStepMeters, 0.0);
-      Cell.RadiusMeters = CellRadiusMeters;
+          FVector3d(
+              static_cast<double>(XIndex) * DistrictConfig.CellStepMeters,
+              static_cast<double>(YIndex) * DistrictConfig.CellStepMeters,
+              0.0);
+      Cell.RadiusMeters = DistrictConfig.CellRadiusMeters;
       Cell.Integrity = 100.0;
       this->DistrictCells.Add(Cell);
     }
   }
 
   this->LauncherPositionsMeters = {
-      FVector3d(-LauncherLateralSpacingMeters, -LauncherRingDistanceMeters, 0.0),
-      FVector3d(0.0, -LauncherRingDistanceMeters - 120.0, 0.0),
-      FVector3d(LauncherLateralSpacingMeters, -LauncherRingDistanceMeters, 0.0),
+      FVector3d(-DistrictConfig.LauncherLateralSpacingMeters, -DistrictConfig.LauncherRingDistanceMeters, 0.0),
+      FVector3d(0.0, -DistrictConfig.LauncherRingDistanceMeters - 120.0, 0.0),
+      FVector3d(DistrictConfig.LauncherLateralSpacingMeters, -DistrictConfig.LauncherRingDistanceMeters, 0.0),
   };
 }
 

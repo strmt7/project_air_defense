@@ -4,6 +4,23 @@
 #include "Engine/DeveloperSettings.h"
 #include "ProjectAirDefenseRuntimeSettings.generated.h"
 
+struct PROJECTAIRDEFENSEUE5_API FProjectAirDefenseDistrictRuntimeInputs {
+  double DistrictHalfExtentMeters = 7000.0;
+  double DistrictTilesetCoverageRatio = 0.82;
+  double DistrictMinHalfExtentMeters = 1600.0;
+  double DistrictCellRadiusMeters = 260.0;
+  double LauncherRingDistanceMeters = 2400.0;
+  double LauncherLateralSpacingMeters = 1000.0;
+};
+
+struct PROJECTAIRDEFENSEUE5_API FProjectAirDefenseDistrictRuntimeConfig {
+  double HalfExtentMeters = 7000.0;
+  double CellStepMeters = 6300.0;
+  double CellRadiusMeters = 260.0;
+  double LauncherRingDistanceMeters = 2400.0;
+  double LauncherLateralSpacingMeters = 1000.0;
+};
+
 UCLASS(Config = Game, DefaultConfig, meta = (DisplayName = "Project Air Defense Runtime"))
 class PROJECTAIRDEFENSEUE5_API UProjectAirDefenseRuntimeSettings : public UDeveloperSettings {
   GENERATED_BODY()
@@ -230,3 +247,11 @@ public:
   UPROPERTY(EditAnywhere, Config, Category = "Gameplay")
   double LauncherLateralSpacingMeters;
 };
+
+PROJECTAIRDEFENSEUE5_API FProjectAirDefenseDistrictRuntimeInputs
+MakeProjectAirDefenseDistrictRuntimeInputs(const UProjectAirDefenseRuntimeSettings* Settings);
+
+PROJECTAIRDEFENSEUE5_API FProjectAirDefenseDistrictRuntimeConfig
+BuildProjectAirDefenseDistrictRuntimeConfig(
+    const FProjectAirDefenseDistrictRuntimeInputs& Inputs,
+    double TilesetRadiusMeters);
