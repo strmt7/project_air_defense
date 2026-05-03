@@ -6,8 +6,8 @@
   "remote_name": "origin",
   "badges": [
     {
-      "alt": "Android APK",
-      "image": "https://img.shields.io/github/actions/workflow/status/{repo_path}/android-release-apk.yml?branch={branch}&label=android-apk",
+      "alt": "Legacy Android APK",
+      "image": "https://img.shields.io/github/actions/workflow/status/{repo_path}/android-release-apk.yml?branch={branch}&label=legacy-android-apk",
       "target": "https://github.com/{repo_path}/actions/workflows/android-release-apk.yml"
     },
     {

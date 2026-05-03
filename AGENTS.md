@@ -61,7 +61,7 @@ later prompt requests:
 - the previous commit's identity, a global `git config` identity, the CI
   runner's identity, or any host / local-placeholder email;
 - any named AI-tool, model-family, or vendor identity;
-- a hyphenated `AI-agent` — it is `AI agent` with a single space and
+- a hyphenated `AI-agent` -- it is `AI agent` with a single space and
   lowercase `a`.
 
 If the tool or environment cannot emit the empty-email form shown above, the
@@ -98,7 +98,7 @@ Do not broad-read the repo on first pass.
 - Do not invent licenses, benchmarks, taps, screenshots, or device behavior, and do not paste PATs, passwords, or internal-only URLs into external tooling.
 - Treat process survival as necessary but insufficient. Screen-flow claims require pre-tap proof, tap proof, and post-tap proof.
 - Use repo-local skills in `.agents/skills/` before generic habits. Update docs and `android/assets/ATTRIBUTION.md` whenever workflow assumptions or external assets change.
-- Current Android/libGDX runtime files are legacy migration input only. For real-city work, load `ue5-city-pipeline` before dataset pull decisions and follow `docs/planning/ue5-city-model-strategies.md`.
+- Current Android/libGDX runtime files and the GitHub legacy APK workflow are migration input only, not UE5 terrain proof. For real-city work, load `ue5-city-pipeline` before dataset pull decisions and follow `docs/planning/ue5-city-model-strategies.md`.
 - The active UE5 city pilot currently uses the local Helsinki Kalasatama 3D Tiles dataset through Cesium for Unreal. 3DBAG Rotterdam remains an evaluated remote candidate, not the current default runtime path.
 - Player-facing UE5 UI is smartphone-first and landscape-only. Visible HUD, menu, and settings surfaces must be touch-first, safe-zone-aware, and keep the playfield clear. Hidden keyboard bindings may remain only for verification or debugging and must not appear in player-facing copy.
 - The main menu title is an invariant: it must always render exactly `PROJECT AIR DEFENSE`.
@@ -116,7 +116,7 @@ Do not broad-read the repo on first pass.
 
 ## External-asset rules
 - Prefer explicit commercial-safe or clearly open licenses for shipped runtime content, reject Google Earth bulk extraction for shipped geometry, prohibit static gameplay backdrops for the battle view, and record every imported model, texture, stream, or reference image in `android/assets/ATTRIBUTION.md`.
-- Helsinki 3D mesh data is CC BY 4.0 and must be credited to the City of Helsinki / Helsinki 3D when active. 3DBAG data and documentation are CC BY 4.0; any 3DBAG runtime or derived view must carry the required credit `© 3DBAG by tudelft3d and 3DGI`, link to `https://docs.3dbag.nl/en/copyright/`, and state whether changes were made.
+- Helsinki 3D mesh data is CC BY 4.0 and must be credited to the City of Helsinki / Helsinki 3D when active. 3DBAG data and documentation are CC BY 4.0; any 3DBAG runtime or derived view must carry the required credit `(c) 3DBAG by tudelft3d and 3DGI`, link to `https://docs.3dbag.nl/en/copyright/`, and state whether changes were made.
 
 ## Verification minimum
 - `./gradlew ktlintCheck`, `./gradlew :android:testDebugUnitTest`, `./gradlew :core:test`, `./gradlew :core:runBattleMonteCarlo -Pruns=300 -Pwaves=1 -Pseconds=48 -Pstep=0.05`, `python3 tools/update_readme_badges.py --check`

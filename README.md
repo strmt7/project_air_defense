@@ -1,7 +1,7 @@
 # Project Air Defense
 
 <!-- BEGIN GENERATED BADGES -->
-[![Android APK](https://img.shields.io/github/actions/workflow/status/strmt7/project_air_defense/android-release-apk.yml?branch=main&label=android-apk)](https://github.com/strmt7/project_air_defense/actions/workflows/android-release-apk.yml)
+[![Legacy Android APK](https://img.shields.io/github/actions/workflow/status/strmt7/project_air_defense/android-release-apk.yml?branch=main&label=legacy-android-apk)](https://github.com/strmt7/project_air_defense/actions/workflows/android-release-apk.yml)
 [![Quality](https://img.shields.io/github/actions/workflow/status/strmt7/project_air_defense/quality.yml?branch=main&label=quality)](https://github.com/strmt7/project_air_defense/actions/workflows/quality.yml)
 [![Ktlint](https://img.shields.io/github/actions/workflow/status/strmt7/project_air_defense/ktlint.yml?branch=main&label=ktlint)](https://github.com/strmt7/project_air_defense/actions/workflows/ktlint.yml)
 [![caveman](https://img.shields.io/badge/caveman-555?logo=github&labelColor=555)](https://github.com/JuliusBrussee/caveman)
@@ -59,7 +59,7 @@ This project is an early alpha test. Many systems are experimental, incomplete, 
    `.\scripts\verify-ue5-bootstrap.cmd`
 4. Build one storage-safe packaged Win64 runtime:
    `.\scripts\package-ue5-runtime.cmd`
-4b. Build an Android APK from the UE5 runtime (requires UE 5.7, Android NDK r25b, JDK 17; see `docs/planning/ue5-android-packaging.md`):
+4b. Build an Android APK from the UE5 runtime (requires UE 5.7, Android NDK r25b, JDK 17, or the manual self-hosted `Package UE5 Android Runtime` workflow; see `docs/planning/ue5-android-packaging.md`):
    `.\scripts\package-ue5-runtime-android.cmd`
 5. Capture the packaged runtime:
    `.\scripts\capture-ue5-runtime-screenshot.cmd -Exe packaged/Win64/ProjectAirDefenseUE5.exe`
@@ -117,7 +117,7 @@ These bullets describe the outgoing renderer only. They are not the target UE5 c
   The game loads the local prepared dataset through Cesium for Unreal.
 - Evaluated remote 3D Tiles candidate:
   [3DBAG Rotterdam LoD2.2](https://data.3dbag.nl/v20250903/cesium3dtiles/lod22/tileset.json), licensed under [CC BY 4.0](https://docs.3dbag.nl/en/copyright/).
-  Required credit: `© 3DBAG by tudelft3d and 3DGI`.
+  Required credit: `(c) 3DBAG by tudelft3d and 3DGI`.
 
 ## Security And Performance
 - **ProGuard/R8 enabled**: minification and obfuscation for production security.
@@ -159,6 +159,8 @@ Android steps below are legacy maintenance and migration-reference only until th
 18. Verify navigation with screenshot + OCR before tap, tap-proof JSON, and screenshot + OCR after tap; do not treat a live PID or logcat alone as proof of a usable battle scene.
 
 ## Build Outputs
+These Gradle outputs are the legacy Android/libGDX prototype only. They do not package the UE5 runtime, Cesium, or the local Helsinki 3D Tiles terrain.
+
 - Local side-load build:
   `.\gradlew.bat :android:assembleLocal`
 - Debug install:
@@ -173,6 +175,8 @@ Production signing variables can be set in `~/.gradle/gradle.properties`, CI sec
 - `RELEASE_KEY_PASSWORD=...`
 
 ## APK Channel Policy
+This policy applies to legacy Gradle APKs. UE5 Android packages use the separate package id `com.airdefense.game.ue5` and the UE5 packaging path documented above.
+
 - `release`
   Production package id `com.airdefense.game`. Must use the stable release keystore.
 - `local`
@@ -184,6 +188,7 @@ Production signing variables can be set in `~/.gradle/gradle.properties`, CI sec
 - This is still a gameplay prototype, not a military simulator.
 - Static background images are not allowed in the gameplay battlespace going forward.
 - The current UE5 city proof path is real local Helsinki 3D Tiles data through Cesium for Unreal. It is not a static panorama and not a fake skyline.
+- The GitHub `Build Legacy Android APK` artifact is the outgoing libGDX prototype and is not proof of the UE5 city runtime; use the UE5 packaging script or manual self-hosted UE5 workflow for terrain APKs.
 - The official Helsinki 3D Tiles package requires an explicit Cesium `3d-tiles-tools upgrade` pass before packaged runtime use because the upstream district payload contains legacy `b3dm` content.
 - Keep one canonical raw Helsinki archive under `data/external/downloads/` and one active runtime dataset, then remove temporary backups after verification.
 - `.\scripts\package-ue5-runtime.ps1` removes `ue5/ProjectAirDefenseUE5/Saved/StagedBuilds` after a successful archive by default because it is a duplicate of the packaged build.

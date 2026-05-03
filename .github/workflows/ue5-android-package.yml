@@ -1,0 +1,65 @@
+name: Package UE5 Android Runtime
+
+on:
+  workflow_dispatch:
+    inputs:
+      configuration:
+        description: UE5 build configuration.
+        required: true
+        default: Development
+        type: choice
+        options:
+          - Development
+          - Shipping
+      texture_format:
+        description: Android texture cook flavor.
+        required: true
+        default: ASTC
+        type: choice
+        options:
+          - ASTC
+          - ETC2
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  package-ue5-android-runtime:
+    if: github.ref_name == github.event.repository.default_branch
+    runs-on:
+      - self-hosted
+      - windows
+      - ue5
+      - android
+
+    steps:
+      - name: Checkout source without deleting ignored UE5 terrain
+        uses: actions/checkout@v6.0.2
+        with:
+          fetch-depth: 1
+          clean: false
+
+      - name: Verify UE5 Android runner prerequisites
+        shell: pwsh
+        run: |
+          $project = "ue5/ProjectAirDefenseUE5/ProjectAirDefenseUE5.uproject"
+          $tileset = "ue5/ProjectAirDefenseUE5/ExternalData/helsinki_kalasatama_3dtiles/tileset.json"
+          $uat = "C:/Program Files/Epic Games/UE_5.7/Engine/Build/BatchFiles/RunUAT.bat"
+          if (-not (Test-Path $project)) { throw "Missing UE5 project: $project" }
+          if (-not (Test-Path $uat)) { throw "Missing Unreal Automation Tool: $uat" }
+          if (-not (Test-Path $tileset)) { throw "Missing local 3D Tiles terrain: $tileset" }
+          if (-not ($env:NDKROOT -or $env:ANDROID_NDK_HOME)) { throw "Set NDKROOT or ANDROID_NDK_HOME to Android NDK r25b." }
+          if (-not $env:ANDROID_HOME) { throw "Set ANDROID_HOME to the Android SDK root." }
+
+      - name: Package UE5 Android runtime
+        shell: pwsh
+        run: |
+          .\scripts\package-ue5-runtime-android.ps1 -Configuration "${{ inputs.configuration }}" -TextureFormat "${{ inputs.texture_format }}"
+
+      - name: Upload UE5 Android package
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: ue5-android-runtime-${{ inputs.configuration }}-${{ inputs.texture_format }}
+          path: packaged/Android/**/*
+          if-no-files-found: error

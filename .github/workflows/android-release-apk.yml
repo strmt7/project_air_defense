@@ -1,4 +1,4 @@
-name: Build Android Release APK
+name: Build Legacy Android APK
 
 on:
   push:
@@ -13,7 +13,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  build-release-apk:
+  build-legacy-android-apk:
     if: github.ref_name == github.event.repository.default_branch
     runs-on: ubuntu-latest
 
@@ -46,15 +46,15 @@ jobs:
       - name: Ensure Gradle wrapper is executable
         run: chmod +x gradlew
 
-      - name: Print app identity
+      - name: Print legacy app identity
         run: ./gradlew --no-daemon :android:printAppIdentity :android:printReleaseSigningSource
 
-      - name: Build local APK artifact
+      - name: Build legacy local APK artifact
         run: ./gradlew --no-daemon :android:assembleLocal
 
-      - name: Upload local APK artifact
+      - name: Upload legacy local APK artifact
         uses: actions/upload-artifact@v7.0.1
         with:
-          name: android-local-apk
+          name: legacy-android-libgdx-apk
           path: android/build/outputs/apk/local/*.apk
           if-no-files-found: error

@@ -160,6 +160,7 @@ class AgentWorkflowDocsTest {
                 ".github/workflows/android-release-apk.yml",
                 ".github/workflows/ktlint.yml",
                 ".github/workflows/quality.yml",
+                ".github/workflows/ue5-android-package.yml",
             )
 
         val workflowDir = File(repoRoot(), ".github/workflows")
