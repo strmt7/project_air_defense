@@ -30,6 +30,8 @@ constexpr double InterceptorTrailRadiusMeters = 2.0;
 constexpr double BlastCoreRadiusScale = 0.28;
 constexpr double BlastCoreMaxRadiusMeters = 88.0;
 constexpr double BlastShockwaveHalfHeightMeters = 1.6;
+constexpr double BlastSmokeMaxRadiusMeters = 165.0;
+constexpr double BlastDebrisMaxRadiusMeters = 120.0;
 // M901 Patriot launcher station dimensions (game-scale; PAC-3 configuration).
 // Real M901 trailer is approximately 10 m long and supports four canisters that each hold four PAC-3 missiles.
 // HEMTT M983 cab is approximately 9.9 m by 2.6 m by 2.9 m but is represented here as a compact cab block for silhouette.
@@ -59,13 +61,10 @@ constexpr int32 MaxBlastVisuals = 64;
 constexpr int32 MaxTrailVisualSpawnsPerFrame = 40;
 constexpr int32 MaxBlastVisualSpawnsPerFrame = 10;
 constexpr int32 DistrictDamageFloorCount = 12;
-constexpr double DistrictDamageTowerOffsetXMeters = 46.0;
-constexpr double DistrictDamageTowerOffsetYMeters = -42.0;
-constexpr double DistrictDamageFloorWidthMeters = 42.0;
-constexpr double DistrictDamageFloorDepthMeters = 38.0;
-constexpr double DistrictDamageFloorHeightMeters = 2.0;
-constexpr double DistrictDamageFloorStepMeters = 3.35;
-constexpr double DistrictDamageFloorBaseHeightMeters = 3.0;
+constexpr int32 DistrictDamageScarMaxLayers = 5;
+constexpr double DistrictDamageScarMinRadiusMeters = 28.0;
+constexpr double DistrictDamageScarMaxRadiusMeters = 135.0;
+constexpr double DistrictDamageScarLayerHeightMeters = 0.35;
 constexpr int32 MinGraphicsQualityLevel = 0;
 constexpr int32 MaxGraphicsQualityLevel = 4;
 constexpr EProjectAirDefenseAntiAliasingMethod AntiAliasingMethods[] = {
@@ -511,16 +510,12 @@ FString AProjectAirDefenseBattleManager::BuildGraphicsSummaryText() const {
       break;
     }
     return FString::Printf(
-        TEXT("%s  %s  AO %s  RT %s  SH %d  RF %d  PP %d"),
+        TEXT("GFX %s | %s | AO %s"),
         *OverallLabel,
         *AALabel,
-        Settings->IsAmbientOcclusionEnabled() ? TEXT("ON") : TEXT("OFF"),
-        Settings->IsRayTracingEnabled() ? TEXT("REQ") : TEXT("OFF"),
-        Settings->GetShadowQuality(),
-        Settings->GetReflectionQuality(),
-        Settings->GetPostProcessingQuality());
+        Settings->IsAmbientOcclusionEnabled() ? TEXT("ON") : TEXT("OFF"));
   }
-  return TEXT("AUTO  AA ?  AO ?  RT ?  SH ?  RF ?  PP ?");
+  return TEXT("GFX AUTO | AA ?");
 }
 
 void AProjectAirDefenseBattleManager::RebuildSimulation() {
@@ -559,8 +554,15 @@ void AProjectAirDefenseBattleManager::RebuildSimulation() {
 void AProjectAirDefenseBattleManager::BuildDistrictCells() {
   const UProjectAirDefenseRuntimeSettings* Settings = GetDefault<UProjectAirDefenseRuntimeSettings>();
   const double DefaultHalfExtentMeters = Settings == nullptr ? 1050.0 : Settings->DistrictHalfExtentMeters;
+  const double TilesetCoverageRatio =
+      Settings == nullptr ? 0.82 : FMath::Clamp(Settings->DistrictTilesetCoverageRatio, 0.25, 1.0);
+  const double MinHalfExtentMeters =
+      Settings == nullptr ? 1600.0 : FMath::Max(Settings->DistrictMinHalfExtentMeters, 700.0);
   const double HalfExtentMeters = this->TilesetRadiusMeters > 0.0
-                                      ? FMath::Clamp(this->TilesetRadiusMeters * 0.42, 700.0, DefaultHalfExtentMeters)
+                                      ? FMath::Clamp(
+                                            this->TilesetRadiusMeters * TilesetCoverageRatio,
+                                            MinHalfExtentMeters,
+                                            DefaultHalfExtentMeters)
                                       : DefaultHalfExtentMeters;
   const double CellStepMeters = HalfExtentMeters * 0.9;
   const double CellRadiusMeters = Settings == nullptr ? 180.0 : Settings->DistrictCellRadiusMeters;
@@ -619,6 +621,9 @@ void AProjectAirDefenseBattleManager::SyncStaticVisuals() {
   DestroyInstancedComponent(this->InterceptBlastCoreInstances);
   DestroyInstancedComponent(this->HostileBlastShockwaveInstances);
   DestroyInstancedComponent(this->InterceptBlastShockwaveInstances);
+  DestroyInstancedComponent(this->HostileBlastSmokeInstances);
+  DestroyInstancedComponent(this->InterceptBlastSmokeInstances);
+  DestroyInstancedComponent(this->HostileBlastDebrisInstances);
   this->DistrictVisuals.Empty();
   this->LauncherVisuals.Empty();
   this->DistrictStatusVisuals.Empty();
@@ -636,10 +641,16 @@ void AProjectAirDefenseBattleManager::SyncStaticVisuals() {
       this->CreateInstancedMarker(TEXT("BlastShockwave-Hot"), this->CylinderMesh != nullptr ? this->CylinderMesh : this->SphereMesh, FLinearColor(1.0f, 0.48f, 0.12f, 1.0f));
   this->InterceptBlastShockwaveInstances =
       this->CreateInstancedMarker(TEXT("BlastShockwave-Interceptor"), this->CylinderMesh != nullptr ? this->CylinderMesh : this->SphereMesh, FLinearColor(0.22f, 0.95f, 1.0f, 1.0f));
+  this->HostileBlastSmokeInstances =
+      this->CreateInstancedMarker(TEXT("BlastSmoke-Hot"), this->SphereMesh, FLinearColor(0.62f, 0.55f, 0.46f, 1.0f));
+  this->InterceptBlastSmokeInstances =
+      this->CreateInstancedMarker(TEXT("BlastSmoke-Interceptor"), this->SphereMesh, FLinearColor(0.36f, 0.50f, 0.62f, 1.0f));
+  this->HostileBlastDebrisInstances =
+      this->CreateInstancedMarker(TEXT("BlastDebris-Hot"), this->CubeMesh, FLinearColor(0.34f, 0.24f, 0.17f, 1.0f));
 
-  const FLinearColor PatriotOliveColor(0.20f, 0.24f, 0.14f, 1.0f);
-  const FLinearColor PatriotDarkOliveColor(0.12f, 0.14f, 0.09f, 1.0f);
-  const FLinearColor PatriotCanisterColor(0.15f, 0.18f, 0.11f, 1.0f);
+  const FLinearColor PatriotOliveColor(0.32f, 0.38f, 0.22f, 1.0f);
+  const FLinearColor PatriotDarkOliveColor(0.22f, 0.26f, 0.15f, 1.0f);
+  const FLinearColor PatriotCanisterColor(0.25f, 0.30f, 0.18f, 1.0f);
 
   // Build each launching station as a composite of engine-primitive cubes so
   // the silhouette reads as a recognizable M901 (trailer plus cab plus four
@@ -827,33 +838,50 @@ void AProjectAirDefenseBattleManager::SyncDistrictDamageFloorVisuals(
     if (DamagedFloors <= 0 && CollapsedFloors <= 0) {
       continue;
     }
-    const int32 FirstCollapsedFloor = DistrictDamageFloorCount - CollapsedFloors;
-    const int32 FirstDamagedFloor = DistrictDamageFloorCount - DamagedFloors;
-    for (int32 FloorIndex = 0; FloorIndex < DistrictDamageFloorCount; ++FloorIndex) {
-      const bool bCollapsedFloor = FloorIndex >= FirstCollapsedFloor;
-      if (bCollapsedFloor) {
-        continue;
-      }
+    if (this->DamagedDistrictFloorInstances == nullptr) {
+      continue;
+    }
 
-      const bool bDamagedFloor = FloorIndex >= FirstDamagedFloor;
-      if (!bDamagedFloor || this->DamagedDistrictFloorInstances == nullptr) {
-        continue;
-      }
-      const double FloorCenterHeightMeters =
-          DistrictDamageFloorBaseHeightMeters + static_cast<double>(FloorIndex) * DistrictDamageFloorStepMeters;
-      const FVector FloorLocation =
+    const double DamageSeverity =
+        FMath::Clamp(
+            static_cast<double>(DamagedFloors + CollapsedFloors) /
+                static_cast<double>(DistrictDamageFloorCount),
+            0.0,
+            1.0);
+    const int32 ScarLayers =
+        FMath::Clamp(
+            1 + FMath::CeilToInt(DamageSeverity * static_cast<double>(DistrictDamageScarMaxLayers - 1)),
+            1,
+            DistrictDamageScarMaxLayers);
+    const double BaseScarRadiusMeters =
+        FMath::Clamp(
+            FMath::Lerp(DistrictDamageScarMinRadiusMeters, DistrictDamageScarMaxRadiusMeters, DamageSeverity),
+            DistrictDamageScarMinRadiusMeters,
+            DistrictCell.RadiusMeters * 0.72);
+    const FVector3d ScarEpicenterMeters =
+        DistrictCell.bHasDamageEpicenter ? DistrictCell.LastDamageEpicenterMeters : DistrictCell.LocalPositionMeters;
+    const FRotator ScarRotation(
+        0.0,
+        static_cast<double>(GetTypeHash(DistrictCell.Id) % 90),
+        0.0);
+
+    for (int32 LayerIndex = 0; LayerIndex < ScarLayers; ++LayerIndex) {
+      const double LayerAlpha =
+          ScarLayers <= 1 ? 0.0 : static_cast<double>(LayerIndex) / static_cast<double>(ScarLayers - 1);
+      const double LayerRadiusMeters =
+          BaseScarRadiusMeters * FMath::Lerp(1.0, 0.56, LayerAlpha);
+      const FVector ScarLocation =
           this->ToWorldPosition(
-              DistrictCell.LocalPositionMeters +
-              FVector3d(
-                  DistrictDamageTowerOffsetXMeters,
-                  DistrictDamageTowerOffsetYMeters,
-                  FloorCenterHeightMeters));
-      const FVector FloorScale =
+              ScarEpicenterMeters +
+              FVector3d(0.0, 0.0, 0.12 + static_cast<double>(LayerIndex) * DistrictDamageScarLayerHeightMeters));
+      const FVector ScarScale =
           ScaleBox(
-              DistrictDamageFloorWidthMeters,
-              DistrictDamageFloorDepthMeters,
-              bDamagedFloor ? DistrictDamageFloorHeightMeters * 0.72 : DistrictDamageFloorHeightMeters);
-      this->DamagedDistrictFloorInstances->AddInstance(FTransform(FRotator::ZeroRotator, FloorLocation, FloorScale), true);
+              LayerRadiusMeters,
+              LayerRadiusMeters * FMath::Lerp(0.78, 0.52, LayerAlpha),
+              DistrictDamageScarLayerHeightMeters);
+      this->DamagedDistrictFloorInstances->AddInstance(
+          FTransform(ScarRotation, ScarLocation, ScarScale),
+          true);
     }
   }
 }
@@ -900,6 +928,9 @@ void AProjectAirDefenseBattleManager::RefreshTransientVisualInstances() {
   ClearInstances(this->InterceptBlastCoreInstances);
   ClearInstances(this->HostileBlastShockwaveInstances);
   ClearInstances(this->InterceptBlastShockwaveInstances);
+  ClearInstances(this->HostileBlastSmokeInstances);
+  ClearInstances(this->InterceptBlastSmokeInstances);
+  ClearInstances(this->HostileBlastDebrisInstances);
 
   for (const FTrailVisual& TrailVisual : this->TrailVisuals) {
     UInstancedStaticMeshComponent* TargetInstances =
@@ -942,6 +973,28 @@ void AProjectAirDefenseBattleManager::RefreshTransientVisualInstances() {
                   BlastVisual.ShockwaveScale.X * FMath::Lerp(0.2, 1.0, Alpha),
                   BlastVisual.ShockwaveScale.Y * FMath::Lerp(0.2, 1.0, Alpha),
                   BlastVisual.ShockwaveScale.Z)),
+          true);
+    }
+    UInstancedStaticMeshComponent* SmokeInstances =
+        bHostile ? this->HostileBlastSmokeInstances.Get() : this->InterceptBlastSmokeInstances.Get();
+    if (SmokeInstances != nullptr) {
+      const double SmokeEase = 1.0 - FMath::Square(1.0 - Alpha);
+      const FVector SmokePosition =
+          BlastVisual.WorldPosition +
+          FVector(0.0, 0.0, BlastVisual.SmokeRiseMeters * MetersToUnrealUnits * SmokeEase);
+      SmokeInstances->AddInstance(
+          FTransform(
+              FRotator::ZeroRotator,
+              SmokePosition,
+              BlastVisual.SmokeScale * FMath::Lerp(0.35, 1.45, SmokeEase)),
+          true);
+    }
+    if (bHostile && BlastVisual.bGroundImpact && this->HostileBlastDebrisInstances != nullptr) {
+      this->HostileBlastDebrisInstances->AddInstance(
+          FTransform(
+              FRotator(0.0, FMath::Fmod(Alpha * 90.0, 90.0), 0.0),
+              BlastVisual.WorldPosition,
+              BlastVisual.DebrisScale * FMath::Lerp(0.85, 1.10, Alpha)),
           true);
     }
   }
@@ -990,8 +1043,20 @@ void AProjectAirDefenseBattleManager::SpawnBlastVisual(const FProjectAirDefenseB
   }
 
   const FVector WorldPosition = this->ToWorldPosition(BlastEvent.PositionMeters);
+  const bool bHostile = BlastEvent.Kind == EProjectAirDefenseBlastKind::HostileImpact;
+  const double GroundCoupling = FMath::Clamp(BlastEvent.GroundCoupling, 0.0, 1.0);
   const double CoreRadiusMeters =
-      FMath::Min(BlastEvent.RadiusMeters * BlastCoreRadiusScale, BlastCoreMaxRadiusMeters);
+      FMath::Min(
+          BlastEvent.RadiusMeters * (bHostile ? BlastCoreRadiusScale : BlastCoreRadiusScale * 0.72),
+          BlastCoreMaxRadiusMeters);
+  const double SmokeRadiusMeters =
+      FMath::Min(
+          BlastEvent.RadiusMeters * FMath::Lerp(0.28, 0.72, GroundCoupling),
+          BlastSmokeMaxRadiusMeters);
+  const double DebrisRadiusMeters =
+      FMath::Min(
+          BlastEvent.RadiusMeters * FMath::Lerp(0.18, 0.54, GroundCoupling),
+          BlastDebrisMaxRadiusMeters);
   ++this->BlastVisualSpawnsThisFrame;
 
   FBlastVisual BlastVisual;
@@ -1000,8 +1065,14 @@ void AProjectAirDefenseBattleManager::SpawnBlastVisual(const FProjectAirDefenseB
   BlastVisual.ShockwaveScale = this->CylinderMesh != nullptr
                                    ? ScaleCylinder(BlastEvent.RadiusMeters, BlastShockwaveHalfHeightMeters)
                                    : ScaleSphereToRadius(BlastEvent.RadiusMeters);
-  BlastVisual.LifetimeSeconds = AutoBlastVisualSeconds;
+  BlastVisual.SmokeScale = ScaleSphereToRadius(SmokeRadiusMeters);
+  BlastVisual.DebrisScale =
+      ScaleBox(DebrisRadiusMeters, DebrisRadiusMeters * 0.72, FMath::Lerp(2.0, 7.0, GroundCoupling));
+  BlastVisual.LifetimeSeconds =
+      bHostile ? FMath::Lerp(AutoBlastVisualSeconds, 5.4, GroundCoupling) : AutoBlastVisualSeconds;
+  BlastVisual.SmokeRiseMeters = FMath::Lerp(18.0, 95.0, GroundCoupling);
   BlastVisual.Kind = BlastEvent.Kind;
+  BlastVisual.bGroundImpact = BlastEvent.bGroundImpact || GroundCoupling > 0.65;
   this->BlastVisuals.Add(BlastVisual);
 }
 

@@ -11,7 +11,7 @@
 - `ProjectAirDefenseGameUserSettings`
   Owns persistent runtime graphics settings such as AA method, AO enablement, motion blur policy, ray-tracing request state, and UE scalability groups. These toggles are applied with `ECVF_SetByGameOverride`, and `DefaultEngine.ini` no longer hard-forces AA or AO above the user-settings layer.
 - `ProjectAirDefenseBattleSimulation`
-  Owns the deterministic air-defense simulation ported from the legacy runtime: hostile launch profiles, wave accounting, doctrine behavior, interceptor solve, fuse checks, and city-damage outcomes.
+  Owns the deterministic air-defense simulation ported from the legacy runtime: hostile launch profiles, wave accounting, doctrine behavior, persistent per-threat engagement-attempt limits, interceptor solve, fuse checks, and city-damage outcomes.
 - `ProjectAirDefenseBattleManager`
   Owns the live gameplay bridge between the deterministic simulation and the active city scene. It ticks the simulation, exposes runtime snapshots to the HUD, applies graphics-setting changes through `ProjectAirDefenseGameUserSettings`, and renders battle markers/trails/blasts through packaged mesh components rather than debug-only draw calls. It must not render healthy synthetic district towers over the real city mesh.
 - `ProjectAirDefenseBattleMonteCarloCommandlet`

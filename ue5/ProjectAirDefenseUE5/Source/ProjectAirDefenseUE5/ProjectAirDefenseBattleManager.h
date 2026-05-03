@@ -54,9 +54,13 @@ private:
     FVector WorldPosition = FVector::ZeroVector;
     FVector CoreScale = FVector::OneVector;
     FVector ShockwaveScale = FVector::OneVector;
+    FVector SmokeScale = FVector::OneVector;
+    FVector DebrisScale = FVector::OneVector;
     double AgeSeconds = 0.0;
     double LifetimeSeconds = 0.0;
+    double SmokeRiseMeters = 0.0;
     EProjectAirDefenseBlastKind Kind = EProjectAirDefenseBlastKind::HostileImpact;
+    bool bGroundImpact = false;
   };
 
   struct FTrailVisual {
@@ -148,6 +152,15 @@ private:
 
   UPROPERTY(Transient)
   TObjectPtr<UInstancedStaticMeshComponent> InterceptBlastShockwaveInstances;
+
+  UPROPERTY(Transient)
+  TObjectPtr<UInstancedStaticMeshComponent> HostileBlastSmokeInstances;
+
+  UPROPERTY(Transient)
+  TObjectPtr<UInstancedStaticMeshComponent> InterceptBlastSmokeInstances;
+
+  UPROPERTY(Transient)
+  TObjectPtr<UInstancedStaticMeshComponent> HostileBlastDebrisInstances;
 
   UPROPERTY(Transient)
   TMap<FString, TObjectPtr<UStaticMeshComponent>> ThreatVisuals;

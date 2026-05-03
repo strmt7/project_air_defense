@@ -216,6 +216,12 @@ public:
   double DistrictHalfExtentMeters;
 
   UPROPERTY(EditAnywhere, Config, Category = "Gameplay")
+  double DistrictTilesetCoverageRatio;
+
+  UPROPERTY(EditAnywhere, Config, Category = "Gameplay")
+  double DistrictMinHalfExtentMeters;
+
+  UPROPERTY(EditAnywhere, Config, Category = "Gameplay")
   double DistrictCellRadiusMeters;
 
   UPROPERTY(EditAnywhere, Config, Category = "Gameplay")

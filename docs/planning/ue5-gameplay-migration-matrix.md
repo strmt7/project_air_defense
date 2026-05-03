@@ -22,9 +22,9 @@ This file is the authoritative checklist for porting the actual game from the le
 | System | Legacy source | UE5 target | Status | Verification |
 | --- | --- | --- | --- | --- |
 | Deterministic battle simulation core | `BattleSimulation.kt` | `ProjectAirDefenseBattleSimulation.*` | implemented, verified | UE automation tests |
-| Defense doctrines and tuning | `BattleLogic.kt` | `ProjectAirDefenseBattleSimulation.*` | implemented, verified | doctrine comparison test |
+| Defense doctrines and tuning | `BattleLogic.kt` | `ProjectAirDefenseBattleSimulation.*` | implemented, verified | doctrine comparison + shoot-look-shoot tests |
 | Wave spawning and accounting | `BattleSimulation.kt` | `ProjectAirDefenseBattleSimulation.*` | implemented, verified | consistency + seeded tests |
-| Interceptor lead solve and fuse check | `BattleLogic.kt` | `ProjectAirDefenseBattleSimulation.*` | implemented, verified | intercept tests |
+| Interceptor lead solve, fuse check, and attempt cap | `BattleLogic.kt` | `ProjectAirDefenseBattleSimulation.*` | implemented, verified | intercept, seeker-cone, and attempt-limit tests |
 | Threat impact and city damage | `BattleSimulation.kt` | `ProjectAirDefenseBattleSimulation.*` | implemented, verified | hostile-impact test |
 | Monte Carlo / headless balance lane | `BattleMonteCarloRunner.kt` | `ProjectAirDefenseBattleMonteCarloCommandlet.*` | implemented, verified | `scripts/run-ue5-automation-tests.ps1` smoke JSON contract + `scripts/run-ue5-battle-monte-carlo.ps1` full balance report |
 

@@ -308,11 +308,10 @@ void UProjectAirDefenseRadarWidget::BuildWidgetTree() {
     LabelSlot->SetPadding(FMargin(4.0f, 0.0f, 0.0f, 0.0f));
   }
 
-  // Secondary caption reinforces scale/mode; kept static (no data feed wiring)
-  // because the radar paints live metrics through NativePaint.
+  // Secondary caption names the circles without adding another HUD legend.
   UTextBlock* Caption = this->WidgetTree->ConstructWidget<UTextBlock>();
-  Caption->SetText(FText::FromString(TEXT("AREA TRACK")));
-  Caption->SetFont(MakeFont(10));
+  Caption->SetText(FText::FromString(TEXT("RANGE RINGS")));
+  Caption->SetFont(MakeFont(14));
   Caption->SetColorAndOpacity(FSlateColor(FLinearColor(0.56f, 0.82f, 0.96f, 0.85f)));
   if (UOverlaySlot* CaptionSlot = Overlay->AddChildToOverlay(Caption)) {
     CaptionSlot->SetHorizontalAlignment(HAlign_Left);

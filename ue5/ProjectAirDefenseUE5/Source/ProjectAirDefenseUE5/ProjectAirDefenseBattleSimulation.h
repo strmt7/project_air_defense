@@ -81,6 +81,7 @@ private:
   TArray<FProjectAirDefenseInterceptorState> Interceptors;
   TArray<FVector3d> LauncherPositionsMeters;
   TArray<double> LauncherReadyInSeconds;
+  TMap<FString, int32> ThreatEngagementAttempts;
 
   FProjectAirDefenseDefenseSettings Settings;
   FRandomStream RandomStream;

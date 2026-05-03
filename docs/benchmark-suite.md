@@ -67,6 +67,13 @@ UE5-specific scripts write under `benchmark-results/` unless their output paths 
 
 The smoke lane validates that the commandlet produced JSON and that the report contains the expected core contract: non-blank `engine`, `simulation` equal to `FProjectAirDefenseBattleSimulation`, matching `runs`, `waves`, `seed`, `secondsPerWave`, `stepSeconds`, matching doctrine, aggregate metric ranges, non-zero `totalThreatsSpawned`, non-negative totals, and one `runsDetail` entry per run. Use `-SkipBattleMonteCarloSmoke` when intentionally running only the UE automation tests.
 
+Current UE5 balance reference from 2026-05-03 after the engagement-attempt fix:
+
+```text
+scripts/run-ue5-battle-monte-carlo.ps1 -Runs 300 -Waves 1 -Seconds 48.0 -Step 0.05 -Seed 20260411 -Doctrine ShieldWall
+averageInterceptRate=0.861 averageCityIntegrity=81.38 totalThreatsSpawned=3300 totalHostileImpacts=459 averageMissDistanceMeters=45.82
+```
+
 ## Notes
 
 - The Android benchmark target uses the `benchmark` app build type: `com.airdefense.game.benchmark`.

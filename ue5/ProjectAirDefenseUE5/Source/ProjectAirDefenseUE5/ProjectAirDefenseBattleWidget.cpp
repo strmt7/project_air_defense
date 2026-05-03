@@ -962,7 +962,7 @@ void UProjectAirDefenseBattleWidget::BuildWidgetTree() {
 
   UVerticalBox* GraphicsPanel = BuildDrawerPanel(TEXT("GRAPHICS"), FLinearColor(0.79f, 0.63f, 0.99f, 1.0f));
   this->GraphicsSummaryText =
-      CreateText(this->WidgetTree, TEXT("AUTO  AA ?  AO ?  RT ?  SH ?  RF ?  PP ?"), 19, FLinearColor(0.94f, 0.97f, 1.0f, 1.0f));
+      CreateText(this->WidgetTree, TEXT("GFX AUTO | AA ?"), 18, FLinearColor(0.94f, 0.97f, 1.0f, 1.0f));
   if (UVerticalBoxSlot* VerticalSlot = GraphicsPanel->AddChildToVerticalBox(this->GraphicsSummaryText)) {
     VerticalSlot->SetPadding(FMargin(0.0f, 0.0f, 0.0f, 12.0f));
   }
@@ -1041,7 +1041,7 @@ void UProjectAirDefenseBattleWidget::BuildWidgetTree() {
   this->AoSwitch->OnCheckStateChanged.AddDynamic(this, &UProjectAirDefenseBattleWidget::HandleAoSwitchChanged);
   this->BlurSwitch = AddSwitchRow(GraphicsPanel, TEXT("MOTION BLUR"), this->BlurValueText);
   this->BlurSwitch->OnCheckStateChanged.AddDynamic(this, &UProjectAirDefenseBattleWidget::HandleBlurSwitchChanged);
-  this->RayTracingSwitch = AddSwitchRow(GraphicsPanel, TEXT("RAY TRACING REQUEST"), this->RayTracingValueText);
+  this->RayTracingSwitch = AddSwitchRow(GraphicsPanel, TEXT("RT REQUEST"), this->RayTracingValueText);
   this->RayTracingSwitch->OnCheckStateChanged.AddDynamic(this, &UProjectAirDefenseBattleWidget::HandleRayTracingSwitchChanged);
   this->ShadowSlider = AddSettingSlider(GraphicsPanel, TEXT("SHADOWS"), this->ShadowValueText, 0.0f, 4.0f, 1.0f);
   this->ShadowSlider->OnValueChanged.AddDynamic(this, &UProjectAirDefenseBattleWidget::HandleShadowSliderChanged);
@@ -1052,7 +1052,7 @@ void UProjectAirDefenseBattleWidget::BuildWidgetTree() {
 
   UVerticalBox* TimePanel = BuildDrawerPanel(TEXT("TIME"), FLinearColor(1.0f, 0.78f, 0.38f, 1.0f));
   this->TimeSummaryText =
-      CreateText(this->WidgetTree, TEXT("TIME 14:00 | PAUSED"), 19, FLinearColor(0.94f, 0.97f, 1.0f, 1.0f));
+      CreateText(this->WidgetTree, TEXT("14:00 | PAUSED"), 18, FLinearColor(0.94f, 0.97f, 1.0f, 1.0f));
   if (UVerticalBoxSlot* VerticalSlot = TimePanel->AddChildToVerticalBox(this->TimeSummaryText)) {
     VerticalSlot->SetPadding(FMargin(0.0f, 0.0f, 0.0f, 12.0f));
   }

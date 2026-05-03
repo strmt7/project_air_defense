@@ -845,6 +845,7 @@ void FProjectAirDefenseBattleSimulation::UpdateThreats(
       ++this->TotalImpactedByType[ImpactTypeIndex];
     }
     Events.RemovedThreatIds.Add(Threat.Id);
+    this->ThreatEngagementAttempts.Remove(Threat.Id);
     this->Threats.RemoveAt(ThreatIndex);
   }
 }
@@ -1008,6 +1009,7 @@ void FProjectAirDefenseBattleSimulation::UpdateInterceptors(
           const FString TargetId = Target->Id;
           Events.RemovedThreatIds.Add(TargetId);
           Events.RemovedInterceptorIds.Add(Interceptor.Id);
+          this->ThreatEngagementAttempts.Remove(TargetId);
           this->Threats.RemoveAll([&TargetId](const FProjectAirDefenseThreatState& Threat) {
             return Threat.Id == TargetId;
           });
@@ -1133,7 +1135,10 @@ FProjectAirDefenseThreatState* FProjectAirDefenseBattleSimulation::SelectNextThr
     }
 
     const int32 AssignedCount = AssignedCountFor(Threat.Id, AssignmentCounts);
-    if (AssignedCount >= Profile.MaxAssignmentsPerThreat) {
+    const int32 AttemptedCount = this->ThreatEngagementAttempts.Contains(Threat.Id)
+                                     ? this->ThreatEngagementAttempts[Threat.Id]
+                                     : 0;
+    if (AttemptedCount >= Profile.MaxAssignmentsPerThreat) {
       continue;
     }
 
@@ -1144,7 +1149,8 @@ FProjectAirDefenseThreatState* FProjectAirDefenseBattleSimulation::SelectNextThr
         Threat.TargetPositionMeters,
     };
     const double TimeToImpactSeconds = EstimateTimeToImpact(Snapshot);
-    if (AssignedCount > 0 && TimeToImpactSeconds > Profile.RecommitWindowSeconds) {
+    if ((AssignedCount > 0 || AttemptedCount > 0) &&
+        TimeToImpactSeconds > Profile.RecommitWindowSeconds) {
       continue;
     }
 
@@ -1200,6 +1206,8 @@ FProjectAirDefenseBattleSimulation::LaunchInterceptor(
   Interceptor.LauncherIndex = LauncherIndex;
   Interceptor.TrailCooldownSeconds = 0.0;
   this->Interceptors.Add(Interceptor);
+  int32& AttemptCount = this->ThreatEngagementAttempts.FindOrAdd(TargetThreat.Id);
+  ++AttemptCount;
   ++this->TotalInterceptorsLaunched;
   this->LauncherReadyInSeconds[LauncherIndex] = EffectiveLauncherReload(this->Settings);
 
@@ -1267,6 +1275,8 @@ void FProjectAirDefenseBattleSimulation::ApplyDistrictImpact(
       FMath::Max(DistrictCell.DamagedFloors, DamagedFloorsForStructuralIntegrity(DistrictCell.StructuralIntegrity));
   DistrictCell.CollapsedFloors =
       FMath::Max(DistrictCell.CollapsedFloors, CollapsedFloorsForStructuralIntegrity(DistrictCell.StructuralIntegrity));
+  DistrictCell.LastDamageEpicenterMeters = ImpactPositionMeters;
+  DistrictCell.bHasDamageEpicenter = true;
   DistrictCell.bCollapsed =
       DistrictCell.StructuralIntegrity <= FullCollapseThreshold ||
       DistrictCell.Integrity <= 0.0 ||

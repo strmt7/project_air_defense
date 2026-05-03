@@ -206,6 +206,10 @@ bool FProjectAirDefenseBattleHostileImpactTest::RunTest(const FString& Parameter
   WeakerSettings.InterceptorSpeedMetersPerSecond = 420.0;
   WeakerSettings.LaunchCooldownSeconds = 0.75;
   WeakerSettings.BlastRadiusMeters = 58.0;
+  // This test exercises the hostile-impact damage path directly; do not rely
+  // on stochastic leakage from a merely weak defense profile.
+  WeakerSettings.KillProbabilityAtZeroMiss = 0.0;
+  WeakerSettings.KillProbabilityFuseFloor = 0.0;
   FProjectAirDefenseBattleSimulation Simulation(
       MakeDistrictCells(),
       MakeLauncherPositions(),

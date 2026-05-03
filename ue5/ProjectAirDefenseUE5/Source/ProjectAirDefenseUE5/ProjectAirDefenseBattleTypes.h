@@ -72,12 +72,14 @@ struct FProjectAirDefenseDefenseSettings {
 struct FProjectAirDefenseDistrictCell {
   FString Id;
   FVector3d LocalPositionMeters = FVector3d::ZeroVector;
+  FVector3d LastDamageEpicenterMeters = FVector3d::ZeroVector;
   double RadiusMeters = 180.0;
   double Integrity = 100.0;
   double StructuralIntegrity = 100.0;
   int32 DamagedFloors = 0;
   int32 CollapsedFloors = 0;
   bool bCollapsed = false;
+  bool bHasDamageEpicenter = false;
 };
 
 struct FProjectAirDefenseThreatState {

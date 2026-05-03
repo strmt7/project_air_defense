@@ -130,9 +130,9 @@ FString AProjectAirDefenseGameMode::BuildTimeSummaryText() const {
   const int32 Hour = TotalMinutes / 60;
   const int32 Minute = TotalMinutes % 60;
   if (FMath::IsNearlyZero(this->RuntimeTimeScaleHoursPerMinute)) {
-    return FString::Printf(TEXT("TIME %02d:%02d | PAUSED"), Hour, Minute);
+    return FString::Printf(TEXT("%02d:%02d | PAUSED"), Hour, Minute);
   }
-  return FString::Printf(TEXT("TIME %02d:%02d | %.1fh/min"), Hour, Minute, this->RuntimeTimeScaleHoursPerMinute);
+  return FString::Printf(TEXT("%02d:%02d | %.1fh/min"), Hour, Minute, this->RuntimeTimeScaleHoursPerMinute);
 }
 
 void AProjectAirDefenseGameMode::BootstrapPilotScene() {
