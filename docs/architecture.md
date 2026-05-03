@@ -11,17 +11,17 @@
 - `ProjectAirDefenseGameUserSettings`
   Owns persistent runtime graphics settings such as AA method, AO enablement, motion blur policy, ray-tracing request state, and UE scalability groups. These toggles are applied with `ECVF_SetByGameOverride`, and `DefaultEngine.ini` no longer hard-forces AA or AO above the user-settings layer.
 - `ProjectAirDefenseBattleSimulation`
-  Owns the deterministic air-defense simulation ported from the legacy runtime: hostile launch profiles, wave accounting, doctrine behavior, persistent per-threat engagement-attempt limits, interceptor solve, fuse checks, and city-damage outcomes.
+  Owns the deterministic air-defense simulation ported from the legacy runtime: hostile launch profiles, wave accounting, doctrine behavior, player tactical controls, persistent per-threat engagement-attempt limits, interceptor solve, fuse checks, and city-damage outcomes.
 - `ProjectAirDefenseBattleManager`
   Owns the live gameplay bridge between the deterministic simulation and the active city scene. It ticks the simulation, exposes runtime snapshots to the HUD, applies graphics-setting changes through `ProjectAirDefenseGameUserSettings`, and renders battle markers/trails/blasts through packaged mesh components rather than debug-only draw calls. It must not render healthy synthetic district towers over the real city mesh.
 - `ProjectAirDefenseBattleMonteCarloCommandlet`
-  Runs headless balance sweeps through the same `FProjectAirDefenseBattleSimulation` class used by the runtime bridge and writes a JSON benchmark report.
+  Runs headless balance sweeps through the same `FProjectAirDefenseBattleSimulation` class used by the runtime bridge and writes a JSON benchmark report, including the active doctrine, engagement range, salvo mode, threat priority, and fire-control mode.
 - `ProjectAirDefensePlayerController`
   Owns menu-to-battle state, widget visibility, systems-drawer visibility, and the hidden debug-only keyboard fallback. Keyboard bindings remain available for verification and editor debugging, but are not part of the player-facing UI contract.
 - `ProjectAirDefenseMainMenuWidget`
   Owns the active player-facing front-end menu surface: one compact touch-first action card, render summary, and city-source summary without blocking most of the view.
 - `ProjectAirDefenseBattleWidget`
-  Owns the active player-facing battle HUD: compact top corner status cards, a bottom-left radar cluster, bottom-right doctrine and wave actions, and a floating systems drawer for touch controls, graphics controls, and day/night controls.
+  Owns the active player-facing battle HUD: compact top corner status cards, a bottom-left radar cluster, bottom-right doctrine and wave actions, and a floating systems drawer for touch controls, tactical controls, graphics controls, and day/night controls.
 - `ProjectAirDefenseRadarWidget`
   Owns the touch-safe radar surface fed by `ProjectAirDefenseBattleManager::BuildRadarSnapshot()`.
 

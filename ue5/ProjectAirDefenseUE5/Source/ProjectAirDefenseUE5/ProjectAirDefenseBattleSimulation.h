@@ -11,8 +11,15 @@ public:
       const FProjectAirDefenseDefenseSettings& InSettings,
       int32 InRandomSeed = 4242);
 
+  static double MinConfigurableEngagementRangeMeters();
+  static double MaxConfigurableEngagementRangeMeters();
+
   bool StartNextWave();
   void SetDoctrine(EProjectAirDefenseDefenseDoctrine InDoctrine);
+  void SetEngagementMode(EProjectAirDefenseEngagementMode InEngagementMode);
+  void SetThreatPriority(EProjectAirDefenseThreatPriority InThreatPriority);
+  void SetFireControlMode(EProjectAirDefenseFireControlMode InFireControlMode);
+  void SetEngagementRangeMeters(double InEngagementRangeMeters);
   FProjectAirDefenseStepEvents Step(double DeltaSeconds);
 
   const TArray<FProjectAirDefenseDistrictCell>& GetDistrictCells() const;
@@ -109,6 +116,7 @@ private:
   // Array size must stay synchronized with EProjectAirDefenseThreatType.
   static constexpr int32 ThreatTypeCount = 3;
   int32 TotalSpawnedByType[ThreatTypeCount] = {0, 0, 0};
+  int32 TotalLaunchedAtByType[ThreatTypeCount] = {0, 0, 0};
   int32 TotalInterceptedByType[ThreatTypeCount] = {0, 0, 0};
   int32 TotalImpactedByType[ThreatTypeCount] = {0, 0, 0};
   double SpawnTimerSeconds = 0.0;

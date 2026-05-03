@@ -26,6 +26,10 @@ public:
 
   bool StartNextWave();
   void CycleDoctrine();
+  void CycleEngagementMode();
+  void CycleThreatPriority();
+  void CycleFireControlMode();
+  void SetEngagementRangeMeters(double EngagementRangeMeters);
   void IncreaseOverallQuality();
   void DecreaseOverallQuality();
   void SetOverallQualityLevel(int32 QualityLevel);

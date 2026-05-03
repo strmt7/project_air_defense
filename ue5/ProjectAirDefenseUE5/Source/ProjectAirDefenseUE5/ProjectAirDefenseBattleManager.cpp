@@ -284,6 +284,87 @@ void AProjectAirDefenseBattleManager::CycleDoctrine() {
   this->Simulation->SetDoctrine(NextDoctrine);
 }
 
+void AProjectAirDefenseBattleManager::CycleEngagementMode() {
+  if (!this->Simulation) {
+    return;
+  }
+
+  EProjectAirDefenseEngagementMode NextMode = EProjectAirDefenseEngagementMode::DoctrineDefault;
+  switch (this->Simulation->GetSettings().EngagementMode) {
+  case EProjectAirDefenseEngagementMode::DoctrineDefault:
+    NextMode = EProjectAirDefenseEngagementMode::Single;
+    break;
+  case EProjectAirDefenseEngagementMode::Single:
+    NextMode = EProjectAirDefenseEngagementMode::Pair;
+    break;
+  case EProjectAirDefenseEngagementMode::Pair:
+    NextMode = EProjectAirDefenseEngagementMode::Ripple;
+    break;
+  case EProjectAirDefenseEngagementMode::Ripple:
+    NextMode = EProjectAirDefenseEngagementMode::DoctrineDefault;
+    break;
+  }
+  this->Simulation->SetEngagementMode(NextMode);
+}
+
+void AProjectAirDefenseBattleManager::CycleThreatPriority() {
+  if (!this->Simulation) {
+    return;
+  }
+
+  EProjectAirDefenseThreatPriority NextPriority = EProjectAirDefenseThreatPriority::Balanced;
+  switch (this->Simulation->GetSettings().ThreatPriority) {
+  case EProjectAirDefenseThreatPriority::Balanced:
+    NextPriority = EProjectAirDefenseThreatPriority::BallisticFirst;
+    break;
+  case EProjectAirDefenseThreatPriority::BallisticFirst:
+    NextPriority = EProjectAirDefenseThreatPriority::GlideFirst;
+    break;
+  case EProjectAirDefenseThreatPriority::GlideFirst:
+    NextPriority = EProjectAirDefenseThreatPriority::CruiseFirst;
+    break;
+  case EProjectAirDefenseThreatPriority::CruiseFirst:
+    NextPriority = EProjectAirDefenseThreatPriority::ClosestImpact;
+    break;
+  case EProjectAirDefenseThreatPriority::ClosestImpact:
+    NextPriority = EProjectAirDefenseThreatPriority::Balanced;
+    break;
+  }
+  this->Simulation->SetThreatPriority(NextPriority);
+}
+
+void AProjectAirDefenseBattleManager::CycleFireControlMode() {
+  if (!this->Simulation) {
+    return;
+  }
+
+  EProjectAirDefenseFireControlMode NextMode = EProjectAirDefenseFireControlMode::Balanced;
+  switch (this->Simulation->GetSettings().FireControlMode) {
+  case EProjectAirDefenseFireControlMode::Early:
+    NextMode = EProjectAirDefenseFireControlMode::Balanced;
+    break;
+  case EProjectAirDefenseFireControlMode::Balanced:
+    NextMode = EProjectAirDefenseFireControlMode::Terminal;
+    break;
+  case EProjectAirDefenseFireControlMode::Terminal:
+    NextMode = EProjectAirDefenseFireControlMode::Early;
+    break;
+  }
+  this->Simulation->SetFireControlMode(NextMode);
+}
+
+void AProjectAirDefenseBattleManager::SetEngagementRangeMeters(double EngagementRangeMeters) {
+  if (!this->Simulation) {
+    return;
+  }
+
+  const double ClampedRangeMeters = FMath::Clamp(
+      EngagementRangeMeters,
+      FProjectAirDefenseBattleSimulation::MinConfigurableEngagementRangeMeters(),
+      FProjectAirDefenseBattleSimulation::MaxConfigurableEngagementRangeMeters());
+  this->Simulation->SetEngagementRangeMeters(ClampedRangeMeters);
+}
+
 void AProjectAirDefenseBattleManager::IncreaseOverallQuality() {
   const UProjectAirDefenseGameUserSettings* Settings =
       UProjectAirDefenseGameUserSettings::GetProjectAirDefenseGameUserSettings();

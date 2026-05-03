@@ -11,6 +11,13 @@ param(
     [int]$MonteCarloSmokeSeed = 20260417,
     [ValidateSet("Disciplined", "Adaptive", "ShieldWall")]
     [string]$MonteCarloSmokeDoctrine = "ShieldWall",
+    [double]$MonteCarloSmokeEngagementRange = 2150.0,
+    [ValidateSet("Auto", "DoctrineDefault", "Single", "Pair", "Ripple")]
+    [string]$MonteCarloSmokeEngagementMode = "Auto",
+    [ValidateSet("Balanced", "Ballistic", "BallisticFirst", "Glide", "GlideFirst", "Cruise", "CruiseFirst", "Impact", "ClosestImpact")]
+    [string]$MonteCarloSmokeThreatPriority = "Balanced",
+    [ValidateSet("Early", "Balanced", "Terminal")]
+    [string]$MonteCarloSmokeFireControl = "Balanced",
     [string]$MonteCarloSmokeReportPath = "benchmark-results/ue5-automation-monte-carlo-smoke.json",
     [string]$MonteCarloSmokeLogPath = "benchmark-results/ue5-automation-monte-carlo-smoke.log"
 )
@@ -78,6 +85,15 @@ function Assert-JsonDoubleInRange([object]$JsonObject, [string]$PropertyName, [d
     return $actual
 }
 
+function Assert-JsonStringNormalizedEquals([object]$JsonObject, [string]$PropertyName, [string]$ExpectedValue) {
+    $actual = Assert-JsonStringNotBlank $JsonObject $PropertyName
+    $normalizedActual = ($actual -replace "[^A-Za-z]", "").ToLowerInvariant()
+    $normalizedExpected = ($ExpectedValue -replace "[^A-Za-z]", "").ToLowerInvariant()
+    if ($normalizedActual -ne $normalizedExpected) {
+        throw "UE5 battle Monte Carlo report field '$PropertyName' was '$actual', expected $ExpectedValue."
+    }
+}
+
 function Assert-BattleMonteCarloReport(
     [string]$ReportFilePath,
     [int]$ExpectedRuns,
@@ -85,7 +101,11 @@ function Assert-BattleMonteCarloReport(
     [double]$ExpectedSeconds,
     [double]$ExpectedStep,
     [int]$ExpectedSeed,
-    [string]$ExpectedDoctrine
+    [string]$ExpectedDoctrine,
+    [double]$ExpectedEngagementRange,
+    [string]$ExpectedEngagementMode,
+    [string]$ExpectedThreatPriority,
+    [string]$ExpectedFireControl
 ) {
     if (-not (Test-Path $ReportFilePath)) {
         throw "UE5 battle Monte Carlo did not create report: $ReportFilePath"
@@ -109,12 +129,23 @@ function Assert-BattleMonteCarloReport(
     Assert-JsonDoubleApproximatelyEquals $report "secondsPerWave" $ExpectedSeconds
     Assert-JsonDoubleApproximatelyEquals $report "stepSeconds" $ExpectedStep
 
-    $doctrine = Assert-JsonStringNotBlank $report "doctrine"
-    $normalizedDoctrine = ($doctrine -replace "[^A-Za-z]", "").ToLowerInvariant()
-    $normalizedExpectedDoctrine = ($ExpectedDoctrine -replace "[^A-Za-z]", "").ToLowerInvariant()
-    if ($normalizedDoctrine -ne $normalizedExpectedDoctrine) {
-        throw "UE5 battle Monte Carlo report field 'doctrine' was '$doctrine', expected $ExpectedDoctrine."
+    Assert-JsonStringNormalizedEquals $report "doctrine" $ExpectedDoctrine
+    Assert-JsonDoubleApproximatelyEquals $report "engagementRangeMeters" $ExpectedEngagementRange 0.000001
+
+    $expectedEngagementModeLabel = switch ($ExpectedEngagementMode) {
+        { $_ -in @("Auto", "DoctrineDefault") } { "AUTO SALVO"; break }
+        default { $ExpectedEngagementMode }
     }
+    $expectedThreatPriorityLabel = switch ($ExpectedThreatPriority) {
+        { $_ -in @("Ballistic", "BallisticFirst") } { "BALLISTIC"; break }
+        { $_ -in @("Glide", "GlideFirst") } { "GLIDE"; break }
+        { $_ -in @("Cruise", "CruiseFirst") } { "CRUISE"; break }
+        { $_ -in @("Impact", "ClosestImpact") } { "IMPACT"; break }
+        default { "BALANCED" }
+    }
+    Assert-JsonStringNormalizedEquals $report "engagementMode" $expectedEngagementModeLabel
+    Assert-JsonStringNormalizedEquals $report "threatPriority" $expectedThreatPriorityLabel
+    Assert-JsonStringNormalizedEquals $report "fireControl" $ExpectedFireControl
 
     Assert-JsonDoubleInRange $report "averageInterceptRate" 0.0 1.0 | Out-Null
     Assert-JsonDoubleInRange $report "averageCityIntegrity" 0.0 100.0 | Out-Null
@@ -210,6 +241,10 @@ $monteCarloArguments = @(
     "-Step=$(Format-InvariantNumber $MonteCarloSmokeStep)",
     "-Seed=$MonteCarloSmokeSeed",
     "-Doctrine=$MonteCarloSmokeDoctrine",
+    "-EngagementRange=$(Format-InvariantNumber $MonteCarloSmokeEngagementRange)",
+    "-EngagementMode=$MonteCarloSmokeEngagementMode",
+    "-ThreatPriority=$MonteCarloSmokeThreatPriority",
+    "-FireControl=$MonteCarloSmokeFireControl",
     "-Report=$monteCarloReportFilePath",
     "-abslog=$monteCarloLogFilePath"
 )
@@ -227,6 +262,10 @@ Assert-BattleMonteCarloReport `
     $MonteCarloSmokeSeconds `
     $MonteCarloSmokeStep `
     $MonteCarloSmokeSeed `
-    $MonteCarloSmokeDoctrine
+    $MonteCarloSmokeDoctrine `
+    $MonteCarloSmokeEngagementRange `
+    $MonteCarloSmokeEngagementMode `
+    $MonteCarloSmokeThreatPriority `
+    $MonteCarloSmokeFireControl
 
 Write-Output "UE5 battle Monte Carlo smoke passed: $monteCarloReportFilePath"

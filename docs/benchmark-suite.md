@@ -63,9 +63,9 @@ UE5-specific scripts write under `benchmark-results/` unless their output paths 
 
 ## UE5 Automation Smoke
 
-`scripts/run-ue5-automation-tests.ps1` runs the UE automation filter first, then runs a bounded `ProjectAirDefenseBattleMonteCarlo` smoke pass by default. The smoke pass uses `-nullrhi`, `5` runs, `1` wave, `12` seconds per wave, a `0.05` second step, seed `20260417`, and the `ShieldWall` doctrine.
+`scripts/run-ue5-automation-tests.ps1` runs the UE automation filter first, then runs a bounded `ProjectAirDefenseBattleMonteCarlo` smoke pass by default. The smoke pass uses `-nullrhi`, `5` runs, `1` wave, `12` seconds per wave, a `0.05` second step, seed `20260417`, the `ShieldWall` doctrine, `2150m` engagement range, `Auto` engagement mode, `Balanced` threat priority, and `Balanced` fire control.
 
-The smoke lane validates that the commandlet produced JSON and that the report contains the expected core contract: non-blank `engine`, `simulation` equal to `FProjectAirDefenseBattleSimulation`, matching `runs`, `waves`, `seed`, `secondsPerWave`, `stepSeconds`, matching doctrine, aggregate metric ranges, non-zero `totalThreatsSpawned`, non-negative totals, and one `runsDetail` entry per run. Use `-SkipBattleMonteCarloSmoke` when intentionally running only the UE automation tests.
+The smoke lane validates that the commandlet produced JSON and that the report contains the expected core contract: non-blank `engine`, `simulation` equal to `FProjectAirDefenseBattleSimulation`, matching `runs`, `waves`, `seed`, `secondsPerWave`, `stepSeconds`, matching doctrine and tactical controls, aggregate metric ranges, non-zero `totalThreatsSpawned`, non-negative totals, and one `runsDetail` entry per run. Use `-SkipBattleMonteCarloSmoke` when intentionally running only the UE automation tests.
 
 Current UE5 balance reference from 2026-05-03 after the engagement-attempt fix:
 
@@ -84,5 +84,6 @@ averageInterceptRate=0.861 averageCityIntegrity=81.38 totalThreatsSpawned=3300 t
 - The Android lint gate keeps a targeted manifest-level suppression for the Android 16 `DiscouragedApi` warning on `screenOrientation`, because this game is a deliberate landscape-only product.
 - For libGDX / SurfaceView rendering, `dumpsys gfxinfo` is supplementary only. Use the runtime `BattleFrame` telemetry windows as the primary frame-health signal.
 - The full UE5 Monte Carlo lane is `scripts/run-ue5-battle-monte-carlo.ps1`; it runs `ProjectAirDefenseBattleMonteCarlo` with `-nullrhi` and uses `FProjectAirDefenseBattleSimulation`, the same deterministic C++ simulation class used by the GUI bridge.
+- UE5 Monte Carlo accepts tactical controls with the same sanitized settings used by the HUD: `-EngagementRange`, `-EngagementMode Auto|Single|Pair|Ripple`, `-ThreatPriority Balanced|Ballistic|Glide|Cruise|Impact`, and `-FireControl Early|Balanced|Terminal`.
 - Baseline Profile generation is intentionally not enabled in this repo-level suite because the standard Android plugin flow creates internal release-like variants that conflict with this project's signing-safety rules.
 - This suite is report-oriented. It is intended to show the current state of performance and engineering health, not only binary pass or fail.

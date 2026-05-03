@@ -29,6 +29,10 @@ public:
   void StartBattleExperience(bool bStartWaveImmediately, bool bOpenSystemsImmediately);
   void RequestStartWave();
   void RequestCycleDoctrine();
+  void RequestCycleEngagementMode();
+  void RequestCycleThreatPriority();
+  void RequestCycleFireControlMode();
+  void RequestSetEngagementRangeMeters(double EngagementRangeMeters);
   void RequestIncreaseQuality();
   void RequestDecreaseQuality();
   void RequestSetOverallQualityLevel(int32 QualityLevel);

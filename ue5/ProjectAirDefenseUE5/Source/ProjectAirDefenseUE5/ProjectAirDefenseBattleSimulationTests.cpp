@@ -401,6 +401,137 @@ bool FProjectAirDefenseBattleShootLookShootTest::RunTest(const FString& Paramete
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+    FProjectAirDefenseBattleTacticalRangeFireControlTest,
+    "ProjectAirDefense.BattleSimulation.TacticalRangeAndFireControl",
+    EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FProjectAirDefenseBattleTacticalRangeFireControlTest::RunTest(const FString& Parameters) {
+  FProjectAirDefenseDefenseSettings EarlyWide =
+      MakeSettings(EProjectAirDefenseDefenseDoctrine::Adaptive);
+  EarlyWide.EngagementRangeMeters =
+      FProjectAirDefenseBattleSimulation::MaxConfigurableEngagementRangeMeters();
+  EarlyWide.FireControlMode = EProjectAirDefenseFireControlMode::Early;
+  EarlyWide.EngagementMode = EProjectAirDefenseEngagementMode::Single;
+
+  FProjectAirDefenseDefenseSettings TerminalNarrow = EarlyWide;
+  TerminalNarrow.EngagementRangeMeters =
+      FProjectAirDefenseBattleSimulation::MinConfigurableEngagementRangeMeters();
+  TerminalNarrow.FireControlMode = EProjectAirDefenseFireControlMode::Terminal;
+
+  constexpr int32 RunCount = 10;
+  int32 EarlyWideLaunches = 0;
+  int32 TerminalNarrowLaunches = 0;
+  for (int32 RunIndex = 0; RunIndex < RunCount; ++RunIndex) {
+    const int32 Seed = 61000 + RunIndex;
+    EarlyWideLaunches +=
+        RunWithOverrideSettings(Seed, EarlyWide, 1, 48.0).InterceptorsLaunched;
+    TerminalNarrowLaunches +=
+        RunWithOverrideSettings(Seed, TerminalNarrow, 1, 48.0).InterceptorsLaunched;
+  }
+
+  TestTrue(TEXT("early wide control creates more launch opportunities"),
+      EarlyWideLaunches > TerminalNarrowLaunches);
+  TestTrue(TEXT("terminal narrow control still launches at least once"),
+      TerminalNarrowLaunches > 0);
+  return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+    FProjectAirDefenseBattleEngagementModeTest,
+    "ProjectAirDefense.BattleSimulation.EngagementModeControlsSalvoBudget",
+    EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FProjectAirDefenseBattleEngagementModeTest::RunTest(const FString& Parameters) {
+  FProjectAirDefenseDefenseSettings Base =
+      MakeSettings(EProjectAirDefenseDefenseDoctrine::ShieldWall);
+  Base.EngagementRangeMeters =
+      FProjectAirDefenseBattleSimulation::MaxConfigurableEngagementRangeMeters();
+  Base.FireControlMode = EProjectAirDefenseFireControlMode::Early;
+  Base.LaunchCooldownSeconds = 0.16;
+  Base.KillProbabilityAtZeroMiss = 0.0;
+  Base.KillProbabilityFuseFloor = 0.0;
+
+  FProjectAirDefenseDefenseSettings Single = Base;
+  Single.EngagementMode = EProjectAirDefenseEngagementMode::Single;
+  FProjectAirDefenseDefenseSettings Pair = Base;
+  Pair.EngagementMode = EProjectAirDefenseEngagementMode::Pair;
+  FProjectAirDefenseDefenseSettings Ripple = Base;
+  Ripple.EngagementMode = EProjectAirDefenseEngagementMode::Ripple;
+
+  constexpr int32 RunCount = 8;
+  int32 SingleLaunches = 0;
+  int32 PairLaunches = 0;
+  int32 RippleLaunches = 0;
+  for (int32 RunIndex = 0; RunIndex < RunCount; ++RunIndex) {
+    const int32 Seed = 62000 + RunIndex;
+    SingleLaunches += RunWithOverrideSettings(Seed, Single, 1, 54.0).InterceptorsLaunched;
+    PairLaunches += RunWithOverrideSettings(Seed, Pair, 1, 54.0).InterceptorsLaunched;
+    RippleLaunches += RunWithOverrideSettings(Seed, Ripple, 1, 54.0).InterceptorsLaunched;
+  }
+
+  TestTrue(TEXT("pair mode launches more interceptors than single mode"),
+      PairLaunches > SingleLaunches);
+  TestTrue(TEXT("ripple mode launches more interceptors than pair mode"),
+      RippleLaunches > PairLaunches);
+  return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+    FProjectAirDefenseBattleThreatPriorityTest,
+    "ProjectAirDefense.BattleSimulation.ThreatPriorityBiasesLaunchMix",
+    EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FProjectAirDefenseBattleThreatPriorityTest::RunTest(const FString& Parameters) {
+  FProjectAirDefenseDefenseSettings Base =
+      MakeSettings(EProjectAirDefenseDefenseDoctrine::Adaptive);
+  Base.EngagementRangeMeters =
+      FProjectAirDefenseBattleSimulation::MaxConfigurableEngagementRangeMeters();
+  Base.FireControlMode = EProjectAirDefenseFireControlMode::Early;
+  Base.EngagementMode = EProjectAirDefenseEngagementMode::Ripple;
+  Base.LaunchCooldownSeconds = 1.4;
+  Base.KillProbabilityAtZeroMiss = 0.0;
+  Base.KillProbabilityFuseFloor = 0.0;
+
+  FProjectAirDefenseDefenseSettings BallisticPriority = Base;
+  BallisticPriority.ThreatPriority = EProjectAirDefenseThreatPriority::BallisticFirst;
+  FProjectAirDefenseDefenseSettings GlidePriority = Base;
+  GlidePriority.ThreatPriority = EProjectAirDefenseThreatPriority::GlideFirst;
+
+  static constexpr int32 BallisticIndex = static_cast<int32>(EProjectAirDefenseThreatType::Ballistic);
+  static constexpr int32 GlideIndex = static_cast<int32>(EProjectAirDefenseThreatType::Glide);
+  constexpr int32 RunCount = 24;
+  int32 BallisticPriorityBallisticTargets = 0;
+  int32 BallisticPriorityGlideTargets = 0;
+  int32 GlidePriorityBallisticTargets = 0;
+  int32 GlidePriorityGlideTargets = 0;
+  for (int32 RunIndex = 0; RunIndex < RunCount; ++RunIndex) {
+    const int32 Seed = 63000 + RunIndex;
+    const FProjectAirDefenseBattleRunSummary BallisticSummary =
+        RunWithOverrideSettings(Seed, BallisticPriority, 1, 32.0);
+    const FProjectAirDefenseBattleRunSummary GlideSummary =
+        RunWithOverrideSettings(Seed, GlidePriority, 1, 32.0);
+    BallisticPriorityBallisticTargets += BallisticSummary.LaunchedAtByType[BallisticIndex];
+    BallisticPriorityGlideTargets += BallisticSummary.LaunchedAtByType[GlideIndex];
+    GlidePriorityBallisticTargets += GlideSummary.LaunchedAtByType[BallisticIndex];
+    GlidePriorityGlideTargets += GlideSummary.LaunchedAtByType[GlideIndex];
+  }
+
+  AddInfo(FString::Printf(
+      TEXT("priority saturated-target counts: ballisticPriority(ballistic=%d glide=%d) glidePriority(ballistic=%d glide=%d)"),
+      BallisticPriorityBallisticTargets,
+      BallisticPriorityGlideTargets,
+      GlidePriorityBallisticTargets,
+      GlidePriorityGlideTargets));
+  TestTrue(
+      TEXT("ballistic priority increases ballistic launcher assignments"),
+      BallisticPriorityBallisticTargets > GlidePriorityBallisticTargets);
+  TestTrue(
+      TEXT("glide priority increases glide launcher assignments"),
+      GlidePriorityGlideTargets > BallisticPriorityGlideTargets);
+  return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
     FProjectAirDefenseBattleDeterminismTest,
     "ProjectAirDefense.BattleSimulation.DeterminismOnSameSeed",
     EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
@@ -488,6 +619,9 @@ bool FProjectAirDefenseBattleSettingsSanitizationTest::RunTest(const FString& Pa
   Bad.KillProbabilityAtZeroMiss = -0.3;
   Bad.KillProbabilityFuseFloor = 5.0;
   Bad.SeekerConeDegrees = -90.0;
+  Bad.EngagementMode = static_cast<EProjectAirDefenseEngagementMode>(255);
+  Bad.ThreatPriority = static_cast<EProjectAirDefenseThreatPriority>(255);
+  Bad.FireControlMode = static_cast<EProjectAirDefenseFireControlMode>(255);
 
   FProjectAirDefenseBattleSimulation Sim(MakeDistrictCells(), MakeLauncherPositions(), Bad, 1);
   const FProjectAirDefenseDefenseSettings& After = Sim.GetSettings();
@@ -511,6 +645,18 @@ bool FProjectAirDefenseBattleSettingsSanitizationTest::RunTest(const FString& Pa
       After.KillProbabilityFuseFloor <= After.KillProbabilityAtZeroMiss);
   TestTrue(TEXT("seeker cone degrees in [1, 179]"),
       After.SeekerConeDegrees >= 1.0 && After.SeekerConeDegrees <= 179.0);
+  TestEqual(
+      TEXT("invalid engagement mode sanitized"),
+      static_cast<int32>(After.EngagementMode),
+      static_cast<int32>(EProjectAirDefenseEngagementMode::DoctrineDefault));
+  TestEqual(
+      TEXT("invalid threat priority sanitized"),
+      static_cast<int32>(After.ThreatPriority),
+      static_cast<int32>(EProjectAirDefenseThreatPriority::Balanced));
+  TestEqual(
+      TEXT("invalid fire control mode sanitized"),
+      static_cast<int32>(After.FireControlMode),
+      static_cast<int32>(EProjectAirDefenseFireControlMode::Balanced));
   return true;
 }
 

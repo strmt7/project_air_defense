@@ -8,6 +8,13 @@ param(
     [int]$Seed = 20260411,
     [ValidateSet("Disciplined", "Adaptive", "ShieldWall")]
     [string]$Doctrine = "ShieldWall",
+    [double]$EngagementRange = 2150.0,
+    [ValidateSet("Auto", "DoctrineDefault", "Single", "Pair", "Ripple")]
+    [string]$EngagementMode = "Auto",
+    [ValidateSet("Balanced", "Ballistic", "BallisticFirst", "Glide", "GlideFirst", "Cruise", "CruiseFirst", "Impact", "ClosestImpact")]
+    [string]$ThreatPriority = "Balanced",
+    [ValidateSet("Early", "Balanced", "Terminal")]
+    [string]$FireControl = "Balanced",
     [string]$ReportPath = "benchmark-results/ue5-battle-monte-carlo.json",
     [string]$LogPath = "benchmark-results/ue5-battle-monte-carlo.log"
 )
@@ -19,6 +26,10 @@ function Resolve-AbsolutePath([string]$PathValue) {
         return $PathValue
     }
     return Join-Path (Get-Location) $PathValue
+}
+
+function Format-InvariantNumber([object]$Value) {
+    return [System.Convert]::ToString($Value, [System.Globalization.CultureInfo]::InvariantCulture)
 }
 
 $projectPath = Resolve-AbsolutePath $Project
@@ -52,10 +63,14 @@ $arguments = @(
     "-run=ProjectAirDefenseBattleMonteCarlo",
     "-Runs=$Runs",
     "-Waves=$Waves",
-    "-Seconds=$Seconds",
-    "-Step=$Step",
+    "-Seconds=$(Format-InvariantNumber $Seconds)",
+    "-Step=$(Format-InvariantNumber $Step)",
     "-Seed=$Seed",
     "-Doctrine=$Doctrine",
+    "-EngagementRange=$(Format-InvariantNumber $EngagementRange)",
+    "-EngagementMode=$EngagementMode",
+    "-ThreatPriority=$ThreatPriority",
+    "-FireControl=$FireControl",
     "-Report=$reportFilePath",
     "-abslog=$logFilePath"
 )

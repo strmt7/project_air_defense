@@ -117,6 +117,31 @@ void AProjectAirDefensePlayerController::RequestCycleDoctrine() {
   }
 }
 
+void AProjectAirDefensePlayerController::RequestCycleEngagementMode() {
+  if (AProjectAirDefenseBattleManager* BattleManager = this->FindBattleManager()) {
+    BattleManager->CycleEngagementMode();
+  }
+}
+
+void AProjectAirDefensePlayerController::RequestCycleThreatPriority() {
+  if (AProjectAirDefenseBattleManager* BattleManager = this->FindBattleManager()) {
+    BattleManager->CycleThreatPriority();
+  }
+}
+
+void AProjectAirDefensePlayerController::RequestCycleFireControlMode() {
+  if (AProjectAirDefenseBattleManager* BattleManager = this->FindBattleManager()) {
+    BattleManager->CycleFireControlMode();
+  }
+}
+
+void AProjectAirDefensePlayerController::RequestSetEngagementRangeMeters(
+    double EngagementRangeMeters) {
+  if (AProjectAirDefenseBattleManager* BattleManager = this->FindBattleManager()) {
+    BattleManager->SetEngagementRangeMeters(EngagementRangeMeters);
+  }
+}
+
 void AProjectAirDefensePlayerController::RequestIncreaseQuality() {
   if (AProjectAirDefenseBattleManager* BattleManager = this->FindBattleManager()) {
     BattleManager->IncreaseOverallQuality();

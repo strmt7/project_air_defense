@@ -33,6 +33,15 @@ private:
   void HandleDoctrinePressed();
 
   UFUNCTION()
+  void HandleEngagementModePressed();
+
+  UFUNCTION()
+  void HandleThreatPriorityPressed();
+
+  UFUNCTION()
+  void HandleFireControlPressed();
+
+  UFUNCTION()
   void HandleWavePressed();
 
   UFUNCTION()
@@ -64,6 +73,9 @@ private:
 
   UFUNCTION()
   void HandleOverallQualitySliderChanged(float Value);
+
+  UFUNCTION()
+  void HandleEngagementRangeSliderChanged(float Value);
 
   UFUNCTION()
   void HandleAaSliderChanged(float Value);
@@ -174,6 +186,15 @@ private:
   TObjectPtr<UTextBlock> DoctrineButtonText;
 
   UPROPERTY(Transient)
+  TObjectPtr<UTextBlock> EngagementModeButtonText;
+
+  UPROPERTY(Transient)
+  TObjectPtr<UTextBlock> ThreatPriorityButtonText;
+
+  UPROPERTY(Transient)
+  TObjectPtr<UTextBlock> FireControlButtonText;
+
+  UPROPERTY(Transient)
   TObjectPtr<UTextBlock> WaveButtonText;
 
   UPROPERTY(Transient)
@@ -213,6 +234,9 @@ private:
   TObjectPtr<UTextBlock> QualityValueText;
 
   UPROPERTY(Transient)
+  TObjectPtr<UTextBlock> EngagementRangeValueText;
+
+  UPROPERTY(Transient)
   TObjectPtr<UTextBlock> AaValueText;
 
   UPROPERTY(Transient)
@@ -244,6 +268,9 @@ private:
 
   UPROPERTY(Transient)
   TObjectPtr<USlider> OverallQualitySlider;
+
+  UPROPERTY(Transient)
+  TObjectPtr<USlider> EngagementRangeSlider;
 
   UPROPERTY(Transient)
   TObjectPtr<USlider> AaSlider;

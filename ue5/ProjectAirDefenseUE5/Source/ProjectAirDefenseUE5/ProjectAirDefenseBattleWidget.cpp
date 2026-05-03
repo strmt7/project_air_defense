@@ -18,6 +18,7 @@
 #include "Components/VerticalBoxSlot.h"
 #include "Brushes/SlateRoundedBoxBrush.h"
 #include "ProjectAirDefenseBattleManager.h"
+#include "ProjectAirDefenseBattleSimulation.h"
 #include "ProjectAirDefenseGameUserSettings.h"
 #include "ProjectAirDefensePlayerController.h"
 #include "ProjectAirDefenseRadarWidget.h"
@@ -272,20 +273,37 @@ void UProjectAirDefenseBattleWidget::RefreshFromRuntime() {
   if (this->DoctrineButtonText != nullptr) {
     this->DoctrineButtonText->SetText(FText::FromString(ProjectAirDefenseDoctrineLabel(Snapshot.Doctrine)));
   }
+  if (this->EngagementModeButtonText != nullptr) {
+    this->EngagementModeButtonText->SetText(FText::FromString(ProjectAirDefenseEngagementModeLabel(Snapshot.EngagementMode)));
+  }
+  if (this->ThreatPriorityButtonText != nullptr) {
+    this->ThreatPriorityButtonText->SetText(FText::FromString(
+        FString::Printf(TEXT("PRI %s"), *ProjectAirDefenseThreatPriorityLabel(Snapshot.ThreatPriority))));
+  }
+  if (this->FireControlButtonText != nullptr) {
+    this->FireControlButtonText->SetText(FText::FromString(
+        FString::Printf(TEXT("CTRL %s"), *ProjectAirDefenseFireControlModeLabel(Snapshot.FireControlMode))));
+  }
   if (this->WaveButtonText != nullptr) {
     this->WaveButtonText->SetText(
         FText::FromString(Snapshot.bWaveInProgress ? TEXT("LIVE") : TEXT("ENGAGE")));
   }
   if (this->TacticsSummaryText != nullptr) {
     this->TacticsSummaryText->SetText(FText::FromString(FString::Printf(
-        TEXT("LIVE %d | TRACK %d | CITY %d%%"),
-        Snapshot.VisibleThreats,
-        Snapshot.TrackedThreats,
-        FMath::RoundToInt(Snapshot.CityIntegrity))));
+        TEXT("RNG %dm | FUSE %dm | TRACK %d"),
+        FMath::RoundToInt(Snapshot.EffectiveRangeMeters),
+        FMath::RoundToInt(Snapshot.EffectiveFuseMeters),
+        Snapshot.TrackedThreats)));
+  }
+  if (this->EngagementRangeValueText != nullptr) {
+    this->EngagementRangeValueText->SetText(FText::FromString(FString::Printf(
+        TEXT("%.1f KM"),
+        Snapshot.EffectiveRangeMeters / 1000.0)));
   }
   if (this->TacticsThreatText != nullptr) {
     this->TacticsThreatText->SetText(FText::FromString(FString::Printf(
-        TEXT("B %d | G %d | C %d"),
+        TEXT("LIVE %d | B %d | G %d | C %d"),
+        Snapshot.VisibleThreats,
         Snapshot.BallisticThreats,
         Snapshot.GlideThreats,
         Snapshot.CruiseThreats)));
@@ -299,6 +317,10 @@ void UProjectAirDefenseBattleWidget::RefreshFromRuntime() {
 
   const bool bWasRefreshingControls = this->bRefreshingControls;
   this->bRefreshingControls = true;
+
+  if (this->EngagementRangeSlider != nullptr) {
+    this->EngagementRangeSlider->SetValue(static_cast<float>(Snapshot.EngagementRangeMeters));
+  }
 
   if (Controller != nullptr) {
     const double SolarTimeHours = Controller->GetSolarTimeHours();
@@ -448,6 +470,27 @@ void UProjectAirDefenseBattleWidget::HandleDoctrinePressed() {
   }
 }
 
+void UProjectAirDefenseBattleWidget::HandleEngagementModePressed() {
+  if (AProjectAirDefensePlayerController* Controller = this->ResolveController()) {
+    Controller->RequestCycleEngagementMode();
+    this->RefreshFromRuntime();
+  }
+}
+
+void UProjectAirDefenseBattleWidget::HandleThreatPriorityPressed() {
+  if (AProjectAirDefensePlayerController* Controller = this->ResolveController()) {
+    Controller->RequestCycleThreatPriority();
+    this->RefreshFromRuntime();
+  }
+}
+
+void UProjectAirDefenseBattleWidget::HandleFireControlPressed() {
+  if (AProjectAirDefensePlayerController* Controller = this->ResolveController()) {
+    Controller->RequestCycleFireControlMode();
+    this->RefreshFromRuntime();
+  }
+}
+
 void UProjectAirDefenseBattleWidget::HandleWavePressed() {
   if (AProjectAirDefensePlayerController* Controller = this->ResolveController()) {
     Controller->RequestStartWave();
@@ -514,6 +557,16 @@ void UProjectAirDefenseBattleWidget::HandleOverallQualitySliderChanged(float Val
   }
   if (AProjectAirDefensePlayerController* Controller = this->ResolveController()) {
     Controller->RequestSetOverallQualityLevel(SliderQualityLevel(Value));
+    this->RefreshFromRuntime();
+  }
+}
+
+void UProjectAirDefenseBattleWidget::HandleEngagementRangeSliderChanged(float Value) {
+  if (this->bRefreshingControls) {
+    return;
+  }
+  if (AProjectAirDefensePlayerController* Controller = this->ResolveController()) {
+    Controller->RequestSetEngagementRangeMeters(static_cast<double>(Value));
     this->RefreshFromRuntime();
   }
 }
@@ -901,16 +954,76 @@ void UProjectAirDefenseBattleWidget::BuildWidgetTree() {
   if (UVerticalBoxSlot* VerticalSlot = TacticsPanel->AddChildToVerticalBox(this->TacticsThreatText)) {
     VerticalSlot->SetPadding(FMargin(0.0f, 0.0f, 0.0f, 12.0f));
   }
-  UButton* DrawerWaveButton =
-      CreateButton(this->WidgetTree, TEXT("ENGAGE"), FLinearColor(0.17f, 0.16f, 0.08f, 0.98f), WaveLabel, 20);
-  DrawerWaveButton->OnClicked.AddDynamic(this, &UProjectAirDefenseBattleWidget::HandleWavePressed);
-  if (UVerticalBoxSlot* VerticalSlot = TacticsPanel->AddChildToVerticalBox(DrawerWaveButton)) {
-    VerticalSlot->SetPadding(FMargin(0.0f, 0.0f, 0.0f, ButtonGap));
+
+  UVerticalBox* RangeStack = this->WidgetTree->ConstructWidget<UVerticalBox>();
+  if (UVerticalBoxSlot* RangeStackSlot = TacticsPanel->AddChildToVerticalBox(RangeStack)) {
+    RangeStackSlot->SetPadding(FMargin(0.0f, 0.0f, 0.0f, 12.0f));
   }
+  UHorizontalBox* RangeHeader = this->WidgetTree->ConstructWidget<UHorizontalBox>();
+  RangeStack->AddChildToVerticalBox(RangeHeader);
+  if (UHorizontalBoxSlot* LabelSlot = RangeHeader->AddChildToHorizontalBox(CreateText(
+          this->WidgetTree,
+          TEXT("RANGE"),
+          17,
+          FLinearColor(0.75f, 0.86f, 0.96f, 1.0f)))) {
+    LabelSlot->SetSize(ESlateSizeRule::Fill);
+  }
+  this->EngagementRangeValueText =
+      CreateText(this->WidgetTree, TEXT("2.2 KM"), 17, FLinearColor(0.98f, 0.82f, 0.46f, 1.0f), ETextJustify::Right);
+  RangeHeader->AddChildToHorizontalBox(this->EngagementRangeValueText);
+  this->EngagementRangeSlider = this->WidgetTree->ConstructWidget<USlider>();
+  this->EngagementRangeSlider->SetMinValue(static_cast<float>(
+      FProjectAirDefenseBattleSimulation::MinConfigurableEngagementRangeMeters()));
+  this->EngagementRangeSlider->SetMaxValue(static_cast<float>(
+      FProjectAirDefenseBattleSimulation::MaxConfigurableEngagementRangeMeters()));
+  this->EngagementRangeSlider->SetStepSize(50.0f);
+  this->EngagementRangeSlider->SetIndentHandle(false);
+  this->EngagementRangeSlider->OnValueChanged.AddDynamic(
+      this, &UProjectAirDefenseBattleWidget::HandleEngagementRangeSliderChanged);
+  if (UVerticalBoxSlot* SliderSlot = RangeStack->AddChildToVerticalBox(this->EngagementRangeSlider)) {
+    SliderSlot->SetPadding(FMargin(0.0f, 4.0f, 0.0f, 0.0f));
+  }
+
+  UUniformGridPanel* TacticsGrid = this->WidgetTree->ConstructWidget<UUniformGridPanel>();
+  TacticsGrid->SetMinDesiredSlotWidth(132.0f);
+  TacticsGrid->SetMinDesiredSlotHeight(50.0f);
+  TacticsPanel->AddChildToVerticalBox(TacticsGrid);
+
+  auto AddTacticsButton = [this, TacticsGrid](
+                              int32 Row,
+                              int32 Column,
+                              const FString& Label,
+                              const FLinearColor& Color,
+                              UTextBlock*& LabelText) -> UButton* {
+    UButton* Button = CreateButton(this->WidgetTree, Label, Color, LabelText, 18);
+    if (UUniformGridSlot* Slot = TacticsGrid->AddChildToUniformGrid(Button, Row, Column)) {
+      Slot->SetHorizontalAlignment(HAlign_Fill);
+      Slot->SetVerticalAlignment(VAlign_Fill);
+    }
+    return Button;
+  };
+
+  UButton* DrawerWaveButton =
+      AddTacticsButton(0, 0, TEXT("ENGAGE"), FLinearColor(0.17f, 0.16f, 0.08f, 0.98f), WaveLabel);
+  DrawerWaveButton->OnClicked.AddDynamic(this, &UProjectAirDefenseBattleWidget::HandleWavePressed);
   UButton* DrawerDoctrineButton =
-      CreateButton(this->WidgetTree, TEXT("SHIELD WALL"), FLinearColor(0.11f, 0.10f, 0.18f, 0.96f), DoctrineLabel, 20);
+      AddTacticsButton(0, 1, TEXT("SHIELD WALL"), FLinearColor(0.11f, 0.10f, 0.18f, 0.96f), DoctrineLabel);
   DrawerDoctrineButton->OnClicked.AddDynamic(this, &UProjectAirDefenseBattleWidget::HandleDoctrinePressed);
-  TacticsPanel->AddChildToVerticalBox(DrawerDoctrineButton);
+  UTextBlock* EngagementModeLabel = nullptr;
+  UButton* EngagementModeButton =
+      AddTacticsButton(1, 0, TEXT("AUTO SALVO"), FLinearColor(0.10f, 0.15f, 0.19f, 0.96f), EngagementModeLabel);
+  this->EngagementModeButtonText = EngagementModeLabel;
+  EngagementModeButton->OnClicked.AddDynamic(this, &UProjectAirDefenseBattleWidget::HandleEngagementModePressed);
+  UTextBlock* ThreatPriorityLabel = nullptr;
+  UButton* ThreatPriorityButton =
+      AddTacticsButton(1, 1, TEXT("PRI BALANCED"), FLinearColor(0.13f, 0.11f, 0.18f, 0.96f), ThreatPriorityLabel);
+  this->ThreatPriorityButtonText = ThreatPriorityLabel;
+  ThreatPriorityButton->OnClicked.AddDynamic(this, &UProjectAirDefenseBattleWidget::HandleThreatPriorityPressed);
+  UTextBlock* FireControlLabel = nullptr;
+  UButton* FireControlButton =
+      AddTacticsButton(2, 0, TEXT("CTRL BALANCED"), FLinearColor(0.08f, 0.15f, 0.22f, 0.96f), FireControlLabel);
+  this->FireControlButtonText = FireControlLabel;
+  FireControlButton->OnClicked.AddDynamic(this, &UProjectAirDefenseBattleWidget::HandleFireControlPressed);
 
   UVerticalBox* CameraPanel = BuildDrawerPanel(TEXT("VIEW"), FLinearColor(0.26f, 0.86f, 0.98f, 1.0f));
   UUniformGridPanel* CameraGrid = this->WidgetTree->ConstructWidget<UUniformGridPanel>();

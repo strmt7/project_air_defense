@@ -75,6 +75,14 @@ struct FDoctrineProfile {
   double TurnRate = 4.4;
 };
 
+struct FFireControlProfile {
+  double EngagementRangeBiasMeters = 0.0;
+  double LaunchCadenceMultiplier = 1.0;
+  double RecommitWindowMultiplier = 1.0;
+  double TimeUrgencyMultiplier = 1.0;
+  double TerminalBonusMultiplier = 1.0;
+};
+
 struct FMotionSample {
   FVector3d PositionMeters = FVector3d::ZeroVector;
   FVector3d VelocityMetersPerSecond = FVector3d::ZeroVector;
@@ -122,6 +130,18 @@ FDoctrineProfile DoctrineProfile(EProjectAirDefenseDefenseDoctrine Doctrine) {
   return {1.0, 1.0, 0.0, 0.0, 1, 4.5, 4.4};
 }
 
+FFireControlProfile FireControlProfile(EProjectAirDefenseFireControlMode FireControlMode) {
+  switch (FireControlMode) {
+  case EProjectAirDefenseFireControlMode::Early:
+    return {240.0, 0.92, 1.35, 0.86, 0.90};
+  case EProjectAirDefenseFireControlMode::Balanced:
+    return {0.0, 1.0, 1.0, 1.0, 1.0};
+  case EProjectAirDefenseFireControlMode::Terminal:
+    return {-220.0, 1.08, 0.68, 1.20, 1.35};
+  }
+  return {0.0, 1.0, 1.0, 1.0, 1.0};
+}
+
 double ClampScalar(double Value, double Min, double Max) {
   return FMath::Clamp(Value, Min, Max);
 }
@@ -141,16 +161,20 @@ TPair<double, double> ThreatSpeedBandForWave(int32 Wave) {
 
 double EffectiveEngagementRange(const FProjectAirDefenseDefenseSettings& Settings) {
   const FDoctrineProfile Profile = DoctrineProfile(Settings.Doctrine);
+  const FFireControlProfile FireProfile = FireControlProfile(Settings.FireControlMode);
   return ClampScalar(
-      Settings.EngagementRangeMeters + Profile.EngagementRangeBiasMeters,
+      Settings.EngagementRangeMeters + Profile.EngagementRangeBiasMeters +
+          FireProfile.EngagementRangeBiasMeters,
       EngagementRangeMinMeters,
       EngagementRangeMaxMeters);
 }
 
 double EffectiveLaunchCooldown(const FProjectAirDefenseDefenseSettings& Settings) {
   const FDoctrineProfile Profile = DoctrineProfile(Settings.Doctrine);
+  const FFireControlProfile FireProfile = FireControlProfile(Settings.FireControlMode);
   return ClampScalar(
-      Settings.LaunchCooldownSeconds * Profile.LaunchCadenceMultiplier,
+      Settings.LaunchCooldownSeconds * Profile.LaunchCadenceMultiplier *
+          FireProfile.LaunchCadenceMultiplier,
       LaunchCooldownMinSeconds,
       LaunchCooldownMaxSeconds);
 }
@@ -173,6 +197,25 @@ double EffectiveBlastRadius(const FProjectAirDefenseDefenseSettings& Settings) {
 
 double EffectiveTurnRate(const FProjectAirDefenseDefenseSettings& Settings) {
   return DoctrineProfile(Settings.Doctrine).TurnRate;
+}
+
+double EffectiveRecommitWindowSeconds(const FProjectAirDefenseDefenseSettings& Settings) {
+  return DoctrineProfile(Settings.Doctrine).RecommitWindowSeconds *
+         FireControlProfile(Settings.FireControlMode).RecommitWindowMultiplier;
+}
+
+int32 MaxAssignmentsPerThreat(const FProjectAirDefenseDefenseSettings& Settings) {
+  switch (Settings.EngagementMode) {
+  case EProjectAirDefenseEngagementMode::DoctrineDefault:
+    return DoctrineProfile(Settings.Doctrine).MaxAssignmentsPerThreat;
+  case EProjectAirDefenseEngagementMode::Single:
+    return 1;
+  case EProjectAirDefenseEngagementMode::Pair:
+    return 2;
+  case EProjectAirDefenseEngagementMode::Ripple:
+    return 3;
+  }
+  return DoctrineProfile(Settings.Doctrine).MaxAssignmentsPerThreat;
 }
 
 double EstimateTimeToImpact(const FProjectAirDefenseThreatSnapshot& Threat) {
@@ -198,11 +241,34 @@ double EstimateTimeToImpact(const FProjectAirDefenseThreatSnapshot& Threat) {
       MaximumTrackTimeToImpact);
 }
 
+double PriorityScoreBias(
+    EProjectAirDefenseThreatType ThreatType,
+    EProjectAirDefenseThreatPriority ThreatPriority,
+    double TimeToImpactSeconds) {
+  switch (ThreatPriority) {
+  case EProjectAirDefenseThreatPriority::Balanced:
+    return 0.0;
+  case EProjectAirDefenseThreatPriority::BallisticFirst:
+    return ThreatType == EProjectAirDefenseThreatType::Ballistic ? 28.0 : 0.0;
+  case EProjectAirDefenseThreatPriority::GlideFirst:
+    return ThreatType == EProjectAirDefenseThreatType::Glide ? 28.0 : 0.0;
+  case EProjectAirDefenseThreatPriority::CruiseFirst:
+    return ThreatType == EProjectAirDefenseThreatType::Cruise ? 28.0 : 0.0;
+  case EProjectAirDefenseThreatPriority::ClosestImpact:
+    return FMath::Clamp((TimeUrgencyReference - TimeToImpactSeconds) * 1.6, -2.0, 18.0);
+  }
+  return 0.0;
+}
+
 double ScoreThreat(
     const FProjectAirDefenseThreatSnapshot& Threat,
+    EProjectAirDefenseThreatType ThreatType,
     double EngagementRangeMeters,
     double TimeToImpactSeconds,
-    int32 AssignedCount) {
+    int32 AssignedCount,
+    EProjectAirDefenseThreatPriority ThreatPriority,
+    EProjectAirDefenseFireControlMode FireControlMode) {
+  const FFireControlProfile FireProfile = FireControlProfile(FireControlMode);
   const double NormalizedDistance =
       1.0 - FMath::Clamp(Threat.PositionMeters.Length() / EngagementRangeMeters, 0.0, 1.0);
   const double CenterlineBias =
@@ -214,10 +280,12 @@ double ScoreThreat(
   const double TerminalBonus =
       Threat.PositionMeters.Y >= TerminalTrackThresholdMeters ? ThreatAssessmentWeights.TerminalBonus : 0.0;
 
-  return TimeUrgency * ThreatAssessmentWeights.TimeUrgency +
+  return TimeUrgency * ThreatAssessmentWeights.TimeUrgency * FireProfile.TimeUrgencyMultiplier +
          NormalizedDistance * ThreatAssessmentWeights.NormalizedDistance +
          CenterlineBias * ThreatAssessmentWeights.CenterlineBias +
-         AltitudeUrgency * ThreatAssessmentWeights.AltitudeUrgency + TerminalBonus -
+         AltitudeUrgency * ThreatAssessmentWeights.AltitudeUrgency +
+         TerminalBonus * FireProfile.TerminalBonusMultiplier +
+         PriorityScoreBias(ThreatType, ThreatPriority, TimeToImpactSeconds) -
          static_cast<double>(AssignedCount) * ThreatAssessmentWeights.AssignmentPenalty;
 }
 
@@ -552,6 +620,90 @@ FString ProjectAirDefenseDoctrineSummary(EProjectAirDefenseDefenseDoctrine Doctr
   return TEXT("Balanced fire with late-track support.");
 }
 
+FString ProjectAirDefenseEngagementModeLabel(EProjectAirDefenseEngagementMode EngagementMode) {
+  switch (EngagementMode) {
+  case EProjectAirDefenseEngagementMode::DoctrineDefault:
+    return TEXT("AUTO SALVO");
+  case EProjectAirDefenseEngagementMode::Single:
+    return TEXT("SINGLE");
+  case EProjectAirDefenseEngagementMode::Pair:
+    return TEXT("PAIR");
+  case EProjectAirDefenseEngagementMode::Ripple:
+    return TEXT("RIPPLE");
+  }
+  return TEXT("AUTO SALVO");
+}
+
+FString ProjectAirDefenseEngagementModeSummary(EProjectAirDefenseEngagementMode EngagementMode) {
+  switch (EngagementMode) {
+  case EProjectAirDefenseEngagementMode::DoctrineDefault:
+    return TEXT("Doctrine chooses salvo count.");
+  case EProjectAirDefenseEngagementMode::Single:
+    return TEXT("One interceptor per threat.");
+  case EProjectAirDefenseEngagementMode::Pair:
+    return TEXT("Two-shot shoot-look-shoot.");
+  case EProjectAirDefenseEngagementMode::Ripple:
+    return TEXT("Up to three interceptors per threat.");
+  }
+  return TEXT("Doctrine chooses salvo count.");
+}
+
+FString ProjectAirDefenseThreatPriorityLabel(EProjectAirDefenseThreatPriority ThreatPriority) {
+  switch (ThreatPriority) {
+  case EProjectAirDefenseThreatPriority::Balanced:
+    return TEXT("BALANCED");
+  case EProjectAirDefenseThreatPriority::BallisticFirst:
+    return TEXT("BALLISTIC");
+  case EProjectAirDefenseThreatPriority::GlideFirst:
+    return TEXT("GLIDE");
+  case EProjectAirDefenseThreatPriority::CruiseFirst:
+    return TEXT("CRUISE");
+  case EProjectAirDefenseThreatPriority::ClosestImpact:
+    return TEXT("IMPACT");
+  }
+  return TEXT("BALANCED");
+}
+
+FString ProjectAirDefenseThreatPrioritySummary(EProjectAirDefenseThreatPriority ThreatPriority) {
+  switch (ThreatPriority) {
+  case EProjectAirDefenseThreatPriority::Balanced:
+    return TEXT("Score every threat by urgency.");
+  case EProjectAirDefenseThreatPriority::BallisticFirst:
+    return TEXT("Favor steep ballistic shots.");
+  case EProjectAirDefenseThreatPriority::GlideFirst:
+    return TEXT("Favor maneuvering glide threats.");
+  case EProjectAirDefenseThreatPriority::CruiseFirst:
+    return TEXT("Favor low cruise threats.");
+  case EProjectAirDefenseThreatPriority::ClosestImpact:
+    return TEXT("Favor shortest time to impact.");
+  }
+  return TEXT("Score every threat by urgency.");
+}
+
+FString ProjectAirDefenseFireControlModeLabel(EProjectAirDefenseFireControlMode FireControlMode) {
+  switch (FireControlMode) {
+  case EProjectAirDefenseFireControlMode::Early:
+    return TEXT("EARLY");
+  case EProjectAirDefenseFireControlMode::Balanced:
+    return TEXT("BALANCED");
+  case EProjectAirDefenseFireControlMode::Terminal:
+    return TEXT("TERMINAL");
+  }
+  return TEXT("BALANCED");
+}
+
+FString ProjectAirDefenseFireControlModeSummary(EProjectAirDefenseFireControlMode FireControlMode) {
+  switch (FireControlMode) {
+  case EProjectAirDefenseFireControlMode::Early:
+    return TEXT("Engage earlier with wider tracks.");
+  case EProjectAirDefenseFireControlMode::Balanced:
+    return TEXT("Balanced launch timing.");
+  case EProjectAirDefenseFireControlMode::Terminal:
+    return TEXT("Hold fire for late certainty.");
+  }
+  return TEXT("Balanced launch timing.");
+}
+
 FString ProjectAirDefenseThreatTypeLabel(EProjectAirDefenseThreatType ThreatType) {
   switch (ThreatType) {
   case EProjectAirDefenseThreatType::Ballistic:
@@ -604,6 +756,14 @@ FProjectAirDefenseBattleSimulation::FProjectAirDefenseBattleSimulation(
   this->DefenseOriginMeters = Sum / static_cast<double>(this->LauncherPositionsMeters.Num());
 }
 
+double FProjectAirDefenseBattleSimulation::MinConfigurableEngagementRangeMeters() {
+  return EngagementRangeMinMeters;
+}
+
+double FProjectAirDefenseBattleSimulation::MaxConfigurableEngagementRangeMeters() {
+  return EngagementRangeMaxMeters;
+}
+
 bool FProjectAirDefenseBattleSimulation::StartNextWave() {
   if (this->bWaveInProgress || this->bGameOver) {
     return false;
@@ -617,6 +777,31 @@ bool FProjectAirDefenseBattleSimulation::StartNextWave() {
 
 void FProjectAirDefenseBattleSimulation::SetDoctrine(EProjectAirDefenseDefenseDoctrine InDoctrine) {
   this->Settings.Doctrine = InDoctrine;
+  this->Settings.Sanitize();
+}
+
+void FProjectAirDefenseBattleSimulation::SetEngagementMode(
+    EProjectAirDefenseEngagementMode InEngagementMode) {
+  this->Settings.EngagementMode = InEngagementMode;
+  this->Settings.Sanitize();
+}
+
+void FProjectAirDefenseBattleSimulation::SetThreatPriority(
+    EProjectAirDefenseThreatPriority InThreatPriority) {
+  this->Settings.ThreatPriority = InThreatPriority;
+  this->Settings.Sanitize();
+}
+
+void FProjectAirDefenseBattleSimulation::SetFireControlMode(
+    EProjectAirDefenseFireControlMode InFireControlMode) {
+  this->Settings.FireControlMode = InFireControlMode;
+  this->Settings.Sanitize();
+}
+
+void FProjectAirDefenseBattleSimulation::SetEngagementRangeMeters(
+    double InEngagementRangeMeters) {
+  this->Settings.EngagementRangeMeters = InEngagementRangeMeters;
+  this->Settings.Sanitize();
 }
 
 FProjectAirDefenseStepEvents FProjectAirDefenseBattleSimulation::Step(double DeltaSeconds) {
@@ -688,9 +873,13 @@ FProjectAirDefenseRuntimeSnapshot FProjectAirDefenseBattleSimulation::BuildRunti
       break;
     }
   }
+  Snapshot.EngagementRangeMeters = this->Settings.EngagementRangeMeters;
   Snapshot.EffectiveRangeMeters = EffectiveEngagementRange(this->Settings);
   Snapshot.EffectiveFuseMeters = EffectiveBlastRadius(this->Settings);
   Snapshot.Doctrine = this->Settings.Doctrine;
+  Snapshot.EngagementMode = this->Settings.EngagementMode;
+  Snapshot.ThreatPriority = this->Settings.ThreatPriority;
+  Snapshot.FireControlMode = this->Settings.FireControlMode;
   return Snapshot;
 }
 
@@ -717,8 +906,15 @@ FProjectAirDefenseBattleSimulation::BuildRunSummary(int32 RunIndex, double Simul
   Summary.InterceptsInTerminalPhase = this->TotalInterceptsInTerminalPhase;
   Summary.MissDistanceSumMeters = this->TotalMissDistanceMetersSum;
   Summary.MissDistanceSampleCount = this->TotalMissDistanceSamples;
+  Summary.EngagementRangeMeters = this->Settings.EngagementRangeMeters;
+  Summary.EffectiveRangeMeters = EffectiveEngagementRange(this->Settings);
+  Summary.Doctrine = this->Settings.Doctrine;
+  Summary.EngagementMode = this->Settings.EngagementMode;
+  Summary.ThreatPriority = this->Settings.ThreatPriority;
+  Summary.FireControlMode = this->Settings.FireControlMode;
   for (int32 TypeIndex = 0; TypeIndex < ThreatTypeCount; ++TypeIndex) {
     Summary.SpawnedByType[TypeIndex] = this->TotalSpawnedByType[TypeIndex];
+    Summary.LaunchedAtByType[TypeIndex] = this->TotalLaunchedAtByType[TypeIndex];
     Summary.InterceptedByType[TypeIndex] = this->TotalInterceptedByType[TypeIndex];
     Summary.ImpactedByType[TypeIndex] = this->TotalImpactedByType[TypeIndex];
   }
@@ -1128,7 +1324,8 @@ FProjectAirDefenseThreatState* FProjectAirDefenseBattleSimulation::SelectNextThr
 
   FProjectAirDefenseThreatState* BestThreat = nullptr;
   double BestScore = -TNumericLimits<double>::Max();
-  const FDoctrineProfile Profile = DoctrineProfile(this->Settings.Doctrine);
+  const int32 MaxAssignments = MaxAssignmentsPerThreat(this->Settings);
+  const double RecommitWindowSeconds = EffectiveRecommitWindowSeconds(this->Settings);
   for (FProjectAirDefenseThreatState& Threat : this->Threats) {
     const FVector3d HorizontalThreat(Threat.PositionMeters.X, Threat.PositionMeters.Y, 0.0);
     if (!Threat.bIsTracked ||
@@ -1140,7 +1337,7 @@ FProjectAirDefenseThreatState* FProjectAirDefenseBattleSimulation::SelectNextThr
     const int32 AttemptedCount = this->ThreatEngagementAttempts.Contains(Threat.Id)
                                      ? this->ThreatEngagementAttempts[Threat.Id]
                                      : 0;
-    if (AttemptedCount >= Profile.MaxAssignmentsPerThreat) {
+    if (AttemptedCount >= MaxAssignments) {
       continue;
     }
 
@@ -1152,12 +1349,19 @@ FProjectAirDefenseThreatState* FProjectAirDefenseBattleSimulation::SelectNextThr
     };
     const double TimeToImpactSeconds = EstimateTimeToImpact(Snapshot);
     if ((AssignedCount > 0 || AttemptedCount > 0) &&
-        TimeToImpactSeconds > Profile.RecommitWindowSeconds) {
+        TimeToImpactSeconds > RecommitWindowSeconds) {
       continue;
     }
 
     const double ThreatScore =
-        ScoreThreat(Snapshot, EngagementRangeMeters, TimeToImpactSeconds, AssignedCount);
+        ScoreThreat(
+            Snapshot,
+            Threat.ThreatType,
+            EngagementRangeMeters,
+            TimeToImpactSeconds,
+            AssignedCount,
+            this->Settings.ThreatPriority,
+            this->Settings.FireControlMode);
     if (BestThreat == nullptr || ThreatScore > BestScore ||
         (FMath::IsNearlyEqual(ThreatScore, BestScore) &&
          ThreatHasPriorityOver(Threat.PositionMeters, BestThreat->PositionMeters))) {
@@ -1211,6 +1415,10 @@ FProjectAirDefenseBattleSimulation::LaunchInterceptor(
   int32& AttemptCount = this->ThreatEngagementAttempts.FindOrAdd(TargetThreat.Id);
   ++AttemptCount;
   ++this->TotalInterceptorsLaunched;
+  const int32 TargetTypeIndex = static_cast<int32>(TargetThreat.ThreatType);
+  if (TargetTypeIndex >= 0 && TargetTypeIndex < ThreatTypeCount) {
+    ++this->TotalLaunchedAtByType[TargetTypeIndex];
+  }
   this->LauncherReadyInSeconds[LauncherIndex] = EffectiveLauncherReload(this->Settings);
 
   FProjectAirDefenseInterceptorLaunchEvent LaunchEvent;

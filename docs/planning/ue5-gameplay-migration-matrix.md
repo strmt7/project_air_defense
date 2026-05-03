@@ -23,6 +23,7 @@ This file is the authoritative checklist for porting the actual game from the le
 | --- | --- | --- | --- | --- |
 | Deterministic battle simulation core | `BattleSimulation.kt` | `ProjectAirDefenseBattleSimulation.*` | implemented, verified | UE automation tests |
 | Defense doctrines and tuning | `BattleLogic.kt` | `ProjectAirDefenseBattleSimulation.*` | implemented, verified | doctrine comparison + shoot-look-shoot tests |
+| Player tactical controls: range, salvo count, threat priority, fire-control timing | `BattleHudController.kt` + `BattleLogic.kt` | `ProjectAirDefenseBattleSimulation.*` + `ProjectAirDefenseBattleWidget.*` + `ProjectAirDefenseBattleMonteCarloCommandlet.*` | implemented, verified | tactical range/fire-control, engagement-mode, priority-bias tests + Monte Carlo JSON contract |
 | Wave spawning and accounting | `BattleSimulation.kt` | `ProjectAirDefenseBattleSimulation.*` | implemented, verified | consistency + seeded tests |
 | Interceptor lead solve, fuse check, and attempt cap | `BattleLogic.kt` | `ProjectAirDefenseBattleSimulation.*` | implemented, verified | intercept, seeker-cone, and attempt-limit tests |
 | Threat impact and city damage | `BattleSimulation.kt` | `ProjectAirDefenseBattleSimulation.*` | implemented, verified | hostile-impact test |

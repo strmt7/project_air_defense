@@ -19,12 +19,36 @@ enum class EProjectAirDefenseDefenseDoctrine : uint8 {
   ShieldWall,
 };
 
+enum class EProjectAirDefenseEngagementMode : uint8 {
+  DoctrineDefault,
+  Single,
+  Pair,
+  Ripple,
+};
+
+enum class EProjectAirDefenseThreatPriority : uint8 {
+  Balanced,
+  BallisticFirst,
+  GlideFirst,
+  CruiseFirst,
+  ClosestImpact,
+};
+
+enum class EProjectAirDefenseFireControlMode : uint8 {
+  Early,
+  Balanced,
+  Terminal,
+};
+
 struct FProjectAirDefenseDefenseSettings {
   double EngagementRangeMeters = 2150.0;
   double InterceptorSpeedMetersPerSecond = 560.0;
   double LaunchCooldownSeconds = 0.46;
   double BlastRadiusMeters = 62.0;
   EProjectAirDefenseDefenseDoctrine Doctrine = EProjectAirDefenseDefenseDoctrine::ShieldWall;
+  EProjectAirDefenseEngagementMode EngagementMode = EProjectAirDefenseEngagementMode::DoctrineDefault;
+  EProjectAirDefenseThreatPriority ThreatPriority = EProjectAirDefenseThreatPriority::Balanced;
+  EProjectAirDefenseFireControlMode FireControlMode = EProjectAirDefenseFireControlMode::Balanced;
   // Interceptor flight-phase tuning. Boost makes the missile climb out of the
   // canister before committing to terminal pursuit. Terminal-phase turn rate
   // sharpens the end-game maneuver the way a real seeker does when the target
@@ -66,6 +90,36 @@ struct FProjectAirDefenseDefenseSettings {
     KillProbabilityFuseFloor =
         FMath::Clamp(KillProbabilityFuseFloor, 0.0, KillProbabilityAtZeroMiss);
     SeekerConeDegrees = FMath::Clamp(SeekerConeDegrees, 1.0, 179.0);
+    switch (EngagementMode) {
+    case EProjectAirDefenseEngagementMode::DoctrineDefault:
+    case EProjectAirDefenseEngagementMode::Single:
+    case EProjectAirDefenseEngagementMode::Pair:
+    case EProjectAirDefenseEngagementMode::Ripple:
+      break;
+    default:
+      EngagementMode = EProjectAirDefenseEngagementMode::DoctrineDefault;
+      break;
+    }
+    switch (ThreatPriority) {
+    case EProjectAirDefenseThreatPriority::Balanced:
+    case EProjectAirDefenseThreatPriority::BallisticFirst:
+    case EProjectAirDefenseThreatPriority::GlideFirst:
+    case EProjectAirDefenseThreatPriority::CruiseFirst:
+    case EProjectAirDefenseThreatPriority::ClosestImpact:
+      break;
+    default:
+      ThreatPriority = EProjectAirDefenseThreatPriority::Balanced;
+      break;
+    }
+    switch (FireControlMode) {
+    case EProjectAirDefenseFireControlMode::Early:
+    case EProjectAirDefenseFireControlMode::Balanced:
+    case EProjectAirDefenseFireControlMode::Terminal:
+      break;
+    default:
+      FireControlMode = EProjectAirDefenseFireControlMode::Balanced;
+      break;
+    }
   }
 };
 
@@ -177,6 +231,12 @@ struct FProjectAirDefenseBattleRunSummary {
   int32 InterceptsInTerminalPhase = 0;
   double MissDistanceSumMeters = 0.0;
   int32 MissDistanceSampleCount = 0;
+  double EngagementRangeMeters = 0.0;
+  double EffectiveRangeMeters = 0.0;
+  EProjectAirDefenseDefenseDoctrine Doctrine = EProjectAirDefenseDefenseDoctrine::ShieldWall;
+  EProjectAirDefenseEngagementMode EngagementMode = EProjectAirDefenseEngagementMode::DoctrineDefault;
+  EProjectAirDefenseThreatPriority ThreatPriority = EProjectAirDefenseThreatPriority::Balanced;
+  EProjectAirDefenseFireControlMode FireControlMode = EProjectAirDefenseFireControlMode::Balanced;
 
   double InterceptRate() const {
     return this->ThreatsSpawned == 0 ? 0.0
@@ -201,6 +261,7 @@ struct FProjectAirDefenseBattleRunSummary {
   // EProjectAirDefenseThreatType. Size must stay synchronized with the enum.
   static constexpr int32 ThreatTypeCount = 3;
   int32 SpawnedByType[ThreatTypeCount] = {0, 0, 0};
+  int32 LaunchedAtByType[ThreatTypeCount] = {0, 0, 0};
   int32 InterceptedByType[ThreatTypeCount] = {0, 0, 0};
   int32 ImpactedByType[ThreatTypeCount] = {0, 0, 0};
 
@@ -228,9 +289,13 @@ struct FProjectAirDefenseRuntimeSnapshot {
   int32 GlideThreats = 0;
   int32 CruiseThreats = 0;
   int32 TrackedThreats = 0;
+  double EngagementRangeMeters = 0.0;
   double EffectiveRangeMeters = 0.0;
   double EffectiveFuseMeters = 0.0;
   EProjectAirDefenseDefenseDoctrine Doctrine = EProjectAirDefenseDefenseDoctrine::Adaptive;
+  EProjectAirDefenseEngagementMode EngagementMode = EProjectAirDefenseEngagementMode::DoctrineDefault;
+  EProjectAirDefenseThreatPriority ThreatPriority = EProjectAirDefenseThreatPriority::Balanced;
+  EProjectAirDefenseFireControlMode FireControlMode = EProjectAirDefenseFireControlMode::Balanced;
 };
 
 struct FProjectAirDefenseThreatSnapshot {
@@ -270,4 +335,10 @@ struct FProjectAirDefenseRadarSnapshot {
 
 FString ProjectAirDefenseDoctrineLabel(EProjectAirDefenseDefenseDoctrine Doctrine);
 FString ProjectAirDefenseDoctrineSummary(EProjectAirDefenseDefenseDoctrine Doctrine);
+FString ProjectAirDefenseEngagementModeLabel(EProjectAirDefenseEngagementMode EngagementMode);
+FString ProjectAirDefenseEngagementModeSummary(EProjectAirDefenseEngagementMode EngagementMode);
+FString ProjectAirDefenseThreatPriorityLabel(EProjectAirDefenseThreatPriority ThreatPriority);
+FString ProjectAirDefenseThreatPrioritySummary(EProjectAirDefenseThreatPriority ThreatPriority);
+FString ProjectAirDefenseFireControlModeLabel(EProjectAirDefenseFireControlMode FireControlMode);
+FString ProjectAirDefenseFireControlModeSummary(EProjectAirDefenseFireControlMode FireControlMode);
 FString ProjectAirDefenseThreatTypeLabel(EProjectAirDefenseThreatType ThreatType);

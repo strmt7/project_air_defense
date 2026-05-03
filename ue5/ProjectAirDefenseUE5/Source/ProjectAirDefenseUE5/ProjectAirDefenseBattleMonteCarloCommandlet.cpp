@@ -58,6 +58,68 @@ EProjectAirDefenseDefenseDoctrine ParseDoctrine(const FString& Params) {
   return EProjectAirDefenseDefenseDoctrine::ShieldWall;
 }
 
+EProjectAirDefenseEngagementMode ParseEngagementMode(const FString& Params) {
+  FString EngagementModeValue;
+  if (!FParse::Value(*Params, TEXT("EngagementMode="), EngagementModeValue)) {
+    return EProjectAirDefenseEngagementMode::DoctrineDefault;
+  }
+
+  if (EngagementModeValue.Equals(TEXT("Auto"), ESearchCase::IgnoreCase) ||
+      EngagementModeValue.Equals(TEXT("DoctrineDefault"), ESearchCase::IgnoreCase)) {
+    return EProjectAirDefenseEngagementMode::DoctrineDefault;
+  }
+  if (EngagementModeValue.Equals(TEXT("Single"), ESearchCase::IgnoreCase)) {
+    return EProjectAirDefenseEngagementMode::Single;
+  }
+  if (EngagementModeValue.Equals(TEXT("Pair"), ESearchCase::IgnoreCase)) {
+    return EProjectAirDefenseEngagementMode::Pair;
+  }
+  if (EngagementModeValue.Equals(TEXT("Ripple"), ESearchCase::IgnoreCase)) {
+    return EProjectAirDefenseEngagementMode::Ripple;
+  }
+  return EProjectAirDefenseEngagementMode::DoctrineDefault;
+}
+
+EProjectAirDefenseThreatPriority ParseThreatPriority(const FString& Params) {
+  FString ThreatPriorityValue;
+  if (!FParse::Value(*Params, TEXT("ThreatPriority="), ThreatPriorityValue)) {
+    return EProjectAirDefenseThreatPriority::Balanced;
+  }
+
+  if (ThreatPriorityValue.Equals(TEXT("Ballistic"), ESearchCase::IgnoreCase) ||
+      ThreatPriorityValue.Equals(TEXT("BallisticFirst"), ESearchCase::IgnoreCase)) {
+    return EProjectAirDefenseThreatPriority::BallisticFirst;
+  }
+  if (ThreatPriorityValue.Equals(TEXT("Glide"), ESearchCase::IgnoreCase) ||
+      ThreatPriorityValue.Equals(TEXT("GlideFirst"), ESearchCase::IgnoreCase)) {
+    return EProjectAirDefenseThreatPriority::GlideFirst;
+  }
+  if (ThreatPriorityValue.Equals(TEXT("Cruise"), ESearchCase::IgnoreCase) ||
+      ThreatPriorityValue.Equals(TEXT("CruiseFirst"), ESearchCase::IgnoreCase)) {
+    return EProjectAirDefenseThreatPriority::CruiseFirst;
+  }
+  if (ThreatPriorityValue.Equals(TEXT("Impact"), ESearchCase::IgnoreCase) ||
+      ThreatPriorityValue.Equals(TEXT("ClosestImpact"), ESearchCase::IgnoreCase)) {
+    return EProjectAirDefenseThreatPriority::ClosestImpact;
+  }
+  return EProjectAirDefenseThreatPriority::Balanced;
+}
+
+EProjectAirDefenseFireControlMode ParseFireControlMode(const FString& Params) {
+  FString FireControlValue;
+  if (!FParse::Value(*Params, TEXT("FireControl="), FireControlValue)) {
+    return EProjectAirDefenseFireControlMode::Balanced;
+  }
+
+  if (FireControlValue.Equals(TEXT("Early"), ESearchCase::IgnoreCase)) {
+    return EProjectAirDefenseFireControlMode::Early;
+  }
+  if (FireControlValue.Equals(TEXT("Terminal"), ESearchCase::IgnoreCase)) {
+    return EProjectAirDefenseFireControlMode::Terminal;
+  }
+  return EProjectAirDefenseFireControlMode::Balanced;
+}
+
 FString ResolveReportPath(const FString& Params) {
   FString ReportPath;
   if (!FParse::Value(*Params, TEXT("Report="), ReportPath) || ReportPath.IsEmpty()) {
@@ -74,9 +136,7 @@ FProjectAirDefenseBattleRunSummary RunSingleMonteCarloSimulation(
     int32 Waves,
     double SecondsPerWave,
     double StepSeconds,
-    EProjectAirDefenseDefenseDoctrine Doctrine) {
-  FProjectAirDefenseDefenseSettings Settings;
-  Settings.Doctrine = Doctrine;
+    const FProjectAirDefenseDefenseSettings& Settings) {
   FProjectAirDefenseBattleSimulation Simulation(
       MakeMonteCarloDistrictCells(),
       MakeMonteCarloLaunchers(),
@@ -125,18 +185,27 @@ TSharedRef<FJsonObject> SummaryToJsonObject(const FProjectAirDefenseBattleRunSum
   Object->SetNumberField(TEXT("interceptsInTerminalPhase"), Summary.InterceptsInTerminalPhase);
   Object->SetNumberField(TEXT("averageMissDistanceMeters"), Summary.AverageMissDistanceMeters());
   Object->SetNumberField(TEXT("singleShotKillProbability"), Summary.SingleShotKillProbability());
+  Object->SetNumberField(TEXT("engagementRangeMeters"), Summary.EngagementRangeMeters);
+  Object->SetNumberField(TEXT("effectiveRangeMeters"), Summary.EffectiveRangeMeters);
+  Object->SetStringField(TEXT("doctrine"), ProjectAirDefenseDoctrineLabel(Summary.Doctrine));
+  Object->SetStringField(TEXT("engagementMode"), ProjectAirDefenseEngagementModeLabel(Summary.EngagementMode));
+  Object->SetStringField(TEXT("threatPriority"), ProjectAirDefenseThreatPriorityLabel(Summary.ThreatPriority));
+  Object->SetStringField(TEXT("fireControl"), ProjectAirDefenseFireControlModeLabel(Summary.FireControlMode));
   static constexpr int32 BallisticIndex = static_cast<int32>(EProjectAirDefenseThreatType::Ballistic);
   static constexpr int32 GlideIndex = static_cast<int32>(EProjectAirDefenseThreatType::Glide);
   static constexpr int32 CruiseIndex = static_cast<int32>(EProjectAirDefenseThreatType::Cruise);
   Object->SetNumberField(TEXT("ballisticSpawned"), Summary.SpawnedByType[BallisticIndex]);
+  Object->SetNumberField(TEXT("ballisticTargeted"), Summary.LaunchedAtByType[BallisticIndex]);
   Object->SetNumberField(TEXT("ballisticIntercepted"), Summary.InterceptedByType[BallisticIndex]);
   Object->SetNumberField(TEXT("ballisticImpacted"), Summary.ImpactedByType[BallisticIndex]);
   Object->SetNumberField(TEXT("ballisticInterceptRate"), Summary.InterceptRateForType(BallisticIndex));
   Object->SetNumberField(TEXT("glideSpawned"), Summary.SpawnedByType[GlideIndex]);
+  Object->SetNumberField(TEXT("glideTargeted"), Summary.LaunchedAtByType[GlideIndex]);
   Object->SetNumberField(TEXT("glideIntercepted"), Summary.InterceptedByType[GlideIndex]);
   Object->SetNumberField(TEXT("glideImpacted"), Summary.ImpactedByType[GlideIndex]);
   Object->SetNumberField(TEXT("glideInterceptRate"), Summary.InterceptRateForType(GlideIndex));
   Object->SetNumberField(TEXT("cruiseSpawned"), Summary.SpawnedByType[CruiseIndex]);
+  Object->SetNumberField(TEXT("cruiseTargeted"), Summary.LaunchedAtByType[CruiseIndex]);
   Object->SetNumberField(TEXT("cruiseIntercepted"), Summary.InterceptedByType[CruiseIndex]);
   Object->SetNumberField(TEXT("cruiseImpacted"), Summary.ImpactedByType[CruiseIndex]);
   Object->SetNumberField(TEXT("cruiseInterceptRate"), Summary.InterceptRateForType(CruiseIndex));
@@ -168,7 +237,17 @@ int32 UProjectAirDefenseBattleMonteCarloCommandlet::Main(const FString& Params) 
   Waves = FMath::Clamp(Waves, 1, 12);
   SecondsPerWave = FMath::Clamp(SecondsPerWave, 5.0, 300.0);
   StepSeconds = FMath::Clamp(StepSeconds, 0.01, 0.2);
-  const EProjectAirDefenseDefenseDoctrine Doctrine = ParseDoctrine(Params);
+  FProjectAirDefenseDefenseSettings Settings;
+  Settings.Doctrine = ParseDoctrine(Params);
+  Settings.EngagementMode = ParseEngagementMode(Params);
+  Settings.ThreatPriority = ParseThreatPriority(Params);
+  Settings.FireControlMode = ParseFireControlMode(Params);
+  FParse::Value(*Params, TEXT("EngagementRange="), Settings.EngagementRangeMeters);
+  Settings.EngagementRangeMeters = FMath::Clamp(
+      Settings.EngagementRangeMeters,
+      FProjectAirDefenseBattleSimulation::MinConfigurableEngagementRangeMeters(),
+      FProjectAirDefenseBattleSimulation::MaxConfigurableEngagementRangeMeters());
+  Settings.Sanitize();
   const FString ReportPath = ResolveReportPath(Params);
 
   TArray<FProjectAirDefenseBattleRunSummary> Summaries;
@@ -196,7 +275,7 @@ int32 UProjectAirDefenseBattleMonteCarloCommandlet::Main(const FString& Params) 
             Waves,
             SecondsPerWave,
             StepSeconds,
-            Doctrine);
+            Settings);
     Summaries.Add(Summary);
     InterceptRateSum += Summary.InterceptRate();
     CityIntegritySum += Summary.CityIntegrity;
@@ -226,7 +305,11 @@ int32 UProjectAirDefenseBattleMonteCarloCommandlet::Main(const FString& Params) 
   RootObject->SetNumberField(TEXT("seed"), Seed);
   RootObject->SetNumberField(TEXT("secondsPerWave"), SecondsPerWave);
   RootObject->SetNumberField(TEXT("stepSeconds"), StepSeconds);
-  RootObject->SetStringField(TEXT("doctrine"), ProjectAirDefenseDoctrineLabel(Doctrine));
+  RootObject->SetStringField(TEXT("doctrine"), ProjectAirDefenseDoctrineLabel(Settings.Doctrine));
+  RootObject->SetNumberField(TEXT("engagementRangeMeters"), Settings.EngagementRangeMeters);
+  RootObject->SetStringField(TEXT("engagementMode"), ProjectAirDefenseEngagementModeLabel(Settings.EngagementMode));
+  RootObject->SetStringField(TEXT("threatPriority"), ProjectAirDefenseThreatPriorityLabel(Settings.ThreatPriority));
+  RootObject->SetStringField(TEXT("fireControl"), ProjectAirDefenseFireControlModeLabel(Settings.FireControlMode));
   RootObject->SetNumberField(TEXT("averageInterceptRate"), InterceptRateSum / static_cast<double>(Runs));
   RootObject->SetNumberField(TEXT("averageCityIntegrity"), CityIntegritySum / static_cast<double>(Runs));
   RootObject->SetNumberField(TEXT("gameOverRuns"), GameOverRuns);
