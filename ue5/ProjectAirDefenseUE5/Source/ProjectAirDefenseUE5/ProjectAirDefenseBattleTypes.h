@@ -237,6 +237,8 @@ struct FProjectAirDefenseBattleRunSummary {
   EProjectAirDefenseEngagementMode EngagementMode = EProjectAirDefenseEngagementMode::DoctrineDefault;
   EProjectAirDefenseThreatPriority ThreatPriority = EProjectAirDefenseThreatPriority::Balanced;
   EProjectAirDefenseFireControlMode FireControlMode = EProjectAirDefenseFireControlMode::Balanced;
+  double EffectiveRecommitWindowSeconds = 0.0;
+  double SalvoCommitWindowSeconds = 0.0;
 
   double InterceptRate() const {
     return this->ThreatsSpawned == 0 ? 0.0

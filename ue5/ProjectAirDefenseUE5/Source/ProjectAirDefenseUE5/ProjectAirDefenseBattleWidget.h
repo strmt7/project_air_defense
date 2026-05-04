@@ -24,6 +24,9 @@ public:
 protected:
   virtual void NativeOnInitialized() override;
   virtual void NativeDestruct() override;
+  virtual FReply NativeOnMouseButtonUp(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) override;
+  virtual void NativeOnMouseLeave(const FPointerEvent& InMouseEvent) override;
+  virtual FReply NativeOnTouchEnded(const FGeometry& InGeometry, const FPointerEvent& InGestureEvent) override;
 
 private:
   UFUNCTION()
@@ -304,6 +307,9 @@ private:
 
   UPROPERTY(Transient)
   TObjectPtr<UVerticalBox> SystemsDrawer;
+
+  UPROPERTY(Transient)
+  TObjectPtr<UWidget> SystemsDrawerSurface;
 
   UPROPERTY(Transient)
   TObjectPtr<UProjectAirDefenseRadarWidget> RadarWidget;

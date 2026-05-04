@@ -13,6 +13,12 @@ void SetConsoleVariableValue(const TCHAR* Name, int32 Value) {
     ConsoleVariable->Set(Value, GameSettingSetBy);
   }
 }
+
+void SetConsoleVariableValue(const TCHAR* Name, float Value) {
+  if (IConsoleVariable* ConsoleVariable = IConsoleManager::Get().FindConsoleVariable(Name)) {
+    ConsoleVariable->Set(Value, GameSettingSetBy);
+  }
+}
 } // namespace
 
 UProjectAirDefenseGameUserSettings::UProjectAirDefenseGameUserSettings()
@@ -120,6 +126,9 @@ void UProjectAirDefenseGameUserSettings::ApplyProjectSpecificCvars() const {
   SetConsoleVariableValue(
       TEXT("r.DefaultFeature.MotionBlur"),
       this->bMotionBlurEnabled ? 1 : 0);
+  SetConsoleVariableValue(
+      TEXT("r.Tonemapper.Sharpen"),
+      this->GetPostProcessingQuality() <= 0 ? 0.15f : 0.35f);
   for (const TCHAR* RayTracingCvar : RayTracingCvars) {
     SetConsoleVariableValue(RayTracingCvar, RayTracingValue);
   }

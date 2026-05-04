@@ -191,6 +191,8 @@ TSharedRef<FJsonObject> SummaryToJsonObject(const FProjectAirDefenseBattleRunSum
   Object->SetStringField(TEXT("engagementMode"), ProjectAirDefenseEngagementModeLabel(Summary.EngagementMode));
   Object->SetStringField(TEXT("threatPriority"), ProjectAirDefenseThreatPriorityLabel(Summary.ThreatPriority));
   Object->SetStringField(TEXT("fireControl"), ProjectAirDefenseFireControlModeLabel(Summary.FireControlMode));
+  Object->SetNumberField(TEXT("effectiveRecommitWindowSeconds"), Summary.EffectiveRecommitWindowSeconds);
+  Object->SetNumberField(TEXT("salvoCommitWindowSeconds"), Summary.SalvoCommitWindowSeconds);
   static constexpr int32 BallisticIndex = static_cast<int32>(EProjectAirDefenseThreatType::Ballistic);
   static constexpr int32 GlideIndex = static_cast<int32>(EProjectAirDefenseThreatType::Glide);
   static constexpr int32 CruiseIndex = static_cast<int32>(EProjectAirDefenseThreatType::Cruise);
@@ -310,6 +312,12 @@ int32 UProjectAirDefenseBattleMonteCarloCommandlet::Main(const FString& Params) 
   RootObject->SetStringField(TEXT("engagementMode"), ProjectAirDefenseEngagementModeLabel(Settings.EngagementMode));
   RootObject->SetStringField(TEXT("threatPriority"), ProjectAirDefenseThreatPriorityLabel(Settings.ThreatPriority));
   RootObject->SetStringField(TEXT("fireControl"), ProjectAirDefenseFireControlModeLabel(Settings.FireControlMode));
+  RootObject->SetNumberField(
+      TEXT("effectiveRecommitWindowSeconds"),
+      Summaries[0].EffectiveRecommitWindowSeconds);
+  RootObject->SetNumberField(
+      TEXT("salvoCommitWindowSeconds"),
+      Summaries[0].SalvoCommitWindowSeconds);
   RootObject->SetNumberField(TEXT("averageInterceptRate"), InterceptRateSum / static_cast<double>(Runs));
   RootObject->SetNumberField(TEXT("averageCityIntegrity"), CityIntegritySum / static_cast<double>(Runs));
   RootObject->SetNumberField(TEXT("gameOverRuns"), GameOverRuns);

@@ -17,7 +17,7 @@ constexpr double MetersToUnrealUnits = 100.0;
 // explosion afterburns read as real ordnance instead of flashes. The per-frame
 // spawn caps keep pooled draw counts bounded even on crowded waves.
 constexpr double AutoBlastVisualSeconds = 2.4;
-constexpr double TrailVisualSeconds = 1.9;
+constexpr double TrailVisualSeconds = 1.65;
 // Slender missile proportions: game-scaled but proportionally near PAC-3 and SCUD-B class geometry.
 // Real PAC-3 is 5.2 m by 0.255 m (L/D ~= 20); real SCUD-B class threats are ~11 m by ~0.9 m (L/D ~= 12).
 // Game-scale visibility requires enlarged markers at district-camera distance;
@@ -26,14 +26,14 @@ constexpr double ThreatMarkerRadiusMeters = 1.6;
 constexpr double ThreatMarkerLengthMeters = 26.0;
 constexpr double InterceptorMarkerRadiusMeters = 1.0;
 constexpr double InterceptorMarkerLengthMeters = 16.0;
-constexpr double ThreatSmokeRadiusMeters = 0.62;
-constexpr double ThreatSmokeLengthMeters = 38.0;
-constexpr double InterceptorSmokeRadiusMeters = 0.46;
-constexpr double InterceptorSmokeLengthMeters = 30.0;
-constexpr double ThreatExhaustRadiusMeters = 0.34;
-constexpr double ThreatExhaustLengthMeters = 22.0;
-constexpr double InterceptorExhaustRadiusMeters = 0.26;
-constexpr double InterceptorExhaustLengthMeters = 18.0;
+constexpr double ThreatSmokeRadiusMeters = 0.50;
+constexpr double ThreatSmokeLengthMeters = 44.0;
+constexpr double InterceptorSmokeRadiusMeters = 0.34;
+constexpr double InterceptorSmokeLengthMeters = 34.0;
+constexpr double ThreatExhaustRadiusMeters = 0.42;
+constexpr double ThreatExhaustLengthMeters = 16.0;
+constexpr double InterceptorExhaustRadiusMeters = 0.32;
+constexpr double InterceptorExhaustLengthMeters = 13.0;
 constexpr double LaunchPlumeVisualSeconds = 1.6;
 constexpr double LaunchPlumeCoreRadiusMeters = 6.0;
 constexpr double LaunchPlumeSmokeRadiusMeters = 3.2;
@@ -744,9 +744,9 @@ void AProjectAirDefenseBattleManager::SyncStaticVisuals() {
   this->DamagedDistrictFloorInstances =
       this->CreateInstancedMarker(TEXT("DistrictFloors-Damaged"), this->CubeMesh, FLinearColor(0.92f, 0.30f, 0.12f, 1.0f));
   this->HostileTrailInstances =
-      this->CreateInstancedMarker(TEXT("TrailSmoke-Hot"), this->CylinderMesh != nullptr ? this->CylinderMesh : this->SphereMesh, FLinearColor(0.86f, 0.84f, 0.78f, 1.0f));
+      this->CreateInstancedMarker(TEXT("TrailSmoke-Hot"), this->CylinderMesh != nullptr ? this->CylinderMesh : this->SphereMesh, FLinearColor(0.92f, 0.90f, 0.84f, 1.0f));
   this->InterceptorTrailInstances =
-      this->CreateInstancedMarker(TEXT("TrailSmoke-Interceptor"), this->CylinderMesh != nullptr ? this->CylinderMesh : this->SphereMesh, FLinearColor(0.88f, 0.91f, 0.88f, 1.0f));
+      this->CreateInstancedMarker(TEXT("TrailSmoke-Interceptor"), this->CylinderMesh != nullptr ? this->CylinderMesh : this->SphereMesh, FLinearColor(0.90f, 0.96f, 1.0f, 1.0f));
   this->HostileExhaustInstances =
       this->CreateInstancedMarker(TEXT("Exhaust-Hot"), this->CylinderMesh != nullptr ? this->CylinderMesh : this->SphereMesh, FLinearColor(1.0f, 0.70f, 0.24f, 1.0f));
   this->InterceptorExhaustInstances =
@@ -1103,7 +1103,7 @@ void AProjectAirDefenseBattleManager::RefreshTransientVisualInstances() {
       ExhaustInstances->AddInstance(
           FTransform(
               TrailVisual.Rotation,
-              TrailVisual.WorldPosition,
+              TrailVisual.ExhaustWorldPosition,
               ExhaustScale),
           true);
     }
@@ -1168,23 +1168,26 @@ void AProjectAirDefenseBattleManager::RefreshTransientVisualInstances() {
         bHostile ? this->HostileBlastShockwaveInstances.Get() : this->InterceptBlastShockwaveInstances.Get();
     const double Alpha =
         BlastVisual.LifetimeSeconds <= 0.0 ? 1.0 : BlastVisual.AgeSeconds / BlastVisual.LifetimeSeconds;
-    if (CoreInstances != nullptr) {
+    const double CoreStageEnd = bHostile ? 0.48 : 0.34;
+    if (CoreInstances != nullptr && Alpha < CoreStageEnd) {
+      const double CoreStageAlpha = FMath::Clamp(Alpha / CoreStageEnd, 0.0, 1.0);
       CoreInstances->AddInstance(
           FTransform(
               FRotator::ZeroRotator,
               BlastVisual.WorldPosition,
-              BlastVisual.CoreScale * FMath::Lerp(0.35, 1.0, Alpha)),
+              BlastVisual.CoreScale * FMath::Lerp(1.10, 0.22, CoreStageAlpha)),
           true);
     }
-    if (ShockwaveInstances != nullptr && bHostile) {
+    if (ShockwaveInstances != nullptr && bHostile && Alpha < 0.62) {
+      const double ShockwaveAlpha = FMath::Clamp(Alpha / 0.62, 0.0, 1.0);
       ShockwaveInstances->AddInstance(
           FTransform(
               FRotator::ZeroRotator,
               BlastVisual.WorldPosition,
               FVector(
-                  BlastVisual.ShockwaveScale.X * FMath::Lerp(0.2, 1.0, Alpha),
-                  BlastVisual.ShockwaveScale.Y * FMath::Lerp(0.2, 1.0, Alpha),
-                  BlastVisual.ShockwaveScale.Z)),
+                  BlastVisual.ShockwaveScale.X * FMath::Lerp(0.2, 1.0, ShockwaveAlpha),
+                  BlastVisual.ShockwaveScale.Y * FMath::Lerp(0.2, 1.0, ShockwaveAlpha),
+                  BlastVisual.ShockwaveScale.Z * FMath::Lerp(1.0, 0.35, ShockwaveAlpha))),
           true);
     }
     UInstancedStaticMeshComponent* SmokeInstances =
@@ -1268,10 +1271,17 @@ void AProjectAirDefenseBattleManager::SpawnTrailVisual(const FProjectAirDefenseT
   const FVector TrailVelocity(TrailEvent.VelocityMetersPerSecond);
   const FVector TrailDirection =
       TrailVelocity.IsNearlyZero() ? FVector::UpVector : TrailVelocity.GetSafeNormal();
+  const FVector3d TrailDirectionMeters(
+      static_cast<double>(TrailDirection.X),
+      static_cast<double>(TrailDirection.Y),
+      static_cast<double>(TrailDirection.Z));
   ++this->TrailVisualSpawnsThisFrame;
 
   FTrailVisual TrailVisual;
-  TrailVisual.WorldPosition = this->ToWorldPosition(TrailEvent.PositionMeters);
+  TrailVisual.WorldPosition =
+      this->ToWorldPosition(TrailEvent.PositionMeters - TrailDirectionMeters * SmokeHalfLengthMeters * 0.58);
+  TrailVisual.ExhaustWorldPosition =
+      this->ToWorldPosition(TrailEvent.PositionMeters - TrailDirectionMeters * ExhaustHalfLengthMeters * 0.72);
   TrailVisual.BaseScale =
       this->CylinderMesh != nullptr
           ? ScaleCylinder(SmokeRadiusMeters, SmokeHalfLengthMeters)

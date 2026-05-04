@@ -3,6 +3,7 @@ param(
     [string]$Project = "",
     [string]$LogPath = "benchmark-results/ue5-runtime.log",
     [string]$ScreenshotPath = "benchmark-results/ue5-runtime.png",
+    [string]$StatePath = "",
     [int]$Width = 1600,
     [int]$Height = 900,
     [int]$DelaySeconds = 35,
@@ -14,7 +15,9 @@ param(
     [string]$SendKeysCsv = "",
     [int]$KeyDelayMilliseconds = 500,
     [int]$PostKeyDelaySeconds = 3,
+    [int]$PostScreenshotAliveSeconds = 3,
     [int]$MutexWaitSeconds = 180,
+    [switch]$KeepAliveAfterScreenshot,
     [switch]$AutoStartBattle,
     [switch]$ShowSystemsMenu
 )
@@ -26,6 +29,10 @@ function Resolve-AbsolutePath([string]$PathValue) {
         return $PathValue
     }
     return Join-Path (Get-Location) $PathValue
+}
+
+function ConvertTo-IsoTimestamp([datetime]$Value) {
+    return $Value.ToUniversalTime().ToString("o", [System.Globalization.CultureInfo]::InvariantCulture)
 }
 
 function Resolve-SavedRoot([string]$ResolvedExePath, [string]$ResolvedProjectPath) {
@@ -57,6 +64,7 @@ $exePath = Resolve-AbsolutePath $Exe
 $projectPath = if ([string]::IsNullOrWhiteSpace($Project)) { "" } else { Resolve-AbsolutePath $Project }
 $logFilePath = Resolve-AbsolutePath $LogPath
 $screenshotFilePath = Resolve-AbsolutePath $ScreenshotPath
+$stateFilePath = if ([string]::IsNullOrWhiteSpace($StatePath)) { "" } else { Resolve-AbsolutePath $StatePath }
 $savedRoot = Resolve-SavedRoot $exePath $projectPath
 $resolvedProcessName = if ([string]::IsNullOrWhiteSpace($ProcessName)) {
     [System.IO.Path]::GetFileNameWithoutExtension($exePath)
@@ -74,12 +82,18 @@ if (-not [string]::IsNullOrWhiteSpace($projectPath) -and -not (Test-Path $projec
 
 New-Item -ItemType Directory -Force -Path ([System.IO.Path]::GetDirectoryName($logFilePath)) | Out-Null
 New-Item -ItemType Directory -Force -Path ([System.IO.Path]::GetDirectoryName($screenshotFilePath)) | Out-Null
+if (-not [string]::IsNullOrWhiteSpace($stateFilePath)) {
+    New-Item -ItemType Directory -Force -Path ([System.IO.Path]::GetDirectoryName($stateFilePath)) | Out-Null
+}
 
 if (Test-Path $logFilePath) {
     Remove-Item -LiteralPath $logFilePath -Force
 }
 if (Test-Path $screenshotFilePath) {
     Remove-Item -LiteralPath $screenshotFilePath -Force
+}
+if (-not [string]::IsNullOrWhiteSpace($stateFilePath) -and (Test-Path $stateFilePath)) {
+    Remove-Item -LiteralPath $stateFilePath -Force
 }
 
 if (-not [string]::IsNullOrWhiteSpace($SendKeysCsv)) {
@@ -112,9 +126,11 @@ $arguments += @(
     "-log",
     "-abslog=$logFilePath",
     "-ProjectAirDefenseVerificationPath=$screenshotFilePath",
-    "-ProjectAirDefenseVerificationDelay=$DelaySeconds",
-    "-ProjectAirDefenseAutoQuitAfterVerification"
+    "-ProjectAirDefenseVerificationDelay=$DelaySeconds"
 )
+if (-not $KeepAliveAfterScreenshot) {
+    $arguments += "-ProjectAirDefenseAutoQuitAfterVerification"
+}
 if ($showSystemsMenu) {
     $arguments += "-ProjectAirDefenseShowSystemsMenu"
 }
@@ -128,6 +144,31 @@ if (-not [string]::IsNullOrWhiteSpace($ExtraArgs)) {
 $captureMutex = New-CaptureMutex $exePath
 $lockAcquired = $false
 $process = $null
+$captureState = [ordered]@{
+    exe = $exePath
+    project = if ([string]::IsNullOrWhiteSpace($projectPath)) { $null } else { $projectPath }
+    log = $logFilePath
+    screenshot = $screenshotFilePath
+    processName = $resolvedProcessName
+    processId = $null
+    requestedMode = if ($showSystemsMenu) { "systems" } elseif ($autoStartBattle) { "battle" } else { "menu" }
+    width = $Width
+    height = $Height
+    delaySeconds = $DelaySeconds
+    keepAliveAfterScreenshot = $KeepAliveAfterScreenshot.IsPresent
+    postScreenshotAliveSeconds = $PostScreenshotAliveSeconds
+    startedAt = $null
+    screenshotDetectedAt = $null
+    completedAt = $null
+    screenshotFound = $false
+    processExitedBeforeScreenshot = $false
+    processAliveAtScreenshot = $false
+    processAliveAfterScreenshotWait = $false
+    forcedShutdown = $false
+    exitCode = $null
+    success = $false
+    failure = $null
+}
 
 try {
     $lockAcquired = $captureMutex.WaitOne([TimeSpan]::FromSeconds($MutexWaitSeconds))
@@ -136,6 +177,8 @@ try {
     }
 
     $process = Start-Process -FilePath $exePath -ArgumentList $arguments -PassThru
+    $captureState.startedAt = ConvertTo-IsoTimestamp (Get-Date)
+    $captureState.processId = $process.Id
     $processExited = $false
     $screenshotFound = $false
 
@@ -147,24 +190,33 @@ try {
             $file = Get-Item -LiteralPath $screenshotFilePath -ErrorAction SilentlyContinue
             if ($null -ne $file -and $file.Length -gt 0) {
                 $screenshotFound = $true
+                $captureState.screenshotFound = $true
+                if ($null -eq $captureState.screenshotDetectedAt) {
+                    $captureState.screenshotDetectedAt = ConvertTo-IsoTimestamp (Get-Date)
+                }
             }
         }
 
         $process.Refresh()
         if ($process.HasExited) {
             $processExited = $true
+            $captureState.exitCode = $process.ExitCode
             if ($screenshotFound) {
                 break
             }
+            $captureState.processExitedBeforeScreenshot = $true
             throw "Game process exited before writing the verification screenshot. Exit code: $($process.ExitCode)"
         }
 
         if ($screenshotFound) {
-            for ($j = 0; $j -lt 40; $j++) {
+            $captureState.processAliveAtScreenshot = $true
+            $postScreenshotPolls = [Math]::Max(1, $PostScreenshotAliveSeconds * 2)
+            for ($j = 0; $j -lt $postScreenshotPolls; $j++) {
                 Start-Sleep -Milliseconds 500
                 $process.Refresh()
                 if ($process.HasExited) {
                     $processExited = $true
+                    $captureState.exitCode = $process.ExitCode
                     break
                 }
             }
@@ -177,12 +229,35 @@ try {
     }
 
     if (-not $processExited) {
+        $captureState.processAliveAfterScreenshotWait = $true
         Write-Warning "Game stayed alive after writing the verification screenshot; forcing process shutdown."
     }
+    $captureState.success = $true
+}
+catch {
+    $captureState.failure = $_.Exception.Message
+    throw
 }
 finally {
     if ($process -ne $null -and -not $process.HasExited) {
+        $captureState.forcedShutdown = $true
         Stop-Process -Id $process.Id -Force
+    }
+    if ($process -ne $null) {
+        try {
+            $process.Refresh()
+            if ($process.HasExited -and $null -eq $captureState.exitCode) {
+                $captureState.exitCode = $process.ExitCode
+            }
+        } catch {
+            if ($null -eq $captureState.failure) {
+                $captureState.failure = "Failed to refresh process state: $($_.Exception.Message)"
+            }
+        }
+    }
+    $captureState.completedAt = ConvertTo-IsoTimestamp (Get-Date)
+    if (-not [string]::IsNullOrWhiteSpace($stateFilePath)) {
+        $captureState | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $stateFilePath -Encoding UTF8
     }
     if ($lockAcquired -and $captureMutex -ne $null) {
         $captureMutex.ReleaseMutex() | Out-Null

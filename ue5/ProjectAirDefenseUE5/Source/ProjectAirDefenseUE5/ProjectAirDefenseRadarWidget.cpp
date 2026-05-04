@@ -205,15 +205,27 @@ int32 UProjectAirDefenseRadarWidget::NativePaint(
   for (const FProjectAirDefenseRadarDistrictSnapshot& District : Snapshot.Districts) {
     const FVector2D DistrictCenter =
         ProjectRadarPoint(District.LocalPositionMeters, RadarCenter, RadarRadius, Snapshot.ExtentMeters);
-    const float IntegrityAlpha =
-        static_cast<float>(FMath::Clamp(District.Integrity / 100.0, 0.25, 1.0));
+    const float IntegrityRatio =
+        static_cast<float>(FMath::Clamp(District.Integrity / 100.0, 0.0, 1.0));
+    const float DamageRatio =
+        static_cast<float>(FMath::Clamp(1.0 - District.StructuralIntegrity / 100.0, 0.0, 1.0));
+    const bool bDamaged =
+        District.DamagedFloors > 0 || District.CollapsedFloors > 0 || DamageRatio > 0.08f || District.bCollapsed;
+    const FLinearColor DistrictColor =
+        District.bCollapsed
+            ? FLinearColor(1.0f, 0.24f, 0.18f, 0.96f)
+            : bDamaged
+            ? FLinearColor(1.0f, 0.68f, 0.28f, 0.92f)
+            : FLinearColor(0.34f, 0.92f, 0.88f, FMath::Lerp(0.42f, 0.82f, IntegrityRatio));
+    const float DistrictSize = District.bCollapsed ? 6.0f : bDamaged ? 5.3f : 4.0f;
+    const float DistrictThickness = District.bCollapsed ? 2.2f : bDamaged ? 1.8f : 1.1f;
     DrawPolyline(
         OutDrawElements,
         LayerId + 2,
         AllottedGeometry,
-        BuildDiamondPoints(DistrictCenter, 4.2f),
-        FLinearColor(0.34f, 0.92f, 0.88f, IntegrityAlpha * 0.88f),
-        1.4f,
+        BuildDiamondPoints(DistrictCenter, DistrictSize),
+        DistrictColor,
+        DistrictThickness,
         true);
   }
 
@@ -247,8 +259,18 @@ int32 UProjectAirDefenseRadarWidget::NativePaint(
   for (const FProjectAirDefenseRadarThreatSnapshot& Threat : Snapshot.Threats) {
     const FVector2D Position =
         ProjectRadarPoint(Threat.LocalPositionMeters, RadarCenter, RadarRadius, Snapshot.ExtentMeters);
-    const float Size = Threat.bIsTracked ? 6.5f : 4.2f;
+    const float Size = Threat.bIsTracked ? 7.0f : 4.8f;
     const FLinearColor Color = ThreatColor(Threat.ThreatType, Threat.bIsTracked);
+    if (!Threat.bIsTracked) {
+      DrawPolyline(
+          OutDrawElements,
+          LayerId + 3,
+          AllottedGeometry,
+          BuildCirclePoints(Position, Size + 2.6f, 14),
+          FLinearColor(Color.R, Color.G, Color.B, 0.26f),
+          0.9f,
+          true);
+    }
     DrawPolyline(
         OutDrawElements,
         LayerId + 4,

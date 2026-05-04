@@ -1,5 +1,6 @@
 #include "ProjectAirDefenseBattleSimulation.h"
 
+#include <cmath>
 #include <limits>
 
 namespace {
@@ -64,6 +65,9 @@ constexpr double TimeUrgencyReference = 10.0;
 constexpr double AltitudeReferenceMeters = 2400.0;
 constexpr double TerminalTrackThresholdMeters = -260.0;
 constexpr double MaxInterceptLeadSeconds = 8.0;
+constexpr double MaxSimulationSubstepSeconds = 0.05;
+constexpr double MaxStepCallSeconds = 1.0;
+constexpr double LauncherSolutionScoreWeight = 0.45;
 
 struct FDoctrineProfile {
   double LaunchCadenceMultiplier = 1.0;
@@ -81,6 +85,8 @@ struct FFireControlProfile {
   double RecommitWindowMultiplier = 1.0;
   double TimeUrgencyMultiplier = 1.0;
   double TerminalBonusMultiplier = 1.0;
+  double SalvoCommitWindowSeconds = 10.0;
+  double MinimumInterceptMarginSeconds = -0.1;
 };
 
 struct FMotionSample {
@@ -133,13 +139,13 @@ FDoctrineProfile DoctrineProfile(EProjectAirDefenseDefenseDoctrine Doctrine) {
 FFireControlProfile FireControlProfile(EProjectAirDefenseFireControlMode FireControlMode) {
   switch (FireControlMode) {
   case EProjectAirDefenseFireControlMode::Early:
-    return {240.0, 0.92, 1.35, 0.86, 0.90};
+    return {240.0, 0.92, 1.35, 0.86, 0.90, 13.0, -0.35};
   case EProjectAirDefenseFireControlMode::Balanced:
-    return {0.0, 1.0, 1.0, 1.0, 1.0};
+    return {0.0, 1.0, 1.0, 1.0, 1.0, 10.0, -0.1};
   case EProjectAirDefenseFireControlMode::Terminal:
-    return {-220.0, 1.08, 0.68, 1.20, 1.35};
+    return {-220.0, 1.08, 0.68, 1.20, 1.35, 6.5, 0.25};
   }
-  return {0.0, 1.0, 1.0, 1.0, 1.0};
+  return {0.0, 1.0, 1.0, 1.0, 1.0, 10.0, -0.1};
 }
 
 double ClampScalar(double Value, double Min, double Max) {
@@ -218,6 +224,32 @@ int32 MaxAssignmentsPerThreat(const FProjectAirDefenseDefenseSettings& Settings)
   return DoctrineProfile(Settings.Doctrine).MaxAssignmentsPerThreat;
 }
 
+double EffectiveSalvoCommitWindowSeconds(const FProjectAirDefenseDefenseSettings& Settings) {
+  if (MaxAssignmentsPerThreat(Settings) <= 1) {
+    return 0.0;
+  }
+  double DoctrineBias = 0.0;
+  switch (Settings.Doctrine) {
+  case EProjectAirDefenseDefenseDoctrine::Disciplined:
+    DoctrineBias = -0.8;
+    break;
+  case EProjectAirDefenseDefenseDoctrine::Adaptive:
+    DoctrineBias = 0.0;
+    break;
+  case EProjectAirDefenseDefenseDoctrine::ShieldWall:
+    DoctrineBias = 1.2;
+    break;
+  }
+  return ClampScalar(
+      FireControlProfile(Settings.FireControlMode).SalvoCommitWindowSeconds + DoctrineBias,
+      3.0,
+      18.0);
+}
+
+double MinimumInterceptMarginSeconds(const FProjectAirDefenseDefenseSettings& Settings) {
+  return FireControlProfile(Settings.FireControlMode).MinimumInterceptMarginSeconds;
+}
+
 double EstimateTimeToImpact(const FProjectAirDefenseThreatSnapshot& Threat) {
   FVector3d ToTarget = Threat.TargetPositionMeters - Threat.PositionMeters;
   const double Distance = FMath::Max(ToTarget.Length(), 1.0);
@@ -263,6 +295,7 @@ double PriorityScoreBias(
 double ScoreThreat(
     const FProjectAirDefenseThreatSnapshot& Threat,
     EProjectAirDefenseThreatType ThreatType,
+    double HorizontalRangeMeters,
     double EngagementRangeMeters,
     double TimeToImpactSeconds,
     int32 AssignedCount,
@@ -270,7 +303,7 @@ double ScoreThreat(
     EProjectAirDefenseFireControlMode FireControlMode) {
   const FFireControlProfile FireProfile = FireControlProfile(FireControlMode);
   const double NormalizedDistance =
-      1.0 - FMath::Clamp(Threat.PositionMeters.Length() / EngagementRangeMeters, 0.0, 1.0);
+      1.0 - FMath::Clamp(HorizontalRangeMeters / EngagementRangeMeters, 0.0, 1.0);
   const double CenterlineBias =
       1.0 - FMath::Clamp(FMath::Abs(Threat.PositionMeters.X) / EngagementRangeMeters, 0.0, 1.0);
   const double AltitudeUrgency =
@@ -810,10 +843,29 @@ FProjectAirDefenseStepEvents FProjectAirDefenseBattleSimulation::Step(double Del
     Events.bGameOver = true;
     return Events;
   }
+  if (!std::isfinite(DeltaSeconds) || DeltaSeconds <= 0.0) {
+    return FProjectAirDefenseStepEvents();
+  }
 
   FStepAccumulator Events;
-  const double CurrentBlastRadiusMeters = EffectiveBlastRadius(this->Settings);
+  double RemainingSeconds = FMath::Min(DeltaSeconds, MaxStepCallSeconds);
+  while (RemainingSeconds > KINDA_SMALL_NUMBER && !this->bGameOver) {
+    const double SubstepSeconds =
+        FMath::Min(RemainingSeconds, MaxSimulationSubstepSeconds);
+    this->StepSubstep(SubstepSeconds, Events);
+    RemainingSeconds -= SubstepSeconds;
+  }
 
+  return Events.ToEvents();
+}
+
+void FProjectAirDefenseBattleSimulation::StepSubstep(
+    double DeltaSeconds,
+    FStepAccumulator& Events) {
+  if (this->bGameOver) {
+    return;
+  }
+  const double CurrentBlastRadiusMeters = EffectiveBlastRadius(this->Settings);
   this->UpdateWaveState(DeltaSeconds, Events);
   this->UpdateLauncherReloads(DeltaSeconds);
   this->UpdateThreats(DeltaSeconds, Events);
@@ -824,8 +876,6 @@ FProjectAirDefenseStepEvents FProjectAirDefenseBattleSimulation::Step(double Del
     this->bGameOver = true;
     Events.bGameOverTriggered = true;
   }
-
-  return Events.ToEvents();
 }
 
 const TArray<FProjectAirDefenseDistrictCell>&
@@ -912,6 +962,10 @@ FProjectAirDefenseBattleSimulation::BuildRunSummary(int32 RunIndex, double Simul
   Summary.EngagementMode = this->Settings.EngagementMode;
   Summary.ThreatPriority = this->Settings.ThreatPriority;
   Summary.FireControlMode = this->Settings.FireControlMode;
+  Summary.EffectiveRecommitWindowSeconds =
+      EffectiveRecommitWindowSeconds(this->Settings);
+  Summary.SalvoCommitWindowSeconds =
+      EffectiveSalvoCommitWindowSeconds(this->Settings);
   for (int32 TypeIndex = 0; TypeIndex < ThreatTypeCount; ++TypeIndex) {
     Summary.SpawnedByType[TypeIndex] = this->TotalSpawnedByType[TypeIndex];
     Summary.LaunchedAtByType[TypeIndex] = this->TotalLaunchedAtByType[TypeIndex];
@@ -1326,10 +1380,13 @@ FProjectAirDefenseThreatState* FProjectAirDefenseBattleSimulation::SelectNextThr
   double BestScore = -TNumericLimits<double>::Max();
   const int32 MaxAssignments = MaxAssignmentsPerThreat(this->Settings);
   const double RecommitWindowSeconds = EffectiveRecommitWindowSeconds(this->Settings);
+  const double SalvoCommitWindowSeconds = EffectiveSalvoCommitWindowSeconds(this->Settings);
   for (FProjectAirDefenseThreatState& Threat : this->Threats) {
     const FVector3d HorizontalThreat(Threat.PositionMeters.X, Threat.PositionMeters.Y, 0.0);
+    const double HorizontalRangeMeters =
+        (HorizontalThreat - this->DefenseOriginMeters).Length();
     if (!Threat.bIsTracked ||
-        (HorizontalThreat - this->DefenseOriginMeters).SquaredLength() > EngagementRangeSquared) {
+        FMath::Square(HorizontalRangeMeters) > EngagementRangeSquared) {
       continue;
     }
 
@@ -1348,8 +1405,19 @@ FProjectAirDefenseThreatState* FProjectAirDefenseBattleSimulation::SelectNextThr
         Threat.TargetPositionMeters,
     };
     const double TimeToImpactSeconds = EstimateTimeToImpact(Snapshot);
-    if ((AssignedCount > 0 || AttemptedCount > 0) &&
+    const bool bHasInFlightAssignment = AssignedCount > 0;
+    if (bHasInFlightAssignment && TimeToImpactSeconds > SalvoCommitWindowSeconds) {
+      continue;
+    }
+    if (!bHasInFlightAssignment && AttemptedCount > 0 &&
         TimeToImpactSeconds > RecommitWindowSeconds) {
+      continue;
+    }
+
+    double LauncherSolutionScore = 0.0;
+    if (!this->FindReadyLauncherForThreat(
+             Threat, TimeToImpactSeconds, &LauncherSolutionScore)
+             .IsSet()) {
       continue;
     }
 
@@ -1357,11 +1425,13 @@ FProjectAirDefenseThreatState* FProjectAirDefenseBattleSimulation::SelectNextThr
         ScoreThreat(
             Snapshot,
             Threat.ThreatType,
+            HorizontalRangeMeters,
             EngagementRangeMeters,
             TimeToImpactSeconds,
             AssignedCount,
             this->Settings.ThreatPriority,
-            this->Settings.FireControlMode);
+            this->Settings.FireControlMode) +
+        LauncherSolutionScore * LauncherSolutionScoreWeight;
     if (BestThreat == nullptr || ThreatScore > BestScore ||
         (FMath::IsNearlyEqual(ThreatScore, BestScore) &&
          ThreatHasPriorityOver(Threat.PositionMeters, BestThreat->PositionMeters))) {
@@ -1372,26 +1442,87 @@ FProjectAirDefenseThreatState* FProjectAirDefenseBattleSimulation::SelectNextThr
   return BestThreat;
 }
 
-TOptional<FProjectAirDefenseInterceptorLaunchEvent>
-FProjectAirDefenseBattleSimulation::LaunchInterceptor(
-    const FProjectAirDefenseThreatState& TargetThreat) {
-  int32 LauncherIndex = INDEX_NONE;
-  double BestDistanceSquared = TNumericLimits<double>::Max();
+TOptional<int32> FProjectAirDefenseBattleSimulation::FindReadyLauncherForThreat(
+    const FProjectAirDefenseThreatState& TargetThreat,
+    double TimeToImpactSeconds,
+    double* OutSolutionScore) const {
+  int32 BestLauncherIndex = INDEX_NONE;
+  double BestScore = -TNumericLimits<double>::Max();
+  const double InterceptorSpeedMetersPerSecond =
+      FMath::Max(this->Settings.InterceptorSpeedMetersPerSecond, 1.0);
+  const double MinimumMarginSeconds = MinimumInterceptMarginSeconds(this->Settings);
+
   for (int32 Index = 0; Index < this->LauncherPositionsMeters.Num(); ++Index) {
     if (this->LauncherReadyInSeconds.IsValidIndex(Index) &&
         this->LauncherReadyInSeconds[Index] > 0.0) {
       continue;
     }
-    const double DistanceSquared =
-        (this->LauncherPositionsMeters[Index] - TargetThreat.PositionMeters).SquaredLength();
-    if (DistanceSquared < BestDistanceSquared) {
-      BestDistanceSquared = DistanceSquared;
-      LauncherIndex = Index;
+
+    const FVector3d LaunchPosition =
+        this->LauncherPositionsMeters[Index] + FVector3d(0.0, 0.0, LauncherMuzzleHeightMeters);
+    const FVector3d AimPoint =
+        PredictInterceptPoint(
+            LaunchPosition,
+            TargetThreat.PositionMeters,
+            TargetThreat.VelocityMetersPerSecond,
+            InterceptorSpeedMetersPerSecond);
+    const FVector3d FlyoutVector = AimPoint - LaunchPosition;
+    const double FlyoutDistanceMeters = FlyoutVector.Length();
+    if (FlyoutDistanceMeters <= TrackingEpsilon) {
+      continue;
+    }
+
+    const double FlyoutSeconds =
+        FlyoutDistanceMeters / InterceptorSpeedMetersPerSecond;
+    const double TimeMarginSeconds = TimeToImpactSeconds - FlyoutSeconds;
+    if (TimeMarginSeconds < MinimumMarginSeconds) {
+      continue;
+    }
+
+    const FVector3d HorizontalAimPoint(AimPoint.X, AimPoint.Y, 0.0);
+    const double HorizontalAimRangeMeters =
+        (HorizontalAimPoint - this->DefenseOriginMeters).Length();
+    if (HorizontalAimRangeMeters > InterceptorMaxRangeMeters) {
+      continue;
+    }
+
+    const double LauncherScore =
+        FMath::Clamp(TimeMarginSeconds, -1.0, 8.0) * 0.9 -
+        FMath::Clamp(FlyoutSeconds, 0.0, 20.0) * 0.15 -
+        FMath::Clamp(HorizontalAimRangeMeters / InterceptorMaxRangeMeters, 0.0, 1.5) * 1.2;
+    if (BestLauncherIndex == INDEX_NONE || LauncherScore > BestScore) {
+      BestLauncherIndex = Index;
+      BestScore = LauncherScore;
     }
   }
-  if (LauncherIndex == INDEX_NONE) {
+
+  if (BestLauncherIndex == INDEX_NONE) {
+    if (OutSolutionScore != nullptr) {
+      *OutSolutionScore = 0.0;
+    }
     return {};
   }
+  if (OutSolutionScore != nullptr) {
+    *OutSolutionScore = BestScore;
+  }
+  return TOptional<int32>(BestLauncherIndex);
+}
+
+TOptional<FProjectAirDefenseInterceptorLaunchEvent>
+FProjectAirDefenseBattleSimulation::LaunchInterceptor(
+    const FProjectAirDefenseThreatState& TargetThreat) {
+  const FProjectAirDefenseThreatSnapshot Snapshot{
+      TargetThreat.Id,
+      TargetThreat.PositionMeters,
+      TargetThreat.VelocityMetersPerSecond,
+      TargetThreat.TargetPositionMeters,
+  };
+  const TOptional<int32> LauncherIndexOption =
+      this->FindReadyLauncherForThreat(TargetThreat, EstimateTimeToImpact(Snapshot));
+  if (!LauncherIndexOption.IsSet()) {
+    return {};
+  }
+  const int32 LauncherIndex = LauncherIndexOption.GetValue();
 
   const FVector3d LaunchPosition =
       this->LauncherPositionsMeters[LauncherIndex] + FVector3d(0.0, 0.0, LauncherMuzzleHeightMeters);

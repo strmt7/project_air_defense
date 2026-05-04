@@ -9,7 +9,6 @@
 #include "Components/OverlaySlot.h"
 #include "Components/SafeZone.h"
 #include "Components/SizeBox.h"
-#include "Components/Spacer.h"
 #include "Components/TextBlock.h"
 #include "Components/VerticalBox.h"
 #include "Components/VerticalBoxSlot.h"
@@ -20,12 +19,13 @@
 #include "Styling/AppStyle.h"
 
 namespace {
-constexpr float PanelPadding = 26.0f;
-constexpr float ButtonGap = 14.0f;
+constexpr float PanelPadding = 22.0f;
+constexpr float ButtonGap = 12.0f;
 constexpr float ChipGap = 10.0f;
-constexpr float PanelCornerRadius = 18.0f;
-constexpr float ButtonCornerRadius = 12.0f;
-constexpr float ChipCornerRadius = 10.0f;
+constexpr float PanelCornerRadius = 24.0f;
+constexpr float ButtonCornerRadius = 24.0f;
+constexpr float ChipCornerRadius = 18.0f;
+constexpr float MenuActionMinHeight = 68.0f;
 constexpr const TCHAR* MainMenuTitleText = TEXT("PROJECT AIR DEFENSE");
 
 FSlateFontInfo MakeFont(int32 Size) {
@@ -85,15 +85,28 @@ UButton* CreatePrimaryButton(
   Button->SetStyle(ButtonStyle);
   Button->SetColorAndOpacity(FLinearColor::White);
   Button->SetClickMethod(EButtonClickMethod::MouseDown);
-
   UBorder* PaddingBorder = WidgetTree->ConstructWidget<UBorder>();
   PaddingBorder->SetBrushColor(FLinearColor::Transparent);
-  PaddingBorder->SetPadding(FMargin(18.0f, 16.0f));
+  PaddingBorder->SetPadding(FMargin(20.0f, 17.0f));
 
   OutLabel = CreateText(WidgetTree, Label, 26, FLinearColor::White, ETextJustify::Center);
   PaddingBorder->SetContent(OutLabel);
   Button->AddChild(PaddingBorder);
   return Button;
+}
+
+USizeBox* CreateTouchTarget(
+    UWidgetTree* WidgetTree,
+    UWidget* Content,
+    float MinHeight,
+    float MinWidth = 0.0f) {
+  USizeBox* Target = WidgetTree->ConstructWidget<USizeBox>();
+  Target->SetMinDesiredHeight(MinHeight);
+  if (MinWidth > 0.0f) {
+    Target->SetMinDesiredWidth(MinWidth);
+  }
+  Target->SetContent(Content);
+  return Target;
 }
 
 UBorder* CreatePanel(UWidgetTree* WidgetTree, const FLinearColor& FillColor) {
@@ -183,7 +196,7 @@ void UProjectAirDefenseMainMenuWidget::BuildWidgetTree() {
   }
 
   USizeBox* SurfaceBox = this->WidgetTree->ConstructWidget<USizeBox>();
-  SurfaceBox->SetWidthOverride(760.0f);
+  SurfaceBox->SetWidthOverride(720.0f);
   Surface->SetContent(SurfaceBox);
 
   UVerticalBox* Content = this->WidgetTree->ConstructWidget<UVerticalBox>();
@@ -197,7 +210,7 @@ void UProjectAirDefenseMainMenuWidget::BuildWidgetTree() {
 
   UTextBlock* SubtitleText = CreateText(
       this->WidgetTree,
-      TEXT("3D city defense"),
+      TEXT("Helsinki mobile defense"),
       20,
       FLinearColor(0.70f, 0.88f, 1.0f, 1.0f));
   if (UVerticalBoxSlot* VerticalSlot = Content->AddChildToVerticalBox(SubtitleText)) {
@@ -218,12 +231,12 @@ void UProjectAirDefenseMainMenuWidget::BuildWidgetTree() {
   }
   ChipRow->AddChildToHorizontalBox(CreateChip(
       this->WidgetTree,
-      TEXT("TOUCH HUD"),
+      TEXT("TOUCH"),
       FLinearColor(0.18f, 0.12f, 0.06f, 0.96f)));
 
   UTextBlock* MissionText = CreateText(
       this->WidgetTree,
-      TEXT("Real city mesh. Touch-first battle. No static backdrop."),
+      TEXT("Defend Helsinki in live 3D."),
       21,
       FLinearColor(0.86f, 0.90f, 0.95f, 1.0f));
   MissionText->SetAutoWrapText(true);
@@ -238,7 +251,9 @@ void UProjectAirDefenseMainMenuWidget::BuildWidgetTree() {
       FLinearColor(0.10f, 0.26f, 0.34f, 0.98f),
       StartLabel);
   this->StartButton->OnClicked.AddDynamic(this, &UProjectAirDefenseMainMenuWidget::HandleStartPressed);
-  if (UVerticalBoxSlot* VerticalSlot = Content->AddChildToVerticalBox(this->StartButton)) {
+  USizeBox* StartTarget =
+      CreateTouchTarget(this->WidgetTree, this->StartButton, MenuActionMinHeight);
+  if (UVerticalBoxSlot* VerticalSlot = Content->AddChildToVerticalBox(StartTarget)) {
     VerticalSlot->SetPadding(FMargin(0.0f, 0.0f, 0.0f, ButtonGap));
   }
 
@@ -249,7 +264,9 @@ void UProjectAirDefenseMainMenuWidget::BuildWidgetTree() {
       FLinearColor(0.07f, 0.08f, 0.14f, 0.98f),
       GraphicsLabel);
   this->GraphicsButton->OnClicked.AddDynamic(this, &UProjectAirDefenseMainMenuWidget::HandleGraphicsPressed);
-  if (UVerticalBoxSlot* VerticalSlot = Content->AddChildToVerticalBox(this->GraphicsButton)) {
+  USizeBox* GraphicsTarget =
+      CreateTouchTarget(this->WidgetTree, this->GraphicsButton, MenuActionMinHeight);
+  if (UVerticalBoxSlot* VerticalSlot = Content->AddChildToVerticalBox(GraphicsTarget)) {
     VerticalSlot->SetPadding(FMargin(0.0f, 0.0f, 0.0f, 18.0f));
   }
 
@@ -303,7 +320,7 @@ void UProjectAirDefenseMainMenuWidget::BuildWidgetTree() {
   }
   UTextBlock* SourceCredit = CreateText(
       this->WidgetTree,
-      TEXT("City of Helsinki / Helsinki 3D  CC BY 4.0"),
+      TEXT("City of Helsinki / Helsinki 3D | CC BY 4.0"),
       14,
       FLinearColor(0.70f, 0.80f, 0.90f, 1.0f));
   SourceCredit->SetAutoWrapText(true);

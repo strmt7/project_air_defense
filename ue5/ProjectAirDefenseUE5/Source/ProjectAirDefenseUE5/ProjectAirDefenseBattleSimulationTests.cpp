@@ -41,6 +41,42 @@ FProjectAirDefenseDefenseSettings MakeSettings(EProjectAirDefenseDefenseDoctrine
   return Settings;
 }
 
+int32 MaxAssignedInterceptorCount(
+    const FProjectAirDefenseBattleSimulation& Simulation,
+    FString* OutTargetId = nullptr) {
+  TMap<FString, int32> AssignmentCounts;
+  for (const FProjectAirDefenseInterceptorState& Interceptor : Simulation.GetInterceptors()) {
+    if (!Interceptor.TargetId.IsEmpty()) {
+      int32& Count = AssignmentCounts.FindOrAdd(Interceptor.TargetId);
+      ++Count;
+    }
+  }
+
+  int32 BestCount = 0;
+  FString BestTargetId;
+  for (const TPair<FString, int32>& Pair : AssignmentCounts) {
+    if (Pair.Value > BestCount) {
+      BestCount = Pair.Value;
+      BestTargetId = Pair.Key;
+    }
+  }
+  if (OutTargetId != nullptr) {
+    *OutTargetId = BestTargetId;
+  }
+  return BestCount;
+}
+
+const FProjectAirDefenseThreatState* FindThreatById(
+    const FProjectAirDefenseBattleSimulation& Simulation,
+    const FString& ThreatId) {
+  for (const FProjectAirDefenseThreatState& Threat : Simulation.GetThreats()) {
+    if (Threat.Id == ThreatId) {
+      return &Threat;
+    }
+  }
+  return nullptr;
+}
+
 FProjectAirDefenseBattleRunSummary RunSingleSimulation(
     int32 Seed,
     EProjectAirDefenseDefenseDoctrine Doctrine,
@@ -477,6 +513,61 @@ bool FProjectAirDefenseBattleEngagementModeTest::RunTest(const FString& Paramete
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+    FProjectAirDefenseBattleInitialSalvoWindowTest,
+    "ProjectAirDefense.BattleSimulation.EngagementModeCreatesInitialSalvo",
+    EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FProjectAirDefenseBattleInitialSalvoWindowTest::RunTest(const FString& Parameters) {
+  FProjectAirDefenseDefenseSettings PairSettings =
+      MakeSettings(EProjectAirDefenseDefenseDoctrine::Adaptive);
+  PairSettings.EngagementRangeMeters =
+      FProjectAirDefenseBattleSimulation::MaxConfigurableEngagementRangeMeters();
+  PairSettings.FireControlMode = EProjectAirDefenseFireControlMode::Early;
+  PairSettings.EngagementMode = EProjectAirDefenseEngagementMode::Pair;
+  PairSettings.LaunchCooldownSeconds = 0.16;
+  PairSettings.KillProbabilityAtZeroMiss = 0.0;
+  PairSettings.KillProbabilityFuseFloor = 0.0;
+
+  FProjectAirDefenseDefenseSettings SingleSettings = PairSettings;
+  SingleSettings.EngagementMode = EProjectAirDefenseEngagementMode::Single;
+
+  FProjectAirDefenseBattleSimulation PairSimulation(
+      MakeDistrictCells(), MakeLauncherPositions(), PairSettings, 72111);
+  FProjectAirDefenseBattleSimulation SingleSimulation(
+      MakeDistrictCells(), MakeLauncherPositions(), SingleSettings, 72111);
+  TestTrue(TEXT("pair wave starts"), PairSimulation.StartNextWave());
+  TestTrue(TEXT("single wave starts"), SingleSimulation.StartNextWave());
+
+  bool bPairCreatedPreTerminalSalvo = false;
+  int32 SingleMaxAssigned = 0;
+  for (int32 StepIndex = 0; StepIndex < 120; ++StepIndex) {
+    PairSimulation.Step(0.05);
+    SingleSimulation.Step(0.05);
+
+    FString PairTargetId;
+    if (MaxAssignedInterceptorCount(PairSimulation, &PairTargetId) >= 2) {
+      const FProjectAirDefenseThreatState* Threat =
+          FindThreatById(PairSimulation, PairTargetId);
+      bPairCreatedPreTerminalSalvo =
+          Threat != nullptr && Threat->PositionMeters.Y < -1000.0;
+      if (bPairCreatedPreTerminalSalvo) {
+        break;
+      }
+    }
+    SingleMaxAssigned =
+        FMath::Max(SingleMaxAssigned, MaxAssignedInterceptorCount(SingleSimulation));
+  }
+
+  TestTrue(
+      TEXT("pair mode creates a coordinated in-flight salvo before terminal range"),
+      bPairCreatedPreTerminalSalvo);
+  TestTrue(
+      TEXT("single mode never assigns a second in-flight interceptor to one threat"),
+      SingleMaxAssigned < 2);
+  return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
     FProjectAirDefenseBattleThreatPriorityTest,
     "ProjectAirDefense.BattleSimulation.ThreatPriorityBiasesLaunchMix",
     EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
@@ -557,6 +648,68 @@ bool FProjectAirDefenseBattleDeterminismTest::RunTest(const FString& Parameters)
       TEXT("miss-distance sample counts match"),
       First.MissDistanceSampleCount,
       Second.MissDistanceSampleCount);
+  return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+    FProjectAirDefenseBattleStepDeltaHandlingTest,
+    "ProjectAirDefense.BattleSimulation.StepDeltaHandling",
+    EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FProjectAirDefenseBattleStepDeltaHandlingTest::RunTest(const FString& Parameters) {
+  FProjectAirDefenseBattleSimulation NoopSimulation(
+      MakeDistrictCells(),
+      MakeLauncherPositions(),
+      MakeSettings(EProjectAirDefenseDefenseDoctrine::Adaptive),
+      81818);
+  TestTrue(TEXT("noop wave starts"), NoopSimulation.StartNextWave());
+  TestEqual(TEXT("negative delta produces no spawns"), NoopSimulation.Step(-0.25).SpawnedThreatIds.Num(), 0);
+  TestEqual(
+      TEXT("non-finite delta produces no spawns"),
+      NoopSimulation.Step(std::numeric_limits<double>::infinity()).SpawnedThreatIds.Num(),
+      0);
+  TestEqual(
+      TEXT("invalid deltas do not consume or rewind the spawn timer"),
+      NoopSimulation.Step(0.45).SpawnedThreatIds.Num(),
+      1);
+
+  FProjectAirDefenseBattleSimulation BurstSimulation(
+      MakeDistrictCells(),
+      MakeLauncherPositions(),
+      MakeSettings(EProjectAirDefenseDefenseDoctrine::Adaptive),
+      81819);
+  FProjectAirDefenseBattleSimulation IncrementalSimulation(
+      MakeDistrictCells(),
+      MakeLauncherPositions(),
+      MakeSettings(EProjectAirDefenseDefenseDoctrine::Adaptive),
+      81819);
+  TestTrue(TEXT("burst wave starts"), BurstSimulation.StartNextWave());
+  TestTrue(TEXT("incremental wave starts"), IncrementalSimulation.StartNextWave());
+  const FProjectAirDefenseStepEvents BurstEvents = BurstSimulation.Step(0.5);
+  int32 IncrementalSpawnCount = 0;
+  for (int32 StepIndex = 0; StepIndex < 10; ++StepIndex) {
+    IncrementalSpawnCount += IncrementalSimulation.Step(0.05).SpawnedThreatIds.Num();
+  }
+
+  TestEqual(
+      TEXT("large delta substeps produce the same spawn count as incremental ticks"),
+      BurstEvents.SpawnedThreatIds.Num(),
+      IncrementalSpawnCount);
+  TestEqual(
+      TEXT("large delta substeps leave the same active threat count"),
+      BurstSimulation.GetThreats().Num(),
+      IncrementalSimulation.GetThreats().Num());
+  TestEqual(
+      TEXT("large delta substeps leave the same remaining wave count"),
+      BurstSimulation.GetThreatsRemainingInWave(),
+      IncrementalSimulation.GetThreatsRemainingInWave());
+  if (!BurstSimulation.GetThreats().IsEmpty() && !IncrementalSimulation.GetThreats().IsEmpty()) {
+    const double PositionDeltaMeters =
+        (BurstSimulation.GetThreats()[0].PositionMeters -
+         IncrementalSimulation.GetThreats()[0].PositionMeters)
+            .Length();
+    TestTrue(TEXT("large delta substep motion matches incremental motion"), PositionDeltaMeters < 0.001);
+  }
   return true;
 }
 

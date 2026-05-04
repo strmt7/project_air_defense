@@ -60,6 +60,8 @@ UE5-specific scripts write under `benchmark-results/` unless their output paths 
 - `ue5-automation-monte-carlo-smoke.log` from the default-on smoke lane in `scripts/run-ue5-automation-tests.ps1`
 - `ue5-battle-monte-carlo.json` from `scripts/run-ue5-battle-monte-carlo.ps1`
 - `ue5-battle-monte-carlo.log` from `scripts/run-ue5-battle-monte-carlo.ps1`
+- `ue5-packaged-ui-proof-manifest.json` from `scripts/run-ue5-mobile-ui-proof.ps1`
+- `ue5-packaged-*-proof-state.json` from `scripts/run-ue5-mobile-ui-proof.ps1`, one per menu, battle, and systems capture
 
 ## UE5 Automation Smoke
 
@@ -67,11 +69,23 @@ UE5-specific scripts write under `benchmark-results/` unless their output paths 
 
 The smoke lane validates that the commandlet produced JSON and that the report contains the expected core contract: non-blank `engine`, `simulation` equal to `FProjectAirDefenseBattleSimulation`, matching `runs`, `waves`, `seed`, `secondsPerWave`, `stepSeconds`, matching doctrine and tactical controls, aggregate metric ranges, non-zero `totalThreatsSpawned`, non-negative totals, and one `runsDetail` entry per run. Use `-SkipBattleMonteCarloSmoke` when intentionally running only the UE automation tests.
 
-Current UE5 balance reference from 2026-05-03 after the engagement-attempt fix:
+## UE5 Mobile UI Proof
+
+`scripts/run-ue5-mobile-ui-proof.ps1` captures menu, battle, and systems screenshots through `scripts/capture-ue5-runtime-screenshot.ps1`. The lane now validates that each screenshot exists, is non-trivial in byte size, has valid dimensions, has sampled color and luminance variation, and has a matching state JSON proving the UE process was still alive when the screenshot appeared. Tesseract OCR is used when available to record whether the menu title `PROJECT AIR DEFENSE` was found; pass `-RequireMenuOcr` when a run must fail without that title proof.
+
+Local Win64 proof command used on 2026-05-05:
+
+```powershell
+scripts/run-ue5-mobile-ui-proof.ps1 -Exe ue5/ProjectAirDefenseUE5/Binaries/Win64/ProjectAirDefenseUE5.exe -OutputDir benchmark-results/ue5-ui-proof-final -RequireState -RequireMenuOcr
+```
+
+Latest validated Win64 UI proof from 2026-05-05: menu, battle, and systems captures all had `stateVerified=true`; menu OCR found `PROJECT AIR DEFENSE`; screenshot samples had 163, 184, and 167 distinct colors respectively. This is packaged desktop landscape proof, not Android device proof.
+
+Current UE5 balance reference from 2026-05-05 after the fire-control/salvo refinement:
 
 ```text
-scripts/run-ue5-battle-monte-carlo.ps1 -Runs 300 -Waves 1 -Seconds 48.0 -Step 0.05 -Seed 20260411 -Doctrine ShieldWall
-averageInterceptRate=0.861 averageCityIntegrity=81.38 totalThreatsSpawned=3300 totalHostileImpacts=459 averageMissDistanceMeters=45.82
+scripts/run-ue5-battle-monte-carlo.ps1 -Runs 300 -Waves 1 -Seconds 48.0 -Step 0.05 -Seed 20260411 -Doctrine ShieldWall -EngagementRange 2150 -EngagementMode Auto -ThreatPriority Balanced -FireControl Balanced
+averageInterceptRate=0.903 averageCityIntegrity=87.12 totalThreatsSpawned=3300 totalHostileImpacts=319 totalInterceptorsLaunched=5634 averageMissDistanceMeters=45.53 interceptRateP05=0.727 interceptRateP95=1.000
 ```
 
 ## Notes

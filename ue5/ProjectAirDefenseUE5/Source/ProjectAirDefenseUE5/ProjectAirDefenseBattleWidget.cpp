@@ -26,12 +26,16 @@
 #include "Styling/AppStyle.h"
 
 namespace {
-constexpr float UiMargin = 22.0f;
-constexpr float PanelPadding = 18.0f;
-constexpr float ButtonGap = 10.0f;
-constexpr float DrawerGap = 14.0f;
-constexpr float CardCornerRadius = 14.0f;
-constexpr float ButtonCornerRadius = 12.0f;
+constexpr float UiMargin = 18.0f;
+constexpr float PanelPadding = 14.0f;
+constexpr float ButtonGap = 8.0f;
+constexpr float DrawerGap = 10.0f;
+constexpr float CardCornerRadius = 20.0f;
+constexpr float ButtonCornerRadius = 24.0f;
+constexpr float BottomActionMinHeight = 60.0f;
+constexpr float DrawerButtonMinHeight = 48.0f;
+constexpr float SliderTouchHeight = 38.0f;
+constexpr float SwitchTouchHeight = 38.0f;
 
 const FName CameraPanUpAction(TEXT("CameraPanUp"));
 const FName CameraPanDownAction(TEXT("CameraPanDown"));
@@ -80,7 +84,8 @@ UButton* CreateButton(
     const FString& Label,
     const FLinearColor& FillColor,
     UTextBlock*& OutLabel,
-    int32 FontSize = 20) {
+    int32 FontSize = 20,
+    const FMargin& ContentPadding = FMargin(16.0f, 14.0f)) {
   UButton* Button = WidgetTree->ConstructWidget<UProjectAirDefenseTouchButton>();
   const FLinearColor HoverColor(
       FMath::Min(FillColor.R + 0.05f, 1.0f),
@@ -113,15 +118,28 @@ UButton* CreateButton(
   Button->SetStyle(ButtonStyle);
   Button->SetColorAndOpacity(FLinearColor::White);
   Button->SetClickMethod(EButtonClickMethod::MouseDown);
-
   UBorder* PaddingBorder = WidgetTree->ConstructWidget<UBorder>();
   PaddingBorder->SetBrushColor(FLinearColor::Transparent);
-  PaddingBorder->SetPadding(FMargin(14.0f, 12.0f));
+  PaddingBorder->SetPadding(ContentPadding);
 
   OutLabel = CreateText(WidgetTree, Label, FontSize, FLinearColor::White, ETextJustify::Center);
   PaddingBorder->SetContent(OutLabel);
   Button->AddChild(PaddingBorder);
   return Button;
+}
+
+USizeBox* CreateTouchTarget(
+    UWidgetTree* WidgetTree,
+    UWidget* Content,
+    float MinHeight,
+    float MinWidth = 0.0f) {
+  USizeBox* Target = WidgetTree->ConstructWidget<USizeBox>();
+  Target->SetMinDesiredHeight(MinHeight);
+  if (MinWidth > 0.0f) {
+    Target->SetMinDesiredWidth(MinWidth);
+  }
+  Target->SetContent(Content);
+  return Target;
 }
 
 void AddOverlayChild(
@@ -242,7 +260,7 @@ void UProjectAirDefenseBattleWidget::RefreshFromRuntime() {
     const FString LeftPrimary =
         Snapshot.bWaveInProgress
             ? FString::Printf(
-                  TEXT("W%d LIVE | %d HOSTILES"),
+                  TEXT("W%d LIVE | %d INBOUND"),
                   Snapshot.Wave,
                   Snapshot.VisibleThreats + Snapshot.RemainingThreatsInWave)
             : FString::Printf(TEXT("W%d READY"), Snapshot.Wave);
@@ -250,21 +268,21 @@ void UProjectAirDefenseBattleWidget::RefreshFromRuntime() {
   }
   if (this->LeftSecondaryText != nullptr) {
     this->LeftSecondaryText->SetText(FText::FromString(FString::Printf(
-        TEXT("%s | TRACK %d"),
+        TEXT("%s | TRK %d"),
         *ProjectAirDefenseDoctrineLabel(Snapshot.Doctrine),
         Snapshot.TrackedThreats)));
   }
   if (this->RightPrimaryText != nullptr) {
     this->RightPrimaryText->SetText(FText::FromString(FString::Printf(
-        TEXT("CITY %d%% | SCORE %d"),
+        TEXT("CITY %d%% | S %d"),
         FMath::RoundToInt(Snapshot.CityIntegrity),
         Snapshot.Score)));
   }
   if (this->RightSecondaryText != nullptr) {
     this->RightSecondaryText->SetText(FText::FromString(FString::Printf(
-        TEXT("CR %d | RNG %dm"),
+        TEXT("CR %d | %.1fKM"),
         Snapshot.Credits,
-        FMath::RoundToInt(Snapshot.EffectiveRangeMeters))));
+        Snapshot.EffectiveRangeMeters / 1000.0)));
   }
   if (this->SystemsButtonText != nullptr) {
     this->SystemsButtonText->SetText(
@@ -278,11 +296,11 @@ void UProjectAirDefenseBattleWidget::RefreshFromRuntime() {
   }
   if (this->ThreatPriorityButtonText != nullptr) {
     this->ThreatPriorityButtonText->SetText(FText::FromString(
-        FString::Printf(TEXT("PRI %s"), *ProjectAirDefenseThreatPriorityLabel(Snapshot.ThreatPriority))));
+        FString::Printf(TEXT("PR %s"), *ProjectAirDefenseThreatPriorityLabel(Snapshot.ThreatPriority))));
   }
   if (this->FireControlButtonText != nullptr) {
     this->FireControlButtonText->SetText(FText::FromString(
-        FString::Printf(TEXT("CTRL %s"), *ProjectAirDefenseFireControlModeLabel(Snapshot.FireControlMode))));
+        FString::Printf(TEXT("FC %s"), *ProjectAirDefenseFireControlModeLabel(Snapshot.FireControlMode))));
   }
   if (this->WaveButtonText != nullptr) {
     this->WaveButtonText->SetText(
@@ -290,10 +308,9 @@ void UProjectAirDefenseBattleWidget::RefreshFromRuntime() {
   }
   if (this->TacticsSummaryText != nullptr) {
     this->TacticsSummaryText->SetText(FText::FromString(FString::Printf(
-        TEXT("RNG %dm | FUSE %dm | TRACK %d"),
-        FMath::RoundToInt(Snapshot.EffectiveRangeMeters),
-        FMath::RoundToInt(Snapshot.EffectiveFuseMeters),
-        Snapshot.TrackedThreats)));
+        TEXT("RNG %.1fKM | FUSE %dm"),
+        Snapshot.EffectiveRangeMeters / 1000.0,
+        FMath::RoundToInt(Snapshot.EffectiveFuseMeters))));
   }
   if (this->EngagementRangeValueText != nullptr) {
     this->EngagementRangeValueText->SetText(FText::FromString(FString::Printf(
@@ -302,7 +319,8 @@ void UProjectAirDefenseBattleWidget::RefreshFromRuntime() {
   }
   if (this->TacticsThreatText != nullptr) {
     this->TacticsThreatText->SetText(FText::FromString(FString::Printf(
-        TEXT("LIVE %d | B %d | G %d | C %d"),
+        TEXT("TRK %d | IN %d | B%d G%d C%d"),
+        Snapshot.TrackedThreats,
         Snapshot.VisibleThreats,
         Snapshot.BallisticThreats,
         Snapshot.GlideThreats,
@@ -456,6 +474,25 @@ void UProjectAirDefenseBattleWidget::NativeDestruct() {
   }
   this->ActiveCameraHoldAction = NAME_None;
   Super::NativeDestruct();
+}
+
+FReply UProjectAirDefenseBattleWidget::NativeOnMouseButtonUp(
+    const FGeometry& InGeometry,
+    const FPointerEvent& InMouseEvent) {
+  this->StopCameraHold();
+  return Super::NativeOnMouseButtonUp(InGeometry, InMouseEvent);
+}
+
+void UProjectAirDefenseBattleWidget::NativeOnMouseLeave(const FPointerEvent& InMouseEvent) {
+  this->StopCameraHold();
+  Super::NativeOnMouseLeave(InMouseEvent);
+}
+
+FReply UProjectAirDefenseBattleWidget::NativeOnTouchEnded(
+    const FGeometry& InGeometry,
+    const FPointerEvent& InGestureEvent) {
+  this->StopCameraHold();
+  return Super::NativeOnTouchEnded(InGeometry, InGestureEvent);
 }
 
 void UProjectAirDefenseBattleWidget::HandleSystemsPressed() {
@@ -826,13 +863,14 @@ void UProjectAirDefenseBattleWidget::BuildWidgetTree() {
   SafeZone->SetContent(RootOverlay);
   this->WidgetTree->RootWidget = SafeZone;
 
-  UBorder* LeftCard = CreateCard(this->WidgetTree, FLinearColor(0.03f, 0.07f, 0.11f, 0.82f));
+  UBorder* LeftCard = CreateCard(this->WidgetTree, FLinearColor(0.03f, 0.07f, 0.11f, 0.72f), 12.0f);
+  LeftCard->SetVisibility(ESlateVisibility::HitTestInvisible);
   UVerticalBox* LeftStack = this->WidgetTree->ConstructWidget<UVerticalBox>();
   LeftCard->SetContent(LeftStack);
   this->LeftPrimaryText =
-      CreateText(this->WidgetTree, TEXT("W1 READY"), 23, FLinearColor(0.97f, 0.99f, 1.0f, 1.0f));
+      CreateText(this->WidgetTree, TEXT("W1 READY"), 21, FLinearColor(0.97f, 0.99f, 1.0f, 1.0f));
   this->LeftSecondaryText =
-      CreateText(this->WidgetTree, TEXT("SHIELD WALL | TRACK 0"), 18, FLinearColor(0.72f, 0.91f, 1.0f, 1.0f));
+      CreateText(this->WidgetTree, TEXT("SHIELD WALL | TRK 0"), 16, FLinearColor(0.72f, 0.91f, 1.0f, 1.0f));
   LeftStack->AddChildToVerticalBox(this->LeftPrimaryText);
   LeftStack->AddChildToVerticalBox(this->LeftSecondaryText);
   AddOverlayChild(
@@ -842,13 +880,14 @@ void UProjectAirDefenseBattleWidget::BuildWidgetTree() {
       VAlign_Top,
       FMargin(UiMargin, UiMargin, 0.0f, 0.0f));
 
-  UBorder* RightCard = CreateCard(this->WidgetTree, FLinearColor(0.03f, 0.07f, 0.11f, 0.82f));
+  UBorder* RightCard = CreateCard(this->WidgetTree, FLinearColor(0.03f, 0.07f, 0.11f, 0.72f), 12.0f);
+  RightCard->SetVisibility(ESlateVisibility::HitTestInvisible);
   UVerticalBox* RightStack = this->WidgetTree->ConstructWidget<UVerticalBox>();
   RightCard->SetContent(RightStack);
   this->RightPrimaryText =
-      CreateText(this->WidgetTree, TEXT("CITY 100% | SCORE 0"), 23, FLinearColor(0.97f, 0.99f, 1.0f, 1.0f));
+      CreateText(this->WidgetTree, TEXT("CITY 100% | S 0"), 21, FLinearColor(0.97f, 0.99f, 1.0f, 1.0f));
   this->RightSecondaryText =
-      CreateText(this->WidgetTree, TEXT("CR 10000 | RNG 0m"), 18, FLinearColor(0.98f, 0.82f, 0.46f, 1.0f));
+      CreateText(this->WidgetTree, TEXT("CR 10000 | 0.0KM"), 16, FLinearColor(0.98f, 0.82f, 0.46f, 1.0f));
   RightStack->AddChildToVerticalBox(this->RightPrimaryText);
   RightStack->AddChildToVerticalBox(this->RightSecondaryText);
   AddOverlayChild(
@@ -863,6 +902,7 @@ void UProjectAirDefenseBattleWidget::BuildWidgetTree() {
   RadarBox->SetHeightOverride(184.0f);
   this->RadarWidget = this->WidgetTree->ConstructWidget<UProjectAirDefenseRadarWidget>();
   RadarBox->AddChild(this->RadarWidget);
+  RadarBox->SetVisibility(ESlateVisibility::HitTestInvisible);
   AddOverlayChild(
       RootOverlay,
       RadarBox,
@@ -877,7 +917,7 @@ void UProjectAirDefenseBattleWidget::BuildWidgetTree() {
   this->SystemsButtonText = SystemsLabel;
   AddOverlayChild(
       RootOverlay,
-      SystemsButton,
+      CreateTouchTarget(this->WidgetTree, SystemsButton, BottomActionMinHeight, 148.0f),
       HAlign_Left,
       VAlign_Bottom,
       FMargin(UiMargin, 0.0f, 0.0f, UiMargin));
@@ -895,7 +935,9 @@ void UProjectAirDefenseBattleWidget::BuildWidgetTree() {
       CreateButton(this->WidgetTree, TEXT("SHIELD WALL"), FLinearColor(0.11f, 0.10f, 0.18f, 0.96f), DoctrineLabel, 22);
   DoctrineButton->OnClicked.AddDynamic(this, &UProjectAirDefenseBattleWidget::HandleDoctrinePressed);
   this->DoctrineButtonText = DoctrineLabel;
-  if (UHorizontalBoxSlot* HorizontalSlot = BottomActions->AddChildToHorizontalBox(DoctrineButton)) {
+  USizeBox* DoctrineTarget =
+      CreateTouchTarget(this->WidgetTree, DoctrineButton, BottomActionMinHeight, 172.0f);
+  if (UHorizontalBoxSlot* HorizontalSlot = BottomActions->AddChildToHorizontalBox(DoctrineTarget)) {
     HorizontalSlot->SetPadding(FMargin(0.0f, 0.0f, ButtonGap, 0.0f));
   }
 
@@ -904,10 +946,12 @@ void UProjectAirDefenseBattleWidget::BuildWidgetTree() {
       CreateButton(this->WidgetTree, TEXT("ENGAGE"), FLinearColor(0.17f, 0.16f, 0.08f, 0.98f), WaveLabel, 22);
   WaveButton->OnClicked.AddDynamic(this, &UProjectAirDefenseBattleWidget::HandleWavePressed);
   this->WaveButtonText = WaveLabel;
-  BottomActions->AddChildToHorizontalBox(WaveButton);
+  BottomActions->AddChildToHorizontalBox(
+      CreateTouchTarget(this->WidgetTree, WaveButton, BottomActionMinHeight, 136.0f));
 
   UTextBlock* MapCreditText =
       CreateText(this->WidgetTree, TEXT("\u00A9 City of Helsinki 3D Mesh, CC BY 4.0"), 18, FLinearColor(0.82f, 0.90f, 1.0f, 0.72f), ETextJustify::Right);
+  MapCreditText->SetVisibility(ESlateVisibility::HitTestInvisible);
   AddOverlayChild(
       RootOverlay,
       MapCreditText,
@@ -915,13 +959,14 @@ void UProjectAirDefenseBattleWidget::BuildWidgetTree() {
       VAlign_Bottom,
       FMargin(0.0f, 0.0f, UiMargin, 82.0f));
 
-  UBorder* DrawerCard = CreateCard(this->WidgetTree, FLinearColor(0.03f, 0.07f, 0.11f, 0.88f), 20.0f);
+  UBorder* DrawerCard = CreateCard(this->WidgetTree, FLinearColor(0.03f, 0.07f, 0.11f, 0.78f), 14.0f);
+  this->SystemsDrawerSurface = DrawerCard;
   AddOverlayChild(
       RootOverlay,
       DrawerCard,
       HAlign_Center,
       VAlign_Bottom,
-      FMargin(34.0f, 0.0f, 34.0f, 108.0f));
+      FMargin(34.0f, 0.0f, 34.0f, 100.0f));
   this->SystemsDrawer = this->WidgetTree->ConstructWidget<UVerticalBox>();
   DrawerCard->SetContent(this->SystemsDrawer);
 
@@ -929,25 +974,25 @@ void UProjectAirDefenseBattleWidget::BuildWidgetTree() {
   this->SystemsDrawer->AddChildToVerticalBox(DrawerColumns);
 
   auto BuildDrawerPanel = [this, DrawerColumns](const FString& Title, const FLinearColor& Accent) -> UVerticalBox* {
-    UBorder* Panel = CreateCard(this->WidgetTree, FLinearColor(0.05f, 0.09f, 0.14f, 0.94f), 16.0f);
+    UBorder* Panel = CreateCard(this->WidgetTree, FLinearColor(0.05f, 0.09f, 0.14f, 0.86f), 10.0f);
     if (UHorizontalBoxSlot* Slot = DrawerColumns->AddChildToHorizontalBox(Panel)) {
       Slot->SetPadding(FMargin(0.0f, 0.0f, DrawerGap, 0.0f));
       Slot->SetSize(ESlateSizeRule::Fill);
     }
     UVerticalBox* Stack = this->WidgetTree->ConstructWidget<UVerticalBox>();
     Panel->SetContent(Stack);
-    UTextBlock* Heading = CreateText(this->WidgetTree, Title, 22, Accent);
+    UTextBlock* Heading = CreateText(this->WidgetTree, Title, 18, Accent);
     if (UVerticalBoxSlot* HeadingSlot = Stack->AddChildToVerticalBox(Heading)) {
-      HeadingSlot->SetPadding(FMargin(0.0f, 0.0f, 0.0f, 12.0f));
+      HeadingSlot->SetPadding(FMargin(0.0f, 0.0f, 0.0f, 8.0f));
     }
     return Stack;
   };
 
   UVerticalBox* TacticsPanel = BuildDrawerPanel(TEXT("TACTICS"), FLinearColor(0.98f, 0.82f, 0.46f, 1.0f));
   this->TacticsSummaryText =
-      CreateText(this->WidgetTree, TEXT("LIVE 0 | TRACK 0 | CITY 100%"), 19, FLinearColor(0.94f, 0.97f, 1.0f, 1.0f));
+      CreateText(this->WidgetTree, TEXT("RNG 2.2KM | FUSE 0m"), 17, FLinearColor(0.94f, 0.97f, 1.0f, 1.0f));
   this->TacticsThreatText =
-      CreateText(this->WidgetTree, TEXT("B 0 | G 0 | C 0"), 18, FLinearColor(0.74f, 0.90f, 1.0f, 1.0f));
+      CreateText(this->WidgetTree, TEXT("TRK 0 | IN 0 | B0 G0 C0"), 16, FLinearColor(0.74f, 0.90f, 1.0f, 1.0f));
   if (UVerticalBoxSlot* VerticalSlot = TacticsPanel->AddChildToVerticalBox(this->TacticsSummaryText)) {
     VerticalSlot->SetPadding(FMargin(0.0f, 0.0f, 0.0f, 8.0f));
   }
@@ -964,12 +1009,12 @@ void UProjectAirDefenseBattleWidget::BuildWidgetTree() {
   if (UHorizontalBoxSlot* LabelSlot = RangeHeader->AddChildToHorizontalBox(CreateText(
           this->WidgetTree,
           TEXT("RANGE"),
-          17,
+          16,
           FLinearColor(0.75f, 0.86f, 0.96f, 1.0f)))) {
     LabelSlot->SetSize(ESlateSizeRule::Fill);
   }
   this->EngagementRangeValueText =
-      CreateText(this->WidgetTree, TEXT("2.2 KM"), 17, FLinearColor(0.98f, 0.82f, 0.46f, 1.0f), ETextJustify::Right);
+      CreateText(this->WidgetTree, TEXT("2.2 KM"), 16, FLinearColor(0.98f, 0.82f, 0.46f, 1.0f), ETextJustify::Right);
   RangeHeader->AddChildToHorizontalBox(this->EngagementRangeValueText);
   this->EngagementRangeSlider = this->WidgetTree->ConstructWidget<USlider>();
   this->EngagementRangeSlider->SetMinValue(static_cast<float>(
@@ -980,13 +1025,14 @@ void UProjectAirDefenseBattleWidget::BuildWidgetTree() {
   this->EngagementRangeSlider->SetIndentHandle(false);
   this->EngagementRangeSlider->OnValueChanged.AddDynamic(
       this, &UProjectAirDefenseBattleWidget::HandleEngagementRangeSliderChanged);
-  if (UVerticalBoxSlot* SliderSlot = RangeStack->AddChildToVerticalBox(this->EngagementRangeSlider)) {
-    SliderSlot->SetPadding(FMargin(0.0f, 4.0f, 0.0f, 0.0f));
+  if (UVerticalBoxSlot* SliderSlot = RangeStack->AddChildToVerticalBox(
+          CreateTouchTarget(this->WidgetTree, this->EngagementRangeSlider, SliderTouchHeight))) {
+    SliderSlot->SetPadding(FMargin(0.0f, 6.0f, 0.0f, 0.0f));
   }
 
   UUniformGridPanel* TacticsGrid = this->WidgetTree->ConstructWidget<UUniformGridPanel>();
-  TacticsGrid->SetMinDesiredSlotWidth(132.0f);
-  TacticsGrid->SetMinDesiredSlotHeight(50.0f);
+  TacticsGrid->SetMinDesiredSlotWidth(118.0f);
+  TacticsGrid->SetMinDesiredSlotHeight(DrawerButtonMinHeight);
   TacticsPanel->AddChildToVerticalBox(TacticsGrid);
 
   auto AddTacticsButton = [this, TacticsGrid](
@@ -995,7 +1041,7 @@ void UProjectAirDefenseBattleWidget::BuildWidgetTree() {
                               const FString& Label,
                               const FLinearColor& Color,
                               UTextBlock*& LabelText) -> UButton* {
-    UButton* Button = CreateButton(this->WidgetTree, Label, Color, LabelText, 18);
+    UButton* Button = CreateButton(this->WidgetTree, Label, Color, LabelText, 17, FMargin(12.0f, 9.0f));
     if (UUniformGridSlot* Slot = TacticsGrid->AddChildToUniformGrid(Button, Row, Column)) {
       Slot->SetHorizontalAlignment(HAlign_Fill);
       Slot->SetVerticalAlignment(VAlign_Fill);
@@ -1016,23 +1062,23 @@ void UProjectAirDefenseBattleWidget::BuildWidgetTree() {
   EngagementModeButton->OnClicked.AddDynamic(this, &UProjectAirDefenseBattleWidget::HandleEngagementModePressed);
   UTextBlock* ThreatPriorityLabel = nullptr;
   UButton* ThreatPriorityButton =
-      AddTacticsButton(1, 1, TEXT("PRI BALANCED"), FLinearColor(0.13f, 0.11f, 0.18f, 0.96f), ThreatPriorityLabel);
+      AddTacticsButton(1, 1, TEXT("PR BALANCED"), FLinearColor(0.13f, 0.11f, 0.18f, 0.96f), ThreatPriorityLabel);
   this->ThreatPriorityButtonText = ThreatPriorityLabel;
   ThreatPriorityButton->OnClicked.AddDynamic(this, &UProjectAirDefenseBattleWidget::HandleThreatPriorityPressed);
   UTextBlock* FireControlLabel = nullptr;
   UButton* FireControlButton =
-      AddTacticsButton(2, 0, TEXT("CTRL BALANCED"), FLinearColor(0.08f, 0.15f, 0.22f, 0.96f), FireControlLabel);
+      AddTacticsButton(2, 0, TEXT("FC BALANCED"), FLinearColor(0.08f, 0.15f, 0.22f, 0.96f), FireControlLabel);
   this->FireControlButtonText = FireControlLabel;
   FireControlButton->OnClicked.AddDynamic(this, &UProjectAirDefenseBattleWidget::HandleFireControlPressed);
 
   UVerticalBox* CameraPanel = BuildDrawerPanel(TEXT("VIEW"), FLinearColor(0.26f, 0.86f, 0.98f, 1.0f));
   UUniformGridPanel* CameraGrid = this->WidgetTree->ConstructWidget<UUniformGridPanel>();
-  CameraGrid->SetMinDesiredSlotWidth(118.0f);
-  CameraGrid->SetMinDesiredSlotHeight(50.0f);
+  CameraGrid->SetMinDesiredSlotWidth(112.0f);
+  CameraGrid->SetMinDesiredSlotHeight(44.0f);
   CameraPanel->AddChildToVerticalBox(CameraGrid);
 
   auto AddGridButton = [this](UUniformGridPanel* Grid, int32 Row, int32 Column, const FString& Label, const FLinearColor& Color, UTextBlock*& LabelText) -> UButton* {
-    UButton* Button = CreateButton(this->WidgetTree, Label, Color, LabelText, 18);
+    UButton* Button = CreateButton(this->WidgetTree, Label, Color, LabelText, 17, FMargin(12.0f, 9.0f));
     if (UUniformGridSlot* Slot = Grid->AddChildToUniformGrid(Button, Row, Column)) {
       Slot->SetHorizontalAlignment(HAlign_Fill);
       Slot->SetVerticalAlignment(VAlign_Fill);
@@ -1088,31 +1134,35 @@ void UProjectAirDefenseBattleWidget::BuildWidgetTree() {
           float MinValue,
           float MaxValue,
           float StepSize) -> USlider* {
-    UVerticalBox* RowStack = this->WidgetTree->ConstructWidget<UVerticalBox>();
-    if (UVerticalBoxSlot* RowSlot = Panel->AddChildToVerticalBox(RowStack)) {
-      RowSlot->SetPadding(FMargin(0.0f, 0.0f, 0.0f, 10.0f));
+    UHorizontalBox* Row = this->WidgetTree->ConstructWidget<UHorizontalBox>();
+    if (UVerticalBoxSlot* RowSlot = Panel->AddChildToVerticalBox(Row)) {
+      RowSlot->SetPadding(FMargin(0.0f, 0.0f, 0.0f, 7.0f));
     }
 
-    UHorizontalBox* HeaderRow = this->WidgetTree->ConstructWidget<UHorizontalBox>();
-    RowStack->AddChildToVerticalBox(HeaderRow);
-    if (UHorizontalBoxSlot* LabelSlot = HeaderRow->AddChildToHorizontalBox(CreateText(
+    if (UHorizontalBoxSlot* LabelSlot = Row->AddChildToHorizontalBox(CreateText(
             this->WidgetTree,
             Label,
-            17,
+            16,
             FLinearColor(0.75f, 0.86f, 0.96f, 1.0f)))) {
       LabelSlot->SetSize(ESlateSizeRule::Fill);
+      LabelSlot->SetVerticalAlignment(VAlign_Center);
     }
-    OutValueText =
-        CreateText(this->WidgetTree, TEXT("--"), 17, FLinearColor(0.98f, 0.82f, 0.46f, 1.0f), ETextJustify::Right);
-    HeaderRow->AddChildToHorizontalBox(OutValueText);
 
     USlider* Slider = this->WidgetTree->ConstructWidget<USlider>();
     Slider->SetMinValue(MinValue);
     Slider->SetMaxValue(MaxValue);
     Slider->SetStepSize(StepSize);
     Slider->SetIndentHandle(false);
-    if (UVerticalBoxSlot* SliderSlot = RowStack->AddChildToVerticalBox(Slider)) {
-      SliderSlot->SetPadding(FMargin(0.0f, 4.0f, 0.0f, 0.0f));
+    if (UHorizontalBoxSlot* SliderSlot = Row->AddChildToHorizontalBox(
+            CreateTouchTarget(this->WidgetTree, Slider, SliderTouchHeight, 112.0f))) {
+      SliderSlot->SetSize(ESlateSizeRule::Fill);
+      SliderSlot->SetVerticalAlignment(VAlign_Center);
+      SliderSlot->SetPadding(FMargin(8.0f, 0.0f));
+    }
+    OutValueText =
+        CreateText(this->WidgetTree, TEXT("--"), 16, FLinearColor(0.98f, 0.82f, 0.46f, 1.0f), ETextJustify::Right);
+    if (UHorizontalBoxSlot* ValueSlot = Row->AddChildToHorizontalBox(OutValueText)) {
+      ValueSlot->SetVerticalAlignment(VAlign_Center);
     }
     return Slider;
   };
@@ -1121,25 +1171,26 @@ void UProjectAirDefenseBattleWidget::BuildWidgetTree() {
       [this](UVerticalBox* Panel, const FString& Label, TObjectPtr<UTextBlock>& OutValueText) -> UCheckBox* {
     UHorizontalBox* Row = this->WidgetTree->ConstructWidget<UHorizontalBox>();
     if (UVerticalBoxSlot* RowSlot = Panel->AddChildToVerticalBox(Row)) {
-      RowSlot->SetPadding(FMargin(0.0f, 2.0f, 0.0f, 10.0f));
+      RowSlot->SetPadding(FMargin(0.0f, 0.0f, 0.0f, 7.0f));
     }
     if (UHorizontalBoxSlot* LabelSlot = Row->AddChildToHorizontalBox(CreateText(
             this->WidgetTree,
             Label,
-            17,
+            16,
             FLinearColor(0.75f, 0.86f, 0.96f, 1.0f)))) {
       LabelSlot->SetSize(ESlateSizeRule::Fill);
       LabelSlot->SetVerticalAlignment(VAlign_Center);
     }
     OutValueText =
-        CreateText(this->WidgetTree, TEXT("OFF"), 17, FLinearColor(0.98f, 0.82f, 0.46f, 1.0f), ETextJustify::Right);
+        CreateText(this->WidgetTree, TEXT("OFF"), 16, FLinearColor(0.98f, 0.82f, 0.46f, 1.0f), ETextJustify::Right);
     if (UHorizontalBoxSlot* ValueSlot = Row->AddChildToHorizontalBox(OutValueText)) {
-      ValueSlot->SetPadding(FMargin(0.0f, 0.0f, 12.0f, 0.0f));
+      ValueSlot->SetPadding(FMargin(0.0f, 0.0f, 8.0f, 0.0f));
       ValueSlot->SetVerticalAlignment(VAlign_Center);
     }
     UCheckBox* Switch = this->WidgetTree->ConstructWidget<UCheckBox>();
     Switch->SetCheckedState(ECheckBoxState::Unchecked);
-    if (UHorizontalBoxSlot* SwitchSlot = Row->AddChildToHorizontalBox(Switch)) {
+    if (UHorizontalBoxSlot* SwitchSlot = Row->AddChildToHorizontalBox(
+            CreateTouchTarget(this->WidgetTree, Switch, SwitchTouchHeight, SwitchTouchHeight))) {
       SwitchSlot->SetVerticalAlignment(VAlign_Center);
     }
     return Switch;
@@ -1148,19 +1199,19 @@ void UProjectAirDefenseBattleWidget::BuildWidgetTree() {
   this->OverallQualitySlider =
       AddSettingSlider(GraphicsPanel, TEXT("QUALITY"), this->QualityValueText, 0.0f, 4.0f, 1.0f);
   this->OverallQualitySlider->OnValueChanged.AddDynamic(this, &UProjectAirDefenseBattleWidget::HandleOverallQualitySliderChanged);
-  this->AaSlider = AddSettingSlider(GraphicsPanel, TEXT("ANTI-ALIASING"), this->AaValueText, 0.0f, 4.0f, 1.0f);
+  this->AaSlider = AddSettingSlider(GraphicsPanel, TEXT("AA"), this->AaValueText, 0.0f, 4.0f, 1.0f);
   this->AaSlider->OnValueChanged.AddDynamic(this, &UProjectAirDefenseBattleWidget::HandleAaSliderChanged);
-  this->AoSwitch = AddSwitchRow(GraphicsPanel, TEXT("AMBIENT OCCLUSION"), this->AoValueText);
+  this->AoSwitch = AddSwitchRow(GraphicsPanel, TEXT("AO"), this->AoValueText);
   this->AoSwitch->OnCheckStateChanged.AddDynamic(this, &UProjectAirDefenseBattleWidget::HandleAoSwitchChanged);
-  this->BlurSwitch = AddSwitchRow(GraphicsPanel, TEXT("MOTION BLUR"), this->BlurValueText);
+  this->BlurSwitch = AddSwitchRow(GraphicsPanel, TEXT("BLUR"), this->BlurValueText);
   this->BlurSwitch->OnCheckStateChanged.AddDynamic(this, &UProjectAirDefenseBattleWidget::HandleBlurSwitchChanged);
-  this->RayTracingSwitch = AddSwitchRow(GraphicsPanel, TEXT("RT REQUEST"), this->RayTracingValueText);
+  this->RayTracingSwitch = AddSwitchRow(GraphicsPanel, TEXT("RAY TRACE"), this->RayTracingValueText);
   this->RayTracingSwitch->OnCheckStateChanged.AddDynamic(this, &UProjectAirDefenseBattleWidget::HandleRayTracingSwitchChanged);
   this->ShadowSlider = AddSettingSlider(GraphicsPanel, TEXT("SHADOWS"), this->ShadowValueText, 0.0f, 4.0f, 1.0f);
   this->ShadowSlider->OnValueChanged.AddDynamic(this, &UProjectAirDefenseBattleWidget::HandleShadowSliderChanged);
   this->ReflectionSlider = AddSettingSlider(GraphicsPanel, TEXT("REFLECTIONS"), this->ReflectionValueText, 0.0f, 4.0f, 1.0f);
   this->ReflectionSlider->OnValueChanged.AddDynamic(this, &UProjectAirDefenseBattleWidget::HandleReflectionSliderChanged);
-  this->PostSlider = AddSettingSlider(GraphicsPanel, TEXT("POST PROCESS"), this->PostValueText, 0.0f, 4.0f, 1.0f);
+  this->PostSlider = AddSettingSlider(GraphicsPanel, TEXT("POST FX"), this->PostValueText, 0.0f, 4.0f, 1.0f);
   this->PostSlider->OnValueChanged.AddDynamic(this, &UProjectAirDefenseBattleWidget::HandlePostSliderChanged);
 
   UVerticalBox* TimePanel = BuildDrawerPanel(TEXT("TIME"), FLinearColor(1.0f, 0.78f, 0.38f, 1.0f));
@@ -1170,10 +1221,10 @@ void UProjectAirDefenseBattleWidget::BuildWidgetTree() {
     VerticalSlot->SetPadding(FMargin(0.0f, 0.0f, 0.0f, 12.0f));
   }
   this->TimeOfDaySlider =
-      AddSettingSlider(TimePanel, TEXT("TIME OF DAY"), this->TimeOfDayValueText, 0.0f, 24.0f, 0.25f);
+      AddSettingSlider(TimePanel, TEXT("CLOCK"), this->TimeOfDayValueText, 0.0f, 24.0f, 0.25f);
   this->TimeOfDaySlider->OnValueChanged.AddDynamic(this, &UProjectAirDefenseBattleWidget::HandleTimeOfDaySliderChanged);
   this->TimeScaleSlider =
-      AddSettingSlider(TimePanel, TEXT("DAY/NIGHT SPEED"), this->TimeScaleValueText, 0.0f, 12.0f, 0.25f);
+      AddSettingSlider(TimePanel, TEXT("SPEED"), this->TimeScaleValueText, 0.0f, 12.0f, 0.25f);
   this->TimeScaleSlider->OnValueChanged.AddDynamic(this, &UProjectAirDefenseBattleWidget::HandleTimeScaleSliderChanged);
   this->TimeCycleSwitch = AddSwitchRow(TimePanel, TEXT("CYCLE"), this->TimeCycleValueText);
   this->TimeCycleSwitch->OnCheckStateChanged.AddDynamic(this, &UProjectAirDefenseBattleWidget::HandleTimeCycleSwitchChanged);
@@ -1192,5 +1243,12 @@ void UProjectAirDefenseBattleWidget::SetDrawerVisibility(bool bVisible) {
   if (this->SystemsDrawer == nullptr) {
     return;
   }
-  this->SystemsDrawer->SetVisibility(bVisible ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
+  if (!bVisible) {
+    this->StopCameraHold();
+  }
+  const ESlateVisibility DrawerVisibility = bVisible ? ESlateVisibility::Visible : ESlateVisibility::Collapsed;
+  this->SystemsDrawer->SetVisibility(DrawerVisibility);
+  if (this->SystemsDrawerSurface != nullptr) {
+    this->SystemsDrawerSurface->SetVisibility(DrawerVisibility);
+  }
 }

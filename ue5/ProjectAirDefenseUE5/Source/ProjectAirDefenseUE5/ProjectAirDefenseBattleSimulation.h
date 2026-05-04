@@ -62,9 +62,14 @@ private:
       double EffectiveBlastRadiusMeters,
       FStepAccumulator& Events);
   void LaunchInterceptorIfReady(double DeltaSeconds, FStepAccumulator& Events);
+  void StepSubstep(double DeltaSeconds, FStepAccumulator& Events);
 
   FProjectAirDefenseThreatState SpawnThreat();
   FProjectAirDefenseThreatState* SelectNextThreat();
+  TOptional<int32> FindReadyLauncherForThreat(
+      const FProjectAirDefenseThreatState& TargetThreat,
+      double TimeToImpactSeconds,
+      double* OutSolutionScore = nullptr) const;
   TOptional<FProjectAirDefenseInterceptorLaunchEvent> LaunchInterceptor(
       const FProjectAirDefenseThreatState& TargetThreat);
   void ResolveImpact(

@@ -59,6 +59,15 @@ void AProjectAirDefenseCityCameraPawn::ApplyRuntimeDefaults() {
       MetersToUnrealUnits(Settings->CameraVerticalSpeedMetersPerSecond);
   this->RotationSpeedDegreesPerSecond = Settings->CameraRotationSpeedDegreesPerSecond;
   this->ZoomSpeedUnrealUnitsPerSecond = MetersToUnrealUnits(Settings->CameraZoomSpeedMetersPerSecond);
+
+  const float RuntimeHalfExtentMeters = static_cast<float>(FMath::Max(
+      Settings->DistrictHalfExtentMeters,
+      Settings->RemoteTilesetCameraFrameRadiusMeters * 1.25));
+  this->FocusRadiusUnrealUnits = MetersToUnrealUnits(FMath::Max(RuntimeHalfExtentMeters, 1000.0f));
+  this->MinFocusAltitudeUnrealUnits = MetersToUnrealUnits(-250.0f);
+  this->MaxFocusAltitudeUnrealUnits =
+      MetersToUnrealUnits(FMath::Max(1200.0f, Settings->CameraMaxDistanceMeters * 0.35f));
+  this->ClampFocusPointToInspectableBounds();
 }
 
 void AProjectAirDefenseCityCameraPawn::BeginPlay() {
@@ -141,6 +150,7 @@ void AProjectAirDefenseCityCameraPawn::ResetCamera() {
 
 void AProjectAirDefenseCityCameraPawn::SetFocusPoint(const FVector& NewFocusPoint) {
   this->FocusPoint = NewFocusPoint;
+  this->ClampFocusPointToInspectableBounds();
   this->UpdateCameraTransform();
 }
 
@@ -154,6 +164,7 @@ void AProjectAirDefenseCityCameraPawn::FrameFocusPoint(
 
   this->FocusPoint =
       NewFocusPoint - FVector(0.0f, 0.0f, SuggestedRadiusUnrealUnits * VerticalOffsetRatio);
+  this->ClampFocusPointToInspectableBounds();
   const float FramedDistance = FMath::Clamp(
       SuggestedRadiusUnrealUnits * DistanceMultiplier,
       this->MinDistanceUnrealUnits,
@@ -168,6 +179,7 @@ void AProjectAirDefenseCityCameraPawn::StepPan(float ForwardMeters, float RightM
   const FVector Right = FRotationMatrix(YawRotation).GetUnitAxis(EAxis::Y);
   this->FocusPoint +=
       Forward * MetersToUnrealUnits(ForwardMeters) + Right * MetersToUnrealUnits(RightMeters);
+  this->ClampFocusPointToInspectableBounds();
   this->UpdateCameraTransform();
 }
 
@@ -192,6 +204,7 @@ void AProjectAirDefenseCityCameraPawn::StepZoom(float DeltaMeters) {
 
 void AProjectAirDefenseCityCameraPawn::StepAltitude(float DeltaMeters) {
   this->FocusPoint.Z += MetersToUnrealUnits(DeltaMeters);
+  this->ClampFocusPointToInspectableBounds();
   this->UpdateCameraTransform();
 }
 
@@ -274,6 +287,21 @@ void AProjectAirDefenseCityCameraPawn::InitializeInputMappingContext() {
   InputSubsystem->AddMappingContext(this->InputMappingContext, 0);
 }
 
+void AProjectAirDefenseCityCameraPawn::ClampFocusPointToInspectableBounds() {
+  const FVector2D PlanarFocus(this->FocusPoint.X, this->FocusPoint.Y);
+  const double PlanarDistance = PlanarFocus.Size();
+  if (this->FocusRadiusUnrealUnits > 0.0f && PlanarDistance > this->FocusRadiusUnrealUnits) {
+    const double Scale = static_cast<double>(this->FocusRadiusUnrealUnits) / PlanarDistance;
+    this->FocusPoint.X *= Scale;
+    this->FocusPoint.Y *= Scale;
+  }
+
+  this->FocusPoint.Z = FMath::Clamp(
+      this->FocusPoint.Z,
+      this->MinFocusAltitudeUnrealUnits,
+      this->MaxFocusAltitudeUnrealUnits);
+}
+
 void AProjectAirDefenseCityCameraPawn::UpdateCameraTransform() {
   const FRotator OrbitRotation(this->OrbitPitchDegrees, this->OrbitYawDegrees, 0.0f);
   const FVector Offset = OrbitRotation.Vector() * -this->DistanceUnrealUnits;
@@ -303,6 +331,7 @@ void AProjectAirDefenseCityCameraPawn::MoveForward(const FInputActionValue& Valu
   const FVector Forward = FRotationMatrix(YawRotation).GetUnitAxis(EAxis::X);
   this->FocusPoint +=
       Forward * AxisValue * this->PanSpeedUnrealUnitsPerSecond * this->GetWorld()->GetDeltaSeconds();
+  this->ClampFocusPointToInspectableBounds();
 }
 
 void AProjectAirDefenseCityCameraPawn::MoveRight(const FInputActionValue& Value) {
@@ -318,6 +347,7 @@ void AProjectAirDefenseCityCameraPawn::MoveRight(const FInputActionValue& Value)
   const FVector Right = FRotationMatrix(YawRotation).GetUnitAxis(EAxis::Y);
   this->FocusPoint +=
       Right * AxisValue * this->PanSpeedUnrealUnitsPerSecond * this->GetWorld()->GetDeltaSeconds();
+  this->ClampFocusPointToInspectableBounds();
 }
 
 void AProjectAirDefenseCityCameraPawn::RotateYaw(const FInputActionValue& Value) {
@@ -375,6 +405,7 @@ void AProjectAirDefenseCityCameraPawn::RaiseCamera(const FInputActionValue& Valu
 
   this->FocusPoint.Z +=
       AxisValue * this->VerticalSpeedUnrealUnitsPerSecond * this->GetWorld()->GetDeltaSeconds();
+  this->ClampFocusPointToInspectableBounds();
 }
 
 void AProjectAirDefenseCityCameraPawn::ResetCameraAction(const FInputActionValue& Value) {

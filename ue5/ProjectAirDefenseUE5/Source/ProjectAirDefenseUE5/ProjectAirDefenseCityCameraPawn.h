@@ -47,6 +47,7 @@ public:
 private:
   void ApplyRuntimeDefaults();
   void InitializeInputMappingContext();
+  void ClampFocusPointToInspectableBounds();
   void UpdateCameraTransform();
   bool IsCameraControlBlocked() const;
   void MoveForward(const FInputActionValue& Value);
@@ -122,4 +123,13 @@ private:
 
   UPROPERTY(EditAnywhere, Category = "Camera")
   float ZoomSpeedUnrealUnitsPerSecond;
+
+  UPROPERTY(EditAnywhere, Category = "Camera")
+  float FocusRadiusUnrealUnits;
+
+  UPROPERTY(EditAnywhere, Category = "Camera")
+  float MinFocusAltitudeUnrealUnits;
+
+  UPROPERTY(EditAnywhere, Category = "Camera")
+  float MaxFocusAltitudeUnrealUnits;
 };

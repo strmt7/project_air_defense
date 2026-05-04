@@ -69,6 +69,7 @@ private:
 
   struct FTrailVisual {
     FVector WorldPosition = FVector::ZeroVector;
+    FVector ExhaustWorldPosition = FVector::ZeroVector;
     FVector BaseScale = FVector::OneVector;
     FVector ExhaustScale = FVector::OneVector;
     FRotator Rotation = FRotator::ZeroRotator;
